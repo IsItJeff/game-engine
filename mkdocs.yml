@@ -63,6 +63,20 @@ nav:
   - Home: index.md
   - Handbook:
       - handbook/index.md
+      - C++ for Game Devs:
+          - handbook/cpp/index.md
+          - handbook/cpp/compilation-model.md
+          - handbook/cpp/headers-in-practice.md
+          - handbook/cpp/value-semantics.md
+          - handbook/cpp/raii.md
+          - handbook/cpp/ownership-smart-pointers.md
+          - handbook/cpp/move-semantics-usage.md
+          - handbook/cpp/core-containers.md
+          - handbook/cpp/lambdas-auto-range-for.md
+          - handbook/cpp/cmake-minimum.md
+          - handbook/cpp/debugging-with-sanitizers.md
+          - handbook/cpp/footguns-from-other-languages.md
+          - handbook/cpp/what-to-defer.md
   - Engine Docs:
       - engine/index.md
       - Game Pitch: engine/pitch.md
