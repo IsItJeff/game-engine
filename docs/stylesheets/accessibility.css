@@ -1,0 +1,25 @@
+/* Dyslexia/ADHD-friendly reading defaults (see docs/design/designs-docs-site.md). */
+
+/* Generous leading and a left-aligned ~70ch measure. */
+.md-typeset {
+  line-height: 1.7;
+  text-align: left;
+}
+
+.md-content__inner {
+  max-width: 70ch;
+}
+
+/* Never justify — rivers of whitespace hurt dyslexic readers. */
+.md-typeset p,
+.md-typeset li {
+  text-align: left;
+  hyphens: none;
+}
+
+/* Bold, never italics: italic glyphs are harder to decode. */
+.md-typeset em,
+.md-typeset cite {
+  font-style: normal;
+  font-weight: 700;
+}

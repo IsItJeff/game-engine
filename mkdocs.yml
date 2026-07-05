@@ -1,0 +1,93 @@
+site_name: Game Engine Docs (name pending)
+repo_url: https://github.com/IsItJeff/game-engine
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  font:
+    text: Atkinson Hyperlegible Next
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: deep purple
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight
+  - attr_list
+  - md_in_html
+
+plugins:
+  - search
+  - tags
+  - git-revision-date-localized:
+      type: timeago
+      fallback_to_build_date: true
+      strict: false # uncommitted pages fall back to build date without failing --strict
+  - timetoread
+
+extra_css:
+  - stylesheets/accessibility.css
+
+# docs/design/** is the frozen planning archive: buildable, searchable, out of nav.
+nav:
+  - Home: index.md
+  - Handbook:
+      - handbook/index.md
+  - Engine Docs:
+      - engine/index.md
+      - Game Pitch: engine/pitch.md
+      - Roadmap: engine/roadmap.md
+      - Architecture:
+          - engine/architecture/index.md
+          - engine/architecture/adr-0001-game-first-strategy.md
+          - engine/architecture/adr-0002-fixed-60hz-tick.md
+          - engine/architecture/adr-0003-single-player-is-a-listen-server.md
+          - engine/architecture/adr-0004-one-command-funnel.md
+          - engine/architecture/adr-0005-predicted-movement-is-cpp.md
+          - engine/architecture/adr-0006-first-party-as-a-mod-ratchet.md
+          - engine/architecture/adr-0007-cpp20-cmake-vcpkg.md
+          - engine/architecture/adr-0008-sdl3-platform.md
+          - engine/architecture/adr-0009-sdl-gpu-renderer.md
+          - engine/architecture/adr-0010-entt-ecs.md
+          - engine/architecture/adr-0011-jolt-charactervirtual.md
+          - engine/architecture/adr-0012-ozz-animation.md
+          - engine/architecture/adr-0013-json-authored-bitstream-wire.md
+          - engine/architecture/adr-0014-gns-transport.md
+          - engine/architecture/adr-0015-luau-modding.md
+          - engine/architecture/adr-0016-behavior-trees.md
+          - engine/architecture/adr-0017-errors-expected-boundaries.md
+          - engine/architecture/adr-0018-testing-three-lanes.md
+          - engine/architecture/adr-0019-solid-seams-dod-core.md
+          - engine/architecture/adr-0020-mit-license-public-repo.md
+          - engine/architecture/adr-0021-writes-under-prefpath.md
+          - engine/architecture/adr-0022-imgui-slice-ui.md
