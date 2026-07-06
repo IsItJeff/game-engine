@@ -36,6 +36,12 @@ void wrap_bounds(entt::registry& reg, Vec2 field_size);
 // Runs over exactly the entities that have a Stats component (players, NPCs).
 void regenerate_vitals(entt::registry& reg, float dt);
 
+// Hurt players standing on a Hazard: for each player overlapping a hazard
+// entity, subtract that hazard's damage_per_second * dt from its health. A
+// SYSTEM, not a command — collision is the simulation's own rule, so it changes
+// state directly (the command funnel is only for input from outside the sim).
+void damage_on_contact(entt::registry& reg, float dt);
+
 // React to death: a player-controlled entity whose health hit 0 respawns at
 // `respawn_point` with full health. MUST run before regenerate_vitals, or a
 // just-killed entity gets healed back above 0 the same tick and never dies.

@@ -14,11 +14,13 @@ a real feature.
 - **`DamagePlayer`** — a command that subtracts from a player's health, applied
   through the funnel (the `H` key in the demo).
 - **`handle_deaths`** — a system that respawns a player whose health reaches zero.
+- **`Hazard` + `damage_on_contact`** — a component marking dangerous entities and
+  a system that hurts players who touch them (the drifting motes).
 
-Honest scope: only `health` exists so far. It regenerates, can be damaged through
-a command, and reaching zero respawns the player — but nothing in *gameplay* (a
-weapon, a trap) produces the damage yet; only a debug keypress does. And death is
-respawn, not the permadeath the game's NPCs will use.
+Honest scope: only `health` exists so far. It regenerates, it drops both when a
+debug key fires a damage command and when a drifting hazard touches the player,
+and reaching zero respawns the player. Death is respawn, not the permadeath the
+game's NPCs will use.
 
 ## Why it's built this way
 
@@ -68,6 +70,17 @@ the other order would let the same tick's regen nudge a 0-health entity back
 above zero, and it would never die. The order of the system calls in `step()` is
 the definition of the tick — here it is load-bearing.
 
+Health also drops from *gameplay*, and that shows the other half of the rule.
+Touching a `Hazard` (a drifting mote) hurts the player through the
+`damage_on_contact` **system**, which changes health directly — no command.
+
+!!! info "Command or system? The distinction that matters"
+    A **command** carries intent from *outside* the simulation — a player pressing
+    `H`, later a network client — so it is validated at the funnel before it can
+    do anything. A **system** is the simulation's own rule playing out each tick;
+    it already runs on the authoritative server, so it acts directly. Contact
+    damage is a rule of the world, so it is a system, not a command.
+
 ## Extending it
 
 Every one of these is a small, contained change — the system is made to grow
@@ -78,14 +91,14 @@ this way:
 | **A stamina vital** | a `Vital stamina;` field in `Stats`; one `recover(s.stamina, dt);` line in `regenerate_vitals`; a bar in the panel |
 | **Attributes** (strength, agility) | new fields in `Stats`; a system that reads them where they matter (e.g. movement) |
 | **Skills that level with use** | a `Skill {level, xp}` type and a set of them in `Stats`; a system that grants xp on activity |
-| **Damage from actual gameplay** | a weapon, trap, or collision that *emits* a damage command instead of a keypress |
+| **A new hazard or weapon** | a component marking it (like `Hazard`) plus a system that applies its effect (like `damage_on_contact`) |
 
 ## Where it goes next
 
-Damage exists, but only from a debug key. The next real step is **damage from
-gameplay** — a collision, a projectile, or a trap that emits a `DamagePlayer`
-command the same way the `H` key does. Nothing about `Stats` changes; a new bit
-of game logic just becomes another sender into the funnel.
+Damage now comes from both a command (the `H` key) and gameplay (touching a
+hazard). Further sources are the same two shapes: a projectile or trap is another
+`Hazard`-like component handled by a system, and a healing item would be its own
+system nudging `current` up.
 
 Death currently means respawn, which is right for the player but not for NPCs —
 the game's core rule is **permadeath**. When NPCs arrive, `handle_deaths` grows a
@@ -98,11 +111,11 @@ their own systems, exactly like `Vital` did.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Vital` and `Stats`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (+ its `recover` helper) and `handle_deaths`.
-- `engine/sim/world.cpp` — the player's `Stats`, and the one line scheduling the system in `step()`.
+- `engine/sim/components.hpp` — `Vital`, `Stats`, and `Hazard`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals`, `handle_deaths`, and `damage_on_contact`.
+- `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, and the lines scheduling the systems in `step()`.
 - `game/app/main.cpp` — the health bar in the debug panel.
-- `tests/sim/test_simulation.cpp` — the heal-and-cap test.
+- `tests/sim/test_simulation.cpp` — the heal, damage, death, and contact tests.
 
 ## Go deeper
 

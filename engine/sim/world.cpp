@@ -16,6 +16,7 @@ entt::entity make_mote(entt::registry& reg, Vec2 pos, Vec2 vel, Vec3 color) {
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<Velocity>(e, vel);
   reg.emplace<RenderDot>(e, color, 5.0f);
+  reg.emplace<Hazard>(e);  // motes hurt on contact (default 40 dps)
   return e;
 }
 
@@ -68,9 +69,10 @@ void World::step() {
   const float dt = static_cast<float>(kSecondsPerTick);
   integrate_motion(registry_, dt);
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
-  // Death is checked BEFORE regen on purpose: otherwise the same tick's
-  // regeneration would nudge a 0-health entity back above zero and it would
-  // never die. The order of these lines is the definition of the tick.
+  // Collision runs after movement (positions are current), then death is checked
+  // from any damage it dealt, then survivors regenerate. This order is the
+  // definition of the tick — collision before death before heal.
+  damage_on_contact(registry_, dt);
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f});
   regenerate_vitals(registry_, dt);
 

@@ -64,6 +64,14 @@ struct RenderDot {
   float radius = 6.0f;
 };
 
+// Marks an entity as dangerous to touch. An entity with a Hazard deals
+// damage_per_second to any player whose position it overlaps (see the
+// damage_on_contact system). The drifting motes have this — touch one and it
+// hurts.
+struct Hazard {
+  float damage_per_second = 40.0f;
+};
+
 // --- Stats system ---
 //
 // The foundation for player and NPC stats. Deliberately small: a reusable Vital

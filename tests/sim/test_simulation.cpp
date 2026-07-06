@@ -115,6 +115,41 @@ TEST_CASE("a lethal hit respawns the player at full health and the spawn point",
   REQUIRE(tf.position.y == Approx(eng::sim::kFieldHeight * 0.5f));
 }
 
+TEST_CASE("a hazard touching the player deals contact damage", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  entt::registry& reg = world.registry();
+  const eng::Vec2 player_pos = reg.get<eng::sim::Transform>(player).position;
+
+  // A stationary hazard sitting right on the player (no Velocity, so it stays).
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Transform>(hazard, player_pos);
+  reg.emplace<eng::sim::Hazard>(hazard, 100.0f);  // 100 dps
+
+  const float before = reg.get<eng::sim::Stats>(player).health.current;
+  world.step();  // 100 dps over one 1/60 tick = 1.67 lost, beats 0.13 regen
+
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current < before);
+}
+
+TEST_CASE("a hazard far from the player deals no damage", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  entt::registry& reg = world.registry();
+  const eng::Vec2 player_pos = reg.get<eng::sim::Transform>(player).position;
+
+  // A stationary hazard well out of range.
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Transform>(hazard, player_pos + eng::Vec2{500.0f, 0.0f});
+  reg.emplace<eng::sim::Hazard>(hazard, 100.0f);
+
+  const float before = reg.get<eng::sim::Stats>(player).health.current;
+  world.step();
+
+  // No contact -> no damage; regen only nudges health up, never below `before`.
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current >= before);
+}
+
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {
   eng::sim::World world;
   const auto before = world.registry().storage<eng::sim::Transform>().size();

@@ -77,4 +77,27 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
   }
 }
 
+void damage_on_contact(entt::registry& reg, float dt) {
+  // "In contact" = centres within this many world units. A real engine gives
+  // each entity a collision shape (roadmap M4, Jolt); one distance is plenty for
+  // round dots, and 15 matches the default player+mote radii (10 + 5).
+  constexpr float kContactDistance = 15.0f;
+
+  // Nested loop: every player against every hazard. Fine for a handful of each;
+  // a real game with thousands would use a spatial grid to avoid the O(n*m).
+  auto players = reg.view<PlayerControlled, Stats, Transform>();
+  auto hazards = reg.view<Hazard, Transform>();
+  for (const entt::entity p : players) {
+    const Vec2 p_pos = players.get<Transform>(p).position;
+    Stats& p_stats = players.get<Stats>(p);
+    for (const entt::entity h : hazards) {
+      if (glm::distance(p_pos, hazards.get<Transform>(h).position) >= kContactDistance) {
+        continue;  // not touching this one
+      }
+      p_stats.health.current -= hazards.get<Hazard>(h).damage_per_second * dt;
+      if (p_stats.health.current < 0.0f) p_stats.health.current = 0.0f;  // clamp at 0
+    }
+  }
+}
+
 }  // namespace eng::sim

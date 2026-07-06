@@ -93,8 +93,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
 
   ImGui::Separator();
   ImGui::TextWrapped(
-      "WASD / arrows: move the blue dot. Space: spawn a mote. H: take 15 damage. "
-      "Everything you press becomes a Command sent to the server.");
+      "WASD / arrows: move — and dodge, the drifting motes hurt on contact. "
+      "Space: spawn a mote. H: take 15 damage. Your keypresses become Commands; "
+      "the motes hurting you is a system running on the server.");
   ImGui::End();
 }
 
