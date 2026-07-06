@@ -33,6 +33,30 @@ ctest --preset dev        # run the test suite
 Other presets: `debug` (no sanitizers), `release`, `ci` / `ci-msvc` (warnings-as-errors,
 used by CI).
 
+## Running tests (the TDD loop)
+
+`scripts/test.sh` builds the `dev` preset and runs the tests — it sets `PATH` and
+`VCPKG_ROOT` for you, so it's the one command to remember:
+
+```sh
+./scripts/test.sh                 # build, then run ALL tests (summary)
+./scripts/test.sh "[bitstream]"   # build, then run only tests tagged [bitstream],
+                                  #   printing actual vs expected values
+```
+
+The inner loop when you're working test-first:
+
+1. Write or pick a failing test. Run `./scripts/test.sh "[yourtag]"` — read the
+   `with expansion:` line; it shows the real values (e.g. `0 == 66`).
+2. Edit the code until that line becomes true (e.g. `66 == 66`).
+3. Re-run. Green when the summary says `All tests passed`.
+
+A build error means the compile failed and no test ran — a different red. **Read the
+first error, not the last**; later ones are usually knock-on noise.
+
+Tests build with AddressSanitizer + UBSan on (the `dev` preset), so out-of-bounds
+indexing or use-after-free is reported precisely instead of corrupting silently.
+
 ## Where things are
 
 | Path | What |

@@ -16,12 +16,12 @@ Living checklist. The full narrative lives in
 ## Milestones
 
 - [ ] **M0 — Toolchain** *(ends with: hello-toolchain green everywhere + the pitch written; 6–10 wk)*
-  - [ ] CI green on all 3 OSes (Windows MSVC, macOS AppleClang, Linux Clang+sanitizers+headless)
-  - [ ] MkDocs Material site live on GitHub Pages
-  - [ ] GameNetworkingSockets build-smoke passes
-  - [ ] Bitstream serializer TDD kata (round-trip property + malformed-input fuzz, under ASan/UBSan)
+  - [x] CI green on all 3 OSes (Windows MSVC, macOS AppleClang, Linux Clang+sanitizers+headless)
+  - [x] MkDocs Material site live on GitHub Pages
+  - [x] GameNetworkingSockets build-smoke passes
+  - [x] Bitstream serializer TDD kata (round-trip property + bounds-safe reads, under ASan/UBSan)
   - [ ] Console mini-game runs
-  - [ ] One-page game pitch written (the descope razor, re-read at every milestone exit)
+  - [x] One-page game pitch written (the descope razor, re-read at every milestone exit)
   - [x] TESTING.md
   - [x] code-design-rules.md
   - [ ] Backups configured (restic→B2 nightly + second remote mirror)
