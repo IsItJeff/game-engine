@@ -22,7 +22,7 @@ engine skeleton's ECS. It is the worked example of
 Honest scope: `health` and `stamina` exist. Health regenerates, drops from a debug
 key and from touching a hazard, and reaching zero respawns the player. Stamina is
 spent by moving and recovers by resting; running it dry slows the player to a
-crawl. Death is respawn, not the permadeath the game's NPCs will use.
+crawl. Death is respawn for the player and permadeath — destruction — for NPCs.
 
 ## Why it's built this way
 
@@ -73,12 +73,12 @@ above zero, and it would never die. The order of the system calls in `step()` is
 the definition of the tick — here it is load-bearing.
 
 Health also drops from *gameplay*, and that shows the other half of the rule.
-Touching a `Hazard` (a drifting mote) hurts the player through the
-`resolve_contacts` **system**, which changes health directly — no command — and
-then destroys the mote. It gathers the hazards to remove and destroys them
-*after* the loop: calling `registry.destroy` while iterating a view invalidates
-it (a classic ECS bug), so collect-then-destroy is the safe pattern — the same
-one the permadeath NPCs will use.
+Touching a `Hazard` (a drifting mote) hurts whoever overlaps it — the player or an
+NPC, anything with `Stats` — through the `resolve_contacts` **system**, which
+changes health directly (no command) and then destroys the mote. It gathers the
+hazards to remove and destroys them *after* the loop: calling `registry.destroy`
+while iterating a view invalidates it (a classic ECS bug), so collect-then-destroy
+is the safe pattern — the same one permadeath uses on dead NPCs.
 
 !!! info "Command or system? The distinction that matters"
     A **command** carries intent from *outside* the simulation — a player pressing
@@ -120,11 +120,12 @@ hazard). Further sources are the same two shapes: a projectile or trap is anothe
 `Hazard`-like component handled by a system, and a healing item would be its own
 system nudging `current` up.
 
-Death currently means respawn, which is right for the player but not for NPCs —
-the game's core rule is **permadeath**. When NPCs arrive, `handle_deaths` grows a
-branch that *destroys* a dead NPC's entity instead of resetting it, using the
-exact collect-then-destroy pattern `resolve_contacts` already uses to consume the
-motes.
+Death now means two things, split by which entity died — the game's core rule made
+concrete. The **player** respawns. An **NPC** is *destroyed*: **permadeath**,
+using the same collect-then-destroy pattern `resolve_contacts` uses on the motes.
+That is the `handle_deaths` branch this page kept pointing at; the first wandering
+NPCs (the green dots) exercise it live — watch "NPCs alive" in the panel only ever
+fall as they drift into motes.
 
 Beyond that, the game's design calls for skills that level with activity for both
 players and NPCs (see the master plan). Those slot into `Stats` as new fields with
@@ -132,11 +133,11 @@ their own systems, exactly like `Vital` did.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina), and `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals`, `update_stamina`, `handle_deaths`, and `resolve_contacts`.
-- `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
-- `game/app/main.cpp` — the health and stamina bars in the debug panel.
-- `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, and stamina tests.
+- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina), `Hazard`, and the `Npc` marker.
+- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals`, `update_stamina`, `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
+- `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the wandering NPCs, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
+- `game/app/main.cpp` — the health and stamina bars and the "NPCs alive" counter in the debug panel.
+- `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, and permadeath tests.
 
 ## Go deeper
 

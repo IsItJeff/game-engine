@@ -76,6 +76,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   // exist yet), so null-check before reading its size.
   const auto* transforms = world.registry().storage<eng::sim::Transform>();
   ImGui::Text("entities: %d", transforms ? static_cast<int>(transforms->size()) : 0);
+  // Watch this fall as NPCs wander into motes and die — permadeath, so it only
+  // ever goes down.
+  const auto* npcs = world.registry().storage<eng::sim::Npc>();
+  ImGui::Text("NPCs alive: %d", npcs ? static_cast<int>(npcs->size()) : 0);
 
   const entt::entity player = world.player();
   const eng::Vec2 pos = world.registry().get<eng::sim::Transform>(player).position;
@@ -98,9 +102,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   ImGui::TextWrapped(
       "WASD / arrows: move — and dodge, the drifting motes hurt and vanish on "
       "contact. Moving drains stamina; run it dry and you slow to a crawl until "
-      "you rest. Space: spawn a mote. H: take 15 damage. Your keypresses become "
-      "Commands; the motes hitting you and the stamina you spend are systems "
-      "running on the server.");
+      "you rest. The green dots are NPCs: they take the same contact damage you "
+      "do, but when they die they're gone for good (permadeath) — you respawn. "
+      "Space: spawn a mote. H: take 15 damage. Your keypresses become Commands; "
+      "the motes, the stamina, and the NPCs dying are all systems on the server.");
   ImGui::End();
 }
 

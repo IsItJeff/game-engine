@@ -85,18 +85,30 @@ void update_stamina(entt::registry& reg, float dt) {
 }
 
 void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
-  // Only player-controlled entities are considered here; when NPCs arrive, a
-  // zero-health NPC would be destroyed instead (permadeath, the game's core
-  // rule). Resetting a few components — no entity creation or destruction — so
-  // iterating the view while writing to it is safe.
-  auto view = reg.view<Stats, PlayerControlled, Transform, Velocity>();
-  for (const entt::entity e : view) {
-    Stats& s = view.get<Stats>(e);
-    if (s.health.current > 0.0f) continue;            // still alive, nothing to do
-    s.health.current = s.health.max;                  // respawn at full health...
-    view.get<Transform>(e).position = respawn_point;  // ...at the spawn point...
-    view.get<Velocity>(e).value = Vec2{0.0f, 0.0f};   // ...and standing still
+  // A zero-health entity meets one of two fates, and which one is the game's core
+  // rule made concrete: the PLAYER respawns; an NPC dies for good (permadeath).
+
+  // Players: reset a few components in place. Nothing is created or destroyed, so
+  // writing to the view while iterating it is safe.
+  auto players = reg.view<Stats, PlayerControlled, Transform, Velocity>();
+  for (const entt::entity e : players) {
+    Stats& s = players.get<Stats>(e);
+    if (s.health.current > 0.0f) continue;               // still alive, nothing to do
+    s.health.current = s.health.max;                     // respawn at full health...
+    players.get<Transform>(e).position = respawn_point;  // ...at the spawn point...
+    players.get<Velocity>(e).value = Vec2{0.0f, 0.0f};   // ...and standing still
   }
+
+  // NPCs: permadeath. Collect the dead, then destroy them AFTER the loop —
+  // reg.destroy() during iteration invalidates the view (the same collect-then-
+  // destroy pattern resolve_contacts uses to consume motes). This is the branch
+  // the stats docs kept promising; here it finally exists.
+  std::vector<entt::entity> dead;
+  auto npcs = reg.view<Stats, Npc>();
+  for (const entt::entity e : npcs) {
+    if (npcs.get<Stats>(e).health.current <= 0.0f) dead.push_back(e);
+  }
+  for (const entt::entity e : dead) reg.destroy(e);
 }
 
 void resolve_contacts(entt::registry& reg) {
@@ -111,18 +123,20 @@ void resolve_contacts(entt::registry& reg) {
   // destroy in a separate pass.
   std::vector<entt::entity> consumed;
 
-  // Nested loop: every hazard against every player. Fine for a handful of each;
-  // a real game with thousands would use a spatial grid to avoid the O(n*m).
-  auto players = reg.view<PlayerControlled, Stats, Transform>();
+  // Nested loop: every hazard against every target — anything with Stats, which
+  // is the player AND the NPCs (motes have no Stats, so they can't hurt each
+  // other). Fine for a handful of each; a real game with thousands would use a
+  // spatial grid to avoid the O(n*m).
+  auto targets = reg.view<Stats, Transform>();
   auto hazards = reg.view<Hazard, Transform>();
   for (const entt::entity h : hazards) {
     const Vec2 h_pos = hazards.get<Transform>(h).position;
     bool hit = false;
-    for (const entt::entity p : players) {
-      if (glm::distance(players.get<Transform>(p).position, h_pos) >= kContactDistance) {
-        continue;  // this player isn't touching it
+    for (const entt::entity t : targets) {
+      if (glm::distance(targets.get<Transform>(t).position, h_pos) >= kContactDistance) {
+        continue;  // this target isn't touching it
       }
-      Vital& health = players.get<Stats>(p).health;
+      Vital& health = targets.get<Stats>(t).health;
       health.current -= hazards.get<Hazard>(h).damage;
       if (health.current < 0.0f) health.current = 0.0f;  // clamp at 0
       hit = true;

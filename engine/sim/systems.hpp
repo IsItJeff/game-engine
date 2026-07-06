@@ -42,17 +42,18 @@ void regenerate_vitals(entt::registry& reg, float dt);
 // MovePlayer funnel reads the result and slows an exhausted player to a crawl.
 void update_stamina(entt::registry& reg, float dt);
 
-// Resolve player/hazard collisions: a player overlapping a Hazard takes its
-// `damage`, and the hazard is then consumed (destroyed). A SYSTEM, not a command
-// — collision is the sim's own rule, so it changes state directly (the funnel is
-// only for input from outside the sim). Note it destroys entities only AFTER
-// iterating; destroying during iteration invalidates the view (a classic bug).
+// Resolve contact damage: any entity with Stats (the player or an NPC) that
+// overlaps a Hazard takes its `damage`, and the hazard is then consumed
+// (destroyed). A SYSTEM, not a command — collision is the sim's own rule, so it
+// changes state directly (the funnel is only for input from outside the sim).
+// Note it destroys entities only AFTER iterating; destroying during iteration
+// invalidates the view (a classic bug).
 void resolve_contacts(entt::registry& reg);
 
-// React to death: a player-controlled entity whose health hit 0 respawns at
-// `respawn_point` with full health. MUST run before regenerate_vitals, or a
-// just-killed entity gets healed back above 0 the same tick and never dies.
-// (NPCs will instead be destroyed — permadeath — which is a later step.)
+// React to death, two ways: a player at 0 health respawns at `respawn_point` with
+// full health; an NPC at 0 health is destroyed instead — permadeath, the game's
+// core rule. MUST run before regenerate_vitals, or a just-killed entity gets
+// healed back above 0 the same tick and never dies.
 void handle_deaths(entt::registry& reg, Vec2 respawn_point);
 
 }  // namespace eng::sim
