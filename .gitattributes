@@ -1,0 +1,12 @@
+# Normalize line endings; C++ sources are LF everywhere.
+* text=auto eol=lf
+*.bat text eol=crlf
+
+# Binary asset patterns — UNCOMMENT ONE STRATEGY before the first art commit
+# (open decision #2 in docs/design/master-plan.md: Git LFS vs S3/B2 bucket).
+# *.png filter=lfs diff=lfs merge=lfs -text
+# *.glb filter=lfs diff=lfs merge=lfs -text
+# *.gltf text
+# *.wav filter=lfs diff=lfs merge=lfs -text
+# *.ogg filter=lfs diff=lfs merge=lfs -text
+# *.ktx2 filter=lfs diff=lfs merge=lfs -text

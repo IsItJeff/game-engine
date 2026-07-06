@@ -1,0 +1,62 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+      "name": "dev",
+      "displayName": "Debug + ASan/UBSan (default dev build)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENG_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug, no sanitizers",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "ci",
+      "displayName": "CI (warnings-as-errors)",
+      "inherits": "dev",
+      "cacheVariables": { "ENG_WARNINGS_AS_ERRORS": "ON" }
+    },
+    {
+      "name": "ci-msvc",
+      "displayName": "CI Windows MSVC (warnings-as-errors, no sanitizers)",
+      "inherits": "base",
+      "architecture": { "value": "x64", "strategy": "external" },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENG_WARNINGS_AS_ERRORS": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "ci", "configurePreset": "ci" },
+    { "name": "ci-msvc", "configurePreset": "ci-msvc" }
+  ],
+  "testPresets": [
+    { "name": "dev", "configurePreset": "dev", "output": { "outputOnFailure": true } },
+    { "name": "ci", "configurePreset": "ci", "output": { "outputOnFailure": true } },
+    { "name": "ci-msvc", "configurePreset": "ci-msvc", "output": { "outputOnFailure": true } }
+  ]
+}

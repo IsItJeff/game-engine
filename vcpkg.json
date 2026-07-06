@@ -1,0 +1,20 @@
+{
+  "name": "game-engine",
+  "version-string": "0.0.1",
+  "builtin-baseline": "dfcb04008a5a9e038a4ae0d1af57909e30d21359",
+  "dependencies": [
+    { "name": "sdl3", "platform": "!linux" },
+    {
+      "name": "sdl3",
+      "default-features": false,
+      "features": ["x11", "wayland"],
+      "platform": "linux",
+      "$reason": "Linux target is the headless dedicated server; dbus/ibus default features drag in the whole systemd build chain for nothing"
+    },
+    "entt",
+    "glm",
+    "spdlog",
+    "catch2",
+    "tl-expected"
+  ]
+}

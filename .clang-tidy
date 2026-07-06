@@ -1,0 +1,16 @@
+# Enforces code-design-rules.md items that are machine-checkable (rules 7-8:
+# RAII, no naked new/delete). Judgment-call rules live in the PR checklist.
+Checks: >
+  -*,
+  cppcoreguidelines-special-member-functions,
+  cppcoreguidelines-owning-memory,
+  cppcoreguidelines-no-malloc,
+  cppcoreguidelines-virtual-class-destructor,
+  performance-*,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-loop-convert,
+  bugprone-use-after-move,
+  bugprone-dangling-handle
+WarningsAsErrors: ''
+HeaderFilterRegex: '(engine|game|tools)/.*'
