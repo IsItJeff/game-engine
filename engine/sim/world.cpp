@@ -16,7 +16,7 @@ entt::entity make_mote(entt::registry& reg, Vec2 pos, Vec2 vel, Vec3 color) {
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<Velocity>(e, vel);
   reg.emplace<RenderDot>(e, color, 5.0f);
-  reg.emplace<Hazard>(e);  // motes hurt on contact (default 40 dps)
+  reg.emplace<Hazard>(e);  // motes damage the player on contact, then are consumed
   return e;
 }
 
@@ -68,6 +68,7 @@ void World::step() {
   //    writing a system and adding a line here.
   const float dt = static_cast<float>(kSecondsPerTick);
   integrate_motion(registry_, dt);
+  update_stamina(registry_, dt);  // moving costs stamina; resting restores it
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
   // Collision runs after movement (positions are current), then death is checked
   // from any damage it dealt, then survivors regenerate. This order is the
@@ -95,11 +96,16 @@ void World::apply_command(const Command& cmd) {
       // Find every player-controlled entity belonging to this player and set its
       // velocity from the input direction. (In single-player that's one entity;
       // the loop is what makes it correct once there are several players.)
-      auto view = registry_.view<PlayerControlled, Velocity>();
+      // Requiring Stats too lets the command read stamina: an exhausted player
+      // (0 stamina) is slowed to a crawl rather than stopped dead, so they can
+      // always limp to safety while stamina recovers.
+      auto view = registry_.view<PlayerControlled, Velocity, Stats>();
       for (const entt::entity e : view) {
         const PlayerControlled& pc = view.get<PlayerControlled>(e);
         if (pc.player != cmd.player) continue;
-        view.get<Velocity>(e).value = dir * pc.move_speed;
+        const float speed =
+            view.get<Stats>(e).stamina.current > 0.0f ? pc.move_speed : pc.move_speed * 0.4f;
+        view.get<Velocity>(e).value = dir * speed;
       }
       break;
     }

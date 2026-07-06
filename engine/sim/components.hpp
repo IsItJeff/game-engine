@@ -92,11 +92,14 @@ struct Vital {
 // so a player or an NPC-management screen reads a single place. Give an entity a
 // Stats and it participates in the stats systems; leave it off and it doesn't.
 //
-// It starts with just health. To grow the system you add fields HERE — another
-// Vital (e.g. `Vital stamina;`), later a set of attributes or skills — and teach
-// the relevant system to read them. Nothing else in the engine has to change.
+// To grow the system you add fields HERE — another Vital, later a set of
+// attributes or skills — and teach a system to read them. `stamina` was added
+// exactly that way: one field here plus a small update_stamina system (it's spent
+// by moving, not passively regained, so it earns its own system rather than a
+// line in regenerate_vitals). Nothing else in the engine had to change.
 struct Stats {
-  Vital health{100.0f, 100.0f, 5.0f};  // full, and slowly self-heals
+  Vital health{100.0f, 100.0f, 5.0f};    // full, and slowly self-heals
+  Vital stamina{100.0f, 100.0f, 20.0f};  // spent by moving; recovers when resting
 };
 
 }  // namespace eng::sim

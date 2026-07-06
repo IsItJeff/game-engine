@@ -36,6 +36,12 @@ void wrap_bounds(entt::registry& reg, Vec2 field_size);
 // Runs over exactly the entities that have a Stats component (players, NPCs).
 void regenerate_vitals(entt::registry& reg, float dt);
 
+// Update stamina from movement: any entity with Stats and a non-zero Velocity
+// spends stamina; one standing still recovers it. (Motes have Velocity but no
+// Stats, so they're untouched.) This makes movement cost something — the
+// MovePlayer funnel reads the result and slows an exhausted player to a crawl.
+void update_stamina(entt::registry& reg, float dt);
+
 // Resolve player/hazard collisions: a player overlapping a Hazard takes its
 // `damage`, and the hazard is then consumed (destroyed). A SYSTEM, not a command
 // — collision is the sim's own rule, so it changes state directly (the funnel is
