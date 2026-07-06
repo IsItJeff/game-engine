@@ -46,7 +46,10 @@ jobs:
         run: cmake --build --preset ci-msvc
       - name: Test
         run: ctest --preset ci-msvc
-      - name: Boot smoke (headless)
+      - name: Boot smoke (renders a few frames, then exits)
+        timeout-minutes: 2
+        env:
+          ENG_MAX_FRAMES: "120"
         run: build\ci-msvc\game\app\game.exe
       - name: Include-graph check
         run: python scripts/check_includes.py
@@ -85,7 +88,10 @@ jobs:
         run: cmake --build --preset ci
       - name: Test
         run: ctest --preset ci
-      - name: Boot smoke (headless)
+      - name: Boot smoke (renders a few frames, then exits)
+        timeout-minutes: 2
+        env:
+          ENG_MAX_FRAMES: "120"
         run: build/ci/game/app/game
       - name: Include-graph check
         run: python3 scripts/check_includes.py
@@ -133,7 +139,10 @@ jobs:
         run: cmake --build --preset ci
       - name: Test
         run: ctest --preset ci
-      - name: Boot smoke (headless)
+      - name: Boot smoke (renders a few frames, then exits)
+        timeout-minutes: 2
+        env:
+          ENG_MAX_FRAMES: "120"
         run: build/ci/game/app/game
       - name: Include-graph check
         run: python3 scripts/check_includes.py
