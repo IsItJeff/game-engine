@@ -115,7 +115,7 @@ TEST_CASE("a lethal hit respawns the player at full health and the spawn point",
   REQUIRE(tf.position.y == Approx(eng::sim::kFieldHeight * 0.5f));
 }
 
-TEST_CASE("a hazard touching the player deals contact damage", "[sim]") {
+TEST_CASE("touching a hazard damages the player and consumes the hazard", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
   entt::registry& reg = world.registry();
@@ -124,15 +124,16 @@ TEST_CASE("a hazard touching the player deals contact damage", "[sim]") {
   // A stationary hazard sitting right on the player (no Velocity, so it stays).
   const entt::entity hazard = reg.create();
   reg.emplace<eng::sim::Transform>(hazard, player_pos);
-  reg.emplace<eng::sim::Hazard>(hazard, 100.0f);  // 100 dps
+  reg.emplace<eng::sim::Hazard>(hazard, 20.0f);  // 20 per hit — non-lethal (player has 70)
 
   const float before = reg.get<eng::sim::Stats>(player).health.current;
-  world.step();  // 100 dps over one 1/60 tick = 1.67 lost, beats 0.13 regen
+  world.step();
 
-  REQUIRE(reg.get<eng::sim::Stats>(player).health.current < before);
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current < before);  // took the hit
+  REQUIRE_FALSE(reg.valid(hazard));  // and the hazard was destroyed (consumed)
 }
 
-TEST_CASE("a hazard far from the player deals no damage", "[sim]") {
+TEST_CASE("a hazard out of range does no damage and is not consumed", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
   entt::registry& reg = world.registry();
@@ -141,13 +142,14 @@ TEST_CASE("a hazard far from the player deals no damage", "[sim]") {
   // A stationary hazard well out of range.
   const entt::entity hazard = reg.create();
   reg.emplace<eng::sim::Transform>(hazard, player_pos + eng::Vec2{500.0f, 0.0f});
-  reg.emplace<eng::sim::Hazard>(hazard, 100.0f);
+  reg.emplace<eng::sim::Hazard>(hazard, 20.0f);
 
   const float before = reg.get<eng::sim::Stats>(player).health.current;
   world.step();
 
-  // No contact -> no damage; regen only nudges health up, never below `before`.
+  // No contact: no damage (regen only nudges up), and the hazard survives.
   REQUIRE(reg.get<eng::sim::Stats>(player).health.current >= before);
+  REQUIRE(reg.valid(hazard));
 }
 
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {

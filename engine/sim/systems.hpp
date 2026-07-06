@@ -36,11 +36,12 @@ void wrap_bounds(entt::registry& reg, Vec2 field_size);
 // Runs over exactly the entities that have a Stats component (players, NPCs).
 void regenerate_vitals(entt::registry& reg, float dt);
 
-// Hurt players standing on a Hazard: for each player overlapping a hazard
-// entity, subtract that hazard's damage_per_second * dt from its health. A
-// SYSTEM, not a command — collision is the simulation's own rule, so it changes
-// state directly (the command funnel is only for input from outside the sim).
-void damage_on_contact(entt::registry& reg, float dt);
+// Resolve player/hazard collisions: a player overlapping a Hazard takes its
+// `damage`, and the hazard is then consumed (destroyed). A SYSTEM, not a command
+// — collision is the sim's own rule, so it changes state directly (the funnel is
+// only for input from outside the sim). Note it destroys entities only AFTER
+// iterating; destroying during iteration invalidates the view (a classic bug).
+void resolve_contacts(entt::registry& reg);
 
 // React to death: a player-controlled entity whose health hit 0 respawns at
 // `respawn_point` with full health. MUST run before regenerate_vitals, or a

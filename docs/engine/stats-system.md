@@ -14,8 +14,9 @@ a real feature.
 - **`DamagePlayer`** — a command that subtracts from a player's health, applied
   through the funnel (the `H` key in the demo).
 - **`handle_deaths`** — a system that respawns a player whose health reaches zero.
-- **`Hazard` + `damage_on_contact`** — a component marking dangerous entities and
-  a system that hurts players who touch them (the drifting motes).
+- **`Hazard` + `resolve_contacts`** — a component marking dangerous entities and a
+  system that damages a player who touches one and then destroys it (the drifting
+  motes are consumed on contact).
 
 Honest scope: only `health` exists so far. It regenerates, it drops both when a
 debug key fires a damage command and when a drifting hazard touches the player,
@@ -72,7 +73,11 @@ the definition of the tick — here it is load-bearing.
 
 Health also drops from *gameplay*, and that shows the other half of the rule.
 Touching a `Hazard` (a drifting mote) hurts the player through the
-`damage_on_contact` **system**, which changes health directly — no command.
+`resolve_contacts` **system**, which changes health directly — no command — and
+then destroys the mote. It gathers the hazards to remove and destroys them
+*after* the loop: calling `registry.destroy` while iterating a view invalidates
+it (a classic ECS bug), so collect-then-destroy is the safe pattern — the same
+one the permadeath NPCs will use.
 
 !!! info "Command or system? The distinction that matters"
     A **command** carries intent from *outside* the simulation — a player pressing
@@ -91,7 +96,7 @@ this way:
 | **A stamina vital** | a `Vital stamina;` field in `Stats`; one `recover(s.stamina, dt);` line in `regenerate_vitals`; a bar in the panel |
 | **Attributes** (strength, agility) | new fields in `Stats`; a system that reads them where they matter (e.g. movement) |
 | **Skills that level with use** | a `Skill {level, xp}` type and a set of them in `Stats`; a system that grants xp on activity |
-| **A new hazard or weapon** | a component marking it (like `Hazard`) plus a system that applies its effect (like `damage_on_contact`) |
+| **A new hazard or weapon** | a component marking it (like `Hazard`) plus a system that applies its effect (like `resolve_contacts`) |
 
 ## Where it goes next
 
@@ -102,8 +107,9 @@ system nudging `current` up.
 
 Death currently means respawn, which is right for the player but not for NPCs —
 the game's core rule is **permadeath**. When NPCs arrive, `handle_deaths` grows a
-branch that *destroys* a dead NPC's entity instead of resetting it (the ECS's
-`registry.destroy`, done carefully outside the iteration loop).
+branch that *destroys* a dead NPC's entity instead of resetting it, using the
+exact collect-then-destroy pattern `resolve_contacts` already uses to consume the
+motes.
 
 Beyond that, the game's design calls for skills that level with activity for both
 players and NPCs (see the master plan). Those slot into `Stats` as new fields with
@@ -112,7 +118,7 @@ their own systems, exactly like `Vital` did.
 ## Key files
 
 - `engine/sim/components.hpp` — `Vital`, `Stats`, and `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals`, `handle_deaths`, and `damage_on_contact`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals`, `handle_deaths`, and `resolve_contacts`.
 - `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, and the lines scheduling the systems in `step()`.
 - `game/app/main.cpp` — the health bar in the debug panel.
 - `tests/sim/test_simulation.cpp` — the heal, damage, death, and contact tests.

@@ -1,6 +1,7 @@
 #include "engine/sim/systems.hpp"
 
 #include <cmath>
+#include <vector>
 
 #include "engine/sim/components.hpp"
 
@@ -77,27 +78,38 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
   }
 }
 
-void damage_on_contact(entt::registry& reg, float dt) {
+void resolve_contacts(entt::registry& reg) {
   // "In contact" = centres within this many world units. A real engine gives
   // each entity a collision shape (roadmap M4, Jolt); one distance is plenty for
   // round dots, and 15 matches the default player+mote radii (10 + 5).
   constexpr float kContactDistance = 15.0f;
 
-  // Nested loop: every player against every hazard. Fine for a handful of each;
+  // Gather the hazards to destroy. We must NOT call reg.destroy() while iterating
+  // the view below: destroying an entity mid-iteration invalidates the view and
+  // is undefined behaviour (the classic ECS trap). So we collect first, then
+  // destroy in a separate pass.
+  std::vector<entt::entity> consumed;
+
+  // Nested loop: every hazard against every player. Fine for a handful of each;
   // a real game with thousands would use a spatial grid to avoid the O(n*m).
   auto players = reg.view<PlayerControlled, Stats, Transform>();
   auto hazards = reg.view<Hazard, Transform>();
-  for (const entt::entity p : players) {
-    const Vec2 p_pos = players.get<Transform>(p).position;
-    Stats& p_stats = players.get<Stats>(p);
-    for (const entt::entity h : hazards) {
-      if (glm::distance(p_pos, hazards.get<Transform>(h).position) >= kContactDistance) {
-        continue;  // not touching this one
+  for (const entt::entity h : hazards) {
+    const Vec2 h_pos = hazards.get<Transform>(h).position;
+    bool hit = false;
+    for (const entt::entity p : players) {
+      if (glm::distance(players.get<Transform>(p).position, h_pos) >= kContactDistance) {
+        continue;  // this player isn't touching it
       }
-      p_stats.health.current -= hazards.get<Hazard>(h).damage_per_second * dt;
-      if (p_stats.health.current < 0.0f) p_stats.health.current = 0.0f;  // clamp at 0
+      Vital& health = players.get<Stats>(p).health;
+      health.current -= hazards.get<Hazard>(h).damage;
+      if (health.current < 0.0f) health.current = 0.0f;  // clamp at 0
+      hit = true;
     }
+    if (hit) consumed.push_back(h);  // consume it once, no matter how many it hit
   }
+
+  for (const entt::entity e : consumed) reg.destroy(e);  // safe: iteration is done
 }
 
 }  // namespace eng::sim

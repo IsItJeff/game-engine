@@ -72,7 +72,7 @@ void World::step() {
   // Collision runs after movement (positions are current), then death is checked
   // from any damage it dealt, then survivors regenerate. This order is the
   // definition of the tick — collision before death before heal.
-  damage_on_contact(registry_, dt);
+  resolve_contacts(registry_);
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f});
   regenerate_vitals(registry_, dt);
 
