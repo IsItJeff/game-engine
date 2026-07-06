@@ -17,16 +17,11 @@ namespace eng {
 class WriteBuffer {
  public:
   // Append one byte to the buffer.
-  void write_u8(std::uint8_t value) {
-    // TODO(you): store `value` at the end of bytes_.
-    bytes_.push_back(value);
-  }
+  void write_u8(std::uint8_t value) { bytes_.push_back(value); }
 
   // Append a 32-bit value as four bytes, most-significant byte first
   // (big-endian, a.k.a. "network byte order").
   void write_u32(std::uint32_t value) {
-    // TODO(you): append the four bytes of `value`, high byte first. You can
-    // build this entirely from write_u8, shifts (>>), and masks (& 0xFF).
     write_u8((value >> 24) & 0xFF);
     write_u8((value >> 16) & 0xFF);
     write_u8((value >> 8) & 0xFF);
@@ -45,17 +40,22 @@ class ReadBuffer {
  public:
   explicit ReadBuffer(std::vector<std::uint8_t> bytes) : bytes_(std::move(bytes)) {}
 
-  // Read one byte and advance past it. (Bounds checking comes in a later step —
-  // for now assume the caller reads no more than was written.)
+  // Read one byte and advance past it. Reading past the end is safe: it returns
+  // 0 and trips ok() to false rather than reading out of bounds.
   std::uint8_t read_u8() {
-    // TODO(you): return the byte at read_pos_, then advance read_pos_ by one.
+    if (read_pos_ >= bytes_.size()) {
+      ok_ = false;
+      return 0;
+    }
     return bytes_[read_pos_++];
   }
 
+  // True until a read runs past the end of the buffer. Once false, the data
+  // read afterwards can't be trusted — check this after parsing untrusted input.
+  bool ok() const { return ok_; }
+
   // Read four bytes as a big-endian 32-bit value (the mirror of write_u32).
   std::uint32_t read_u32() {
-    // TODO(you): read four bytes, high byte first, and reassemble them with
-    // shifts (<<) and bitwise-or (|). Building on read_u8 works well.
     std::uint32_t result = 0;
     result |= static_cast<std::uint32_t>(read_u8()) << 24;
     result |= static_cast<std::uint32_t>(read_u8()) << 16;
@@ -67,6 +67,7 @@ class ReadBuffer {
  private:
   std::vector<std::uint8_t> bytes_;
   std::size_t read_pos_ = 0;
+  bool ok_ = true;
 };
 
 }  // namespace eng

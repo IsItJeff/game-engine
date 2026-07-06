@@ -66,3 +66,19 @@ TEST_CASE("random u32 values round-trip", "[bitstream]") {
   eng::ReadBuffer r(w.bytes());
   REQUIRE(r.read_u32() == value);
 }
+
+// STEP 4: untrusted input. A read past the end of the buffer must be safe —
+// no out-of-bounds access — because the server parses packets from anyone
+// (master-plan: "the server must survive arbitrary bytes"). Reading past the
+// end returns 0 and flips ok() to false, rather than reading memory it doesn't
+// own.
+TEST_CASE("reading past the end is safe, not undefined", "[bitstream]") {
+  eng::ReadBuffer r(std::vector<std::uint8_t>{0x01});  // exactly one byte
+
+  REQUIRE(r.read_u8() == 0x01);  // consumes the byte; still ok
+  REQUIRE(r.ok());
+
+  const std::uint8_t past = r.read_u8();  // nothing left to read
+  REQUIRE(past == 0);      // safe default, no out-of-bounds read
+  REQUIRE_FALSE(r.ok());   // the stream records that it overflowed
+}
