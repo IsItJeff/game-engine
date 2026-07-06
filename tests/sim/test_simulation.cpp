@@ -81,6 +81,41 @@ TEST_CASE("regenerate_vitals heals the health vital over time, capped at max", "
   REQUIRE(health.current == Approx(health.max));  // and never overshot the cap
 }
 
+TEST_CASE("moving drains the player's stamina", "[sim]") {
+  eng::sim::World world;  // player spawns with full stamina (100)
+  const entt::entity player = world.player();
+  const float start = world.registry().get<eng::sim::Stats>(player).stamina.current;
+
+  // Hold a direction for half a second of ticks. update_stamina spends stamina
+  // every tick the player is moving, and doesn't recover it until they stop.
+  for (int i = 0; i < eng::sim::kTicksPerSecond / 2; ++i) {
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+    world.step();
+  }
+
+  REQUIRE(world.registry().get<eng::sim::Stats>(player).stamina.current < start);
+}
+
+TEST_CASE("an exhausted player is slowed to a crawl", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  // Move long enough to empty the stamina bar (100 at 40/sec = 2.5s; give it 4).
+  for (int i = 0; i < 4 * eng::sim::kTicksPerSecond; ++i) {
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+    world.step();
+  }
+  REQUIRE(world.registry().get<eng::sim::Stats>(player).stamina.current == Approx(0.0f));
+
+  // One more move while exhausted: the funnel reads the empty stamina and sets a
+  // reduced speed instead of the full 320 — you can still limp away, not sprint.
+  world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+  world.step();
+
+  const float speed = glm::length(world.registry().get<eng::sim::Velocity>(player).value);
+  REQUIRE(speed == Approx(320.0f * 0.4f).margin(0.5f));  // a crawl, not a sprint
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

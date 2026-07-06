@@ -87,6 +87,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     const eng::sim::Vital& h = stats->health;
     ImGui::Text("health: %.0f / %.0f", static_cast<double>(h.current), static_cast<double>(h.max));
     ImGui::ProgressBar(h.current / h.max);
+    const eng::sim::Vital& s = stats->stamina;
+    ImGui::Text("stamina: %.0f / %.0f", static_cast<double>(s.current), static_cast<double>(s.max));
+    ImGui::ProgressBar(s.current / s.max);
   }
 
   ImGui::Checkbox("pause simulation", &paused);
@@ -94,8 +97,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   ImGui::Separator();
   ImGui::TextWrapped(
       "WASD / arrows: move — and dodge, the drifting motes hurt and vanish on "
-      "contact. Space: spawn a mote. H: take 15 damage. Your keypresses become "
-      "Commands; the motes hitting you is a system running on the server.");
+      "contact. Moving drains stamina; run it dry and you slow to a crawl until "
+      "you rest. Space: spawn a mote. H: take 15 damage. Your keypresses become "
+      "Commands; the motes hitting you and the stamina you spend are systems "
+      "running on the server.");
   ImGui::End();
 }
 

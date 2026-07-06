@@ -59,7 +59,28 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
     recover(s.health, dt);
-    // When you add another vital (e.g. Stats::stamina), recover it here too.
+    // Health only ever ticks back up, so it recovers here. Stamina is different —
+    // it's spent by moving — so it has its own system (update_stamina) instead of
+    // a passive line here.
+  }
+}
+
+void update_stamina(entt::registry& reg, float dt) {
+  // Cost of moving, in stamina per second. Higher than stamina's own regen rate
+  // so movement is a real drain. Tuning knob: raise it and you tire faster.
+  constexpr float kDrainPerSecond = 40.0f;
+
+  // Stats + Velocity = things that both tire and move. Motes have Velocity but no
+  // Stats, so the view skips them for free — only the player pays.
+  auto view = reg.view<Stats, Velocity>();
+  for (const entt::entity e : view) {
+    Vital& stamina = view.get<Stats>(e).stamina;
+    if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
+      stamina.current -= kDrainPerSecond * dt;             // moving: spend it...
+      if (stamina.current < 0.0f) stamina.current = 0.0f;  // ...never below empty
+    } else {
+      recover(stamina, dt);  // resting: recover at the vital's own regen rate
+    }
   }
 }
 

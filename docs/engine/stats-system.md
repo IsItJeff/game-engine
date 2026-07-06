@@ -2,15 +2,16 @@
 
 ## What it is
 
-The foundation for the numbers that describe a player or an NPC — health today,
-and stamina, hunger, attributes, and skills as the game grows. It is deliberately
-small: two data types and one system, built on the engine skeleton's ECS. It is
-the worked example of [extending the skeleton](skeleton/extending.md) applied to
-a real feature.
+The foundation for the numbers that describe a player or an NPC — health and
+stamina today, with hunger, attributes, and skills as the game grows. It is
+deliberately small: two data types and a handful of small systems, built on the
+engine skeleton's ECS. It is the worked example of
+[extending the skeleton](skeleton/extending.md) applied to a real feature.
 
 - **`Vital`** — a reusable "bar" stat: `current`, `max`, `regen_per_second`.
 - **`Stats`** — one component per entity that holds its vitals (its character sheet).
-- **`regenerate_vitals`** — a system that recovers each vital toward its cap.
+- **`regenerate_vitals`** — a system that recovers each *passive* vital (health) toward its cap.
+- **`update_stamina`** — a system that spends stamina while moving and restores it while still.
 - **`DamagePlayer`** — a command that subtracts from a player's health, applied
   through the funnel (the `H` key in the demo).
 - **`handle_deaths`** — a system that respawns a player whose health reaches zero.
@@ -18,10 +19,10 @@ a real feature.
   system that damages a player who touches one and then destroys it (the drifting
   motes are consumed on contact).
 
-Honest scope: only `health` exists so far. It regenerates, it drops both when a
-debug key fires a damage command and when a drifting hazard touches the player,
-and reaching zero respawns the player. Death is respawn, not the permadeath the
-game's NPCs will use.
+Honest scope: `health` and `stamina` exist. Health regenerates, drops from a debug
+key and from touching a hazard, and reaching zero respawns the player. Stamina is
+spent by moving and recovers by resting; running it dry slows the player to a
+crawl. Death is respawn, not the permadeath the game's NPCs will use.
 
 ## Why it's built this way
 
@@ -86,6 +87,19 @@ one the permadeath NPCs will use.
     it already runs on the authoritative server, so it acts directly. Contact
     damage is a rule of the world, so it is a system, not a command.
 
+Stamina shows that not every vital regenerates the same way. Health only ever
+ticks back up, so it lives in `regenerate_vitals`. Stamina is *spent*: the
+`update_stamina` system drains it while the player is moving (any entity with
+`Stats` and a non-zero `Velocity`) and lets it recover only while still. That is
+why stamina earns its own system instead of a line in `regenerate_vitals` — a
+one-way "always recover" rule can't express "costs something to use."
+
+The payoff is a gameplay coupling: `MovePlayer` reads stamina when it sets the
+player's velocity, so an exhausted player (empty bar) moves at 40% speed — a
+crawl, not a full stop, so you can always limp to safety. This is a command whose
+*effect depends on simulation state*, which is exactly why the funnel resolves it
+on the server rather than trusting the client's requested speed.
+
 ## Extending it
 
 Every one of these is a small, contained change — the system is made to grow
@@ -93,7 +107,8 @@ this way:
 
 | To add… | You touch… |
 |---|---|
-| **A stamina vital** | a `Vital stamina;` field in `Stats`; one `recover(s.stamina, dt);` line in `regenerate_vitals`; a bar in the panel |
+| **A passive vital** (mana) | a `Vital mana;` field in `Stats`; one `recover(s.mana, dt);` line in `regenerate_vitals`; a bar in the panel |
+| **A spent vital** (hunger) | a `Vital` field in `Stats` plus its own small system for *when* it drains — the shape `update_stamina` follows |
 | **Attributes** (strength, agility) | new fields in `Stats`; a system that reads them where they matter (e.g. movement) |
 | **Skills that level with use** | a `Skill {level, xp}` type and a set of them in `Stats`; a system that grants xp on activity |
 | **A new hazard or weapon** | a component marking it (like `Hazard`) plus a system that applies its effect (like `resolve_contacts`) |
@@ -117,11 +132,11 @@ their own systems, exactly like `Vital` did.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Vital`, `Stats`, and `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals`, `handle_deaths`, and `resolve_contacts`.
-- `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, and the lines scheduling the systems in `step()`.
-- `game/app/main.cpp` — the health bar in the debug panel.
-- `tests/sim/test_simulation.cpp` — the heal, damage, death, and contact tests.
+- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina), and `Hazard`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals`, `update_stamina`, `handle_deaths`, and `resolve_contacts`.
+- `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
+- `game/app/main.cpp` — the health and stamina bars in the debug panel.
+- `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, and stamina tests.
 
 ## Go deeper
 
