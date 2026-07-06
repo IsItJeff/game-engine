@@ -28,15 +28,15 @@ In consumption order:
 2. **[Engine Architecture](architecture/index.md)** — available
 3. **[Rendering](rendering/index.md)** — available
 4. **[Physics](physics/index.md)** — available
-5. Animation
-6. Netcode
-7. AI & Navigation
-8. Scripting & Modding
-9. Tooling
-10. Shipping
+5. **[Animation](animation/index.md)** — available
+6. **[Netcode](netcode/index.md)** — available
+7. **[AI Navigation](ai/index.md)** — available
+8. **[Scripting](scripting/index.md)** — available
+9. **[Tooling](tooling/index.md)** — available
+10. **[Shipping](shipping/index.md)** — available
 
-Tracks appear here as they clear verification. Ten tracks, roughly 10–15
-pages each, published in batches.
+All ten tracks are published — roughly 10–15 pages each, every page
+fact-checked against primary sources with its code compiled as pasted.
 
 ## What to expect
 
