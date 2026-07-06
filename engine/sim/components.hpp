@@ -56,6 +56,14 @@ struct PlayerControlled {
   float move_speed = 300.0f;
 };
 
+// Marks an entity as a non-player character. Empty for now — its whole job is to
+// answer "is this a person the world runs, rather than the player?" so systems
+// can treat the two differently (most importantly: an NPC that dies is destroyed,
+// not respawned — permadeath, the game's core rule). This is the seed of the
+// tiered NPC identity from the master plan: later, "Named" NPCs gain more
+// components (a name, relationships, skills) while this marker stays the floor.
+struct Npc {};
+
 // Presentation-only: how the debug renderer should draw this entity. The
 // simulation never reads this — it exists so the client has something to show.
 // Colours are 0..1 RGB.

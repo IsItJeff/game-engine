@@ -187,6 +187,30 @@ TEST_CASE("a hazard out of range does no damage and is not consumed", "[sim]") {
   REQUIRE(reg.valid(hazard));
 }
 
+TEST_CASE("a dead NPC is destroyed (permadeath), not respawned", "[sim]") {
+  eng::sim::World world;
+  entt::registry& reg = world.registry();
+
+  // A lone NPC with just enough health to die to a single hazard hit, off in a
+  // corner away from the scene's own motes and NPCs.
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{10.0f, 10.0f});
+  reg.emplace<eng::sim::Stats>(npc, eng::sim::Vital{10.0f, 100.0f, 0.0f});
+  reg.emplace<eng::sim::Npc>(npc);
+
+  // A stationary hazard sitting right on it deals 20 — lethal for a 10-health NPC.
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{10.0f, 10.0f});
+  reg.emplace<eng::sim::Hazard>(hazard, 20.0f);
+
+  world.step();  // contact drops the NPC to 0 -> handle_deaths destroys it
+
+  // Unlike the player (who respawns on a lethal hit), the NPC is gone for good —
+  // and the hazard that killed it was consumed.
+  REQUIRE_FALSE(reg.valid(npc));
+  REQUIRE_FALSE(reg.valid(hazard));
+}
+
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {
   eng::sim::World world;
   const auto before = world.registry().storage<eng::sim::Transform>().size();

@@ -20,8 +20,25 @@ entt::entity make_mote(entt::registry& reg, Vec2 pos, Vec2 vel, Vec3 color) {
   return e;
 }
 
-// Build the opening scene: a controllable player in the centre plus a dozen
-// ambient motes drifting in deterministic directions. Returns the player entity.
+// Create one NPC: a wandering non-player character. It has Stats (so it takes
+// contact damage and could regenerate) and the Npc marker (so handle_deaths
+// destroys it on death rather than respawning it — permadeath). It is otherwise a
+// drifting dot, like a mote, but it is a *person* the world owns, not a hazard.
+entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<Velocity>(e, vel);
+  reg.emplace<RenderDot>(e, Vec3{0.4f, 0.85f, 0.4f},
+                         8.0f);                       // green, a touch smaller than the player
+  reg.emplace<Stats>(e, Vital{60.0f, 100.0f, 4.0f});  // frailer than the player; heals slowly
+  reg.emplace<Npc>(e);
+  return e;
+}
+
+// Build the opening scene: a controllable player in the centre, a few wandering
+// NPCs, and a dozen ambient motes drifting in deterministic directions. Returns
+// the player entity.
 entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   const Vec2 center{kFieldWidth * 0.5f, kFieldHeight * 0.5f};
 
@@ -39,6 +56,15 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
     const Vec2 pos{static_cast<float>((i + 1) * 90 % static_cast<int>(kFieldWidth)),
                    static_cast<float>((i + 1) * 60 % static_cast<int>(kFieldHeight))};
     make_mote(reg, pos, Vec2{vel(rng), vel(rng)}, Vec3{0.8f, 0.7f, 0.3f});
+  }
+
+  // A handful of NPCs wandering among the motes. They drift into hazards, take
+  // damage, and — being NPCs, not the player — die for good when their health
+  // runs out. Deterministic spawn spots, same as the motes.
+  for (int i = 0; i < 4; ++i) {
+    const Vec2 pos{static_cast<float>((i + 1) * 200 % static_cast<int>(kFieldWidth)),
+                   static_cast<float>((i + 1) * 140 % static_cast<int>(kFieldHeight))};
+    make_npc(reg, pos, Vec2{vel(rng), vel(rng)});
   }
   return player;
 }
