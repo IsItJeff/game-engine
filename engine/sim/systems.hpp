@@ -32,4 +32,8 @@ void integrate_motion(entt::registry& reg, float dt);
 // of view. Keeps the demo self-contained; a real game uses a camera instead.
 void wrap_bounds(entt::registry& reg, Vec2 field_size);
 
+// Recover every entity's vitals toward their max at each vital's regen rate.
+// Runs over exactly the entities that have a Stats component (players, NPCs).
+void regenerate_vitals(entt::registry& reg, float dt);
+
 }  // namespace eng::sim

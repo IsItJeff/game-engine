@@ -30,6 +30,7 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   reg.emplace<Velocity>(player);
   reg.emplace<PlayerControlled>(player, kLocalPlayer, 320.0f);
   reg.emplace<RenderDot>(player, Vec3{0.3f, 0.8f, 1.0f}, 10.0f);  // bright blue
+  reg.emplace<Stats>(player, Vital{70.0f, 100.0f, 8.0f});         // spawn worn; heals 8/sec
 
   // Deterministic directions from the seeded PRNG so every run starts identically.
   std::uniform_real_distribution<float> vel(-80.0f, 80.0f);
@@ -67,6 +68,7 @@ void World::step() {
   const float dt = static_cast<float>(kSecondsPerTick);
   integrate_motion(registry_, dt);
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
+  regenerate_vitals(registry_, dt);
 
   // 4. One tick done.
   ++tick_;

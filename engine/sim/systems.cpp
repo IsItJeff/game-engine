@@ -38,4 +38,28 @@ void wrap_bounds(entt::registry& reg, Vec2 field_size) {
   }
 }
 
+namespace {
+
+// Move one vital toward its cap at its own rate. Splitting this out is what
+// keeps regenerate_vitals a single line per stat as more vitals are added.
+void recover(Vital& v, float dt) {
+  v.current += v.regen_per_second * dt;
+  if (v.current > v.max) v.current = v.max;  // never past the cap
+}
+
+}  // namespace
+
+void regenerate_vitals(entt::registry& reg, float dt) {
+  // view<Stats>() iterates exactly the entities that have stats — the player
+  // here, not the drifting motes — so this can't touch anything without them.
+  // That automatic filtering is the ECS's whole point: behaviour applies to
+  // whoever has the right data, nobody else.
+  auto view = reg.view<Stats>();
+  for (const entt::entity e : view) {
+    Stats& s = view.get<Stats>(e);
+    recover(s.health, dt);
+    // When you add another vital (e.g. Stats::stamina), recover it here too.
+  }
+}
+
 }  // namespace eng::sim

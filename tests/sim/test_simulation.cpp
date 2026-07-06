@@ -68,6 +68,19 @@ TEST_CASE("a diagonal input does not exceed the player's move speed", "[sim]") {
   REQUIRE(speed == Approx(320.0f).margin(0.5f));  // 320 = the player's move_speed
 }
 
+TEST_CASE("regenerate_vitals heals the health vital over time, capped at max", "[sim]") {
+  eng::sim::World world;  // the player spawns at 70/100 and heals 8/sec
+  const entt::entity player = world.player();
+  const float start = world.registry().get<eng::sim::Stats>(player).health.current;
+
+  // Ten seconds of ticks: +8/sec for 10s = +80, so 70 -> 150, clamped to 100.
+  for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) world.step();
+
+  const eng::sim::Vital& health = world.registry().get<eng::sim::Stats>(player).health;
+  REQUIRE(health.current > start);                // it healed
+  REQUIRE(health.current == Approx(health.max));  // and never overshot the cap
+}
+
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {
   eng::sim::World world;
   const auto before = world.registry().storage<eng::sim::Transform>().size();

@@ -81,6 +81,14 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   const eng::Vec2 pos = world.registry().get<eng::sim::Transform>(player).position;
   ImGui::Text("player: (%.0f, %.0f)", static_cast<double>(pos.x), static_cast<double>(pos.y));
 
+  // Read the player's Stats. try_get returns null if the entity has no Stats, so
+  // this stays safe for entities (like the motes) that were never given any.
+  if (const eng::sim::Stats* stats = world.registry().try_get<eng::sim::Stats>(player)) {
+    const eng::sim::Vital& h = stats->health;
+    ImGui::Text("health: %.0f / %.0f", static_cast<double>(h.current), static_cast<double>(h.max));
+    ImGui::ProgressBar(h.current / h.max);
+  }
+
   ImGui::Checkbox("pause simulation", &paused);
 
   ImGui::Separator();
