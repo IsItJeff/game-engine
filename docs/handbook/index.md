@@ -24,10 +24,10 @@ site, with the dead ends removed.
 
 In consumption order:
 
-1. **C++ for Game Devs** — *in production*
-2. Engine Architecture
-3. Rendering
-4. Physics
+1. **[C++ for Game Devs](cpp/index.md)** — available
+2. **[Engine Architecture](architecture/index.md)** — available
+3. **[Rendering](rendering/index.md)** — available
+4. **[Physics](physics/index.md)** — available
 5. Animation
 6. Netcode
 7. AI & Navigation

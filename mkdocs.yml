@@ -77,6 +77,40 @@ nav:
           - handbook/cpp/debugging-with-sanitizers.md
           - handbook/cpp/footguns-from-other-languages.md
           - handbook/cpp/what-to-defer.md
+      - Engine Architecture:
+          - handbook/architecture/index.md
+          - handbook/architecture/game-loop.md
+          - handbook/architecture/fixed-timestep.md
+          - handbook/architecture/input-as-data.md
+          - handbook/architecture/ecs-pattern.md
+          - handbook/architecture/composition-over-inheritance.md
+          - handbook/architecture/data-oriented-design.md
+          - handbook/architecture/solid-at-the-seams.md
+          - handbook/architecture/command-funnel.md
+          - handbook/architecture/engine-layering.md
+          - handbook/architecture/serialization-basics.md
+      - Rendering:
+          - handbook/rendering/index.md
+          - handbook/rendering/gpu-mental-model.md
+          - handbook/rendering/render-pipeline.md
+          - handbook/rendering/sdl-gpu-api.md
+          - handbook/rendering/hlsl-shader-basics.md
+          - handbook/rendering/meshes-on-the-gpu.md
+          - handbook/rendering/textures.md
+          - handbook/rendering/cameras.md
+          - handbook/rendering/depth-buffer.md
+          - handbook/rendering/lighting-basics.md
+          - handbook/rendering/render-interpolation.md
+      - Physics:
+          - handbook/physics/index.md
+          - handbook/physics/physics-in-game-engines.md
+          - handbook/physics/collision-shapes.md
+          - handbook/physics/kinematic-vs-dynamic.md
+          - handbook/physics/character-controllers.md
+          - handbook/physics/spatial-queries.md
+          - handbook/physics/jolt-overview.md
+          - handbook/physics/physics-on-a-fixed-tick.md
+          - handbook/physics/determinism-limits.md
   - Engine Docs:
       - engine/index.md
       - Game Pitch: engine/pitch.md
