@@ -62,4 +62,19 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   }
 }
 
+void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
+  // Only player-controlled entities are considered here; when NPCs arrive, a
+  // zero-health NPC would be destroyed instead (permadeath, the game's core
+  // rule). Resetting a few components — no entity creation or destruction — so
+  // iterating the view while writing to it is safe.
+  auto view = reg.view<Stats, PlayerControlled, Transform, Velocity>();
+  for (const entt::entity e : view) {
+    Stats& s = view.get<Stats>(e);
+    if (s.health.current > 0.0f) continue;            // still alive, nothing to do
+    s.health.current = s.health.max;                  // respawn at full health...
+    view.get<Transform>(e).position = respawn_point;  // ...at the spawn point...
+    view.get<Velocity>(e).value = Vec2{0.0f, 0.0f};   // ...and standing still
+  }
+}
+
 }  // namespace eng::sim

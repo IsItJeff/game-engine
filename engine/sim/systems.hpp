@@ -36,4 +36,10 @@ void wrap_bounds(entt::registry& reg, Vec2 field_size);
 // Runs over exactly the entities that have a Stats component (players, NPCs).
 void regenerate_vitals(entt::registry& reg, float dt);
 
+// React to death: a player-controlled entity whose health hit 0 respawns at
+// `respawn_point` with full health. MUST run before regenerate_vitals, or a
+// just-killed entity gets healed back above 0 the same tick and never dies.
+// (NPCs will instead be destroyed — permadeath — which is a later step.)
+void handle_deaths(entt::registry& reg, Vec2 respawn_point);
+
 }  // namespace eng::sim

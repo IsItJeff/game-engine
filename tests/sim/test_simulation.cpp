@@ -95,15 +95,24 @@ TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   REQUIRE(after == Approx(before - 25.0f).margin(0.5f));
 }
 
-TEST_CASE("damage clamps health at zero, never negative", "[sim]") {
+TEST_CASE("a lethal hit respawns the player at full health and the spawn point", "[sim]") {
   eng::sim::World world;
+  const entt::entity player = world.player();
 
-  world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 9999.0f));  // overkill
-  world.step();
+  // Move the player off-centre first, so the respawn visibly moves it back.
+  world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+  for (int i = 0; i < 30; ++i) world.step();
+  REQUIRE(world.registry().get<eng::sim::Transform>(player).position.x >
+          eng::sim::kFieldWidth * 0.5f);  // drifted right of centre
 
-  const float health = world.registry().get<eng::sim::Stats>(world.player()).health.current;
-  REQUIRE(health >= 0.0f);                       // clamped — not negative
-  REQUIRE(health == Approx(0.0f).margin(0.5f));  // and fully drained
+  world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 9999.0f));  // lethal
+  world.step();  // damage -> health hits 0 -> handle_deaths respawns before regen
+
+  const eng::sim::Stats& stats = world.registry().get<eng::sim::Stats>(player);
+  const eng::sim::Transform& tf = world.registry().get<eng::sim::Transform>(player);
+  REQUIRE(stats.health.current == Approx(stats.health.max));       // back to full
+  REQUIRE(tf.position.x == Approx(eng::sim::kFieldWidth * 0.5f));  // back to spawn
+  REQUIRE(tf.position.y == Approx(eng::sim::kFieldHeight * 0.5f));
 }
 
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {

@@ -68,6 +68,10 @@ void World::step() {
   const float dt = static_cast<float>(kSecondsPerTick);
   integrate_motion(registry_, dt);
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
+  // Death is checked BEFORE regen on purpose: otherwise the same tick's
+  // regeneration would nudge a 0-health entity back above zero and it would
+  // never die. The order of these lines is the definition of the tick.
+  handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f});
   regenerate_vitals(registry_, dt);
 
   // 4. One tick done.

@@ -13,10 +13,12 @@ a real feature.
 - **`regenerate_vitals`** — a system that recovers each vital toward its cap.
 - **`DamagePlayer`** — a command that subtracts from a player's health, applied
   through the funnel (the `H` key in the demo).
+- **`handle_deaths`** — a system that respawns a player whose health reaches zero.
 
-Honest scope: only `health` exists so far. It regenerates over time, and it can
-be damaged through a command — but nothing in *gameplay* (a weapon, a trap)
-produces that damage yet; only a debug keypress does.
+Honest scope: only `health` exists so far. It regenerates, can be damaged through
+a command, and reaching zero respawns the player — but nothing in *gameplay* (a
+weapon, a trap) produces the damage yet; only a debug keypress does. And death is
+respawn, not the permadeath the game's NPCs will use.
 
 ## Why it's built this way
 
@@ -60,6 +62,12 @@ key) is handled in `apply_command`, which subtracts from the matching player's
 health and clamps it at zero. Because that runs on the server through the funnel,
 a client can't fake damage — it can only ask for it.
 
+When health reaches zero, `handle_deaths` respawns the player at full health and
+the spawn point. It runs **before** `regenerate_vitals` in `step()` on purpose:
+the other order would let the same tick's regen nudge a 0-health entity back
+above zero, and it would never die. The order of the system calls in `step()` is
+the definition of the tick — here it is load-bearing.
+
 ## Extending it
 
 Every one of these is a small, contained change — the system is made to grow
@@ -79,15 +87,19 @@ gameplay** — a collision, a projectile, or a trap that emits a `DamagePlayer`
 command the same way the `H` key does. Nothing about `Stats` changes; a new bit
 of game logic just becomes another sender into the funnel.
 
+Death currently means respawn, which is right for the player but not for NPCs —
+the game's core rule is **permadeath**. When NPCs arrive, `handle_deaths` grows a
+branch that *destroys* a dead NPC's entity instead of resetting it (the ECS's
+`registry.destroy`, done carefully outside the iteration loop).
+
 Beyond that, the game's design calls for skills that level with activity for both
 players and NPCs (see the master plan). Those slot into `Stats` as new fields with
-their own systems, exactly like `Vital` did — and a health that can reach zero is
-what a future "death" system will watch for.
+their own systems, exactly like `Vital` did.
 
 ## Key files
 
 - `engine/sim/components.hpp` — `Vital` and `Stats`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` and its `recover` helper.
+- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (+ its `recover` helper) and `handle_deaths`.
 - `engine/sim/world.cpp` — the player's `Stats`, and the one line scheduling the system in `step()`.
 - `game/app/main.cpp` — the health bar in the debug panel.
 - `tests/sim/test_simulation.cpp` — the heal-and-cap test.
