@@ -103,6 +103,20 @@ void World::apply_command(const Command& cmd) {
                 Vec3{0.9f, 0.4f, 0.4f});  // reddish, so spawned motes stand out
       break;
     }
+    case CommandKind::DamagePlayer: {
+      // Subtract from the matching player's health, clamped at 0 (no negative
+      // health). Only entities that are player-controlled AND have Stats can be
+      // hit — the view filters the rest out for free. Because this runs on the
+      // server through the funnel, a client can't fake damage: it can only ask.
+      auto view = registry_.view<PlayerControlled, Stats>();
+      for (const entt::entity e : view) {
+        if (view.get<PlayerControlled>(e).player != cmd.player) continue;
+        Vital& health = view.get<Stats>(e).health;
+        health.current -= cmd.amount;
+        if (health.current < 0.0f) health.current = 0.0f;
+      }
+      break;
+    }
   }
 }
 

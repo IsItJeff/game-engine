@@ -93,7 +93,7 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
 
   ImGui::Separator();
   ImGui::TextWrapped(
-      "WASD / arrows: move the blue dot. Space: spawn a mote. "
+      "WASD / arrows: move the blue dot. Space: spawn a mote. H: take 15 damage. "
       "Everything you press becomes a Command sent to the server.");
   ImGui::End();
 }
@@ -130,6 +130,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   const double counter_freq = static_cast<double>(SDL_GetPerformanceFrequency());
   bool paused = false;
   bool space_was_down = false;
+  bool hurt_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -159,6 +160,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::spawn_mote(pos)});
     }
     space_was_down = space_raw;
+
+    // H, edge-triggered, hurts the player by 15. It travels the same funnel as
+    // everything else — input becomes a DamagePlayer command the server applies —
+    // so you can watch the bar drop, then the regen system heal it back up.
+    const bool hurt_raw = keys[SDL_SCANCODE_H];
+    if (hurt_raw && !hurt_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::damage_player(eng::sim::kLocalPlayer, 15.0f)});
+    }
+    hurt_was_down = hurt_raw;
 
     // --- advance the simulation in fixed steps ---
     const int steps = paused ? 0 : timestep.advance(frame_seconds);

@@ -11,9 +11,12 @@ a real feature.
 - **`Vital`** — a reusable "bar" stat: `current`, `max`, `regen_per_second`.
 - **`Stats`** — one component per entity that holds its vitals (its character sheet).
 - **`regenerate_vitals`** — a system that recovers each vital toward its cap.
+- **`DamagePlayer`** — a command that subtracts from a player's health, applied
+  through the funnel (the `H` key in the demo).
 
-Honest scope: only `health` exists so far, and it only regenerates — nothing
-damages it yet. That (a damage command) is the natural next step, below.
+Honest scope: only `health` exists so far. It regenerates over time, and it can
+be damaged through a command — but nothing in *gameplay* (a weapon, a trap)
+produces that damage yet; only a debug keypress does.
 
 ## Why it's built this way
 
@@ -52,6 +55,11 @@ The player is created in `build_scene` with `emplace<Stats>(player, Vital{70,
 100, 8})` — spawned a little worn so the regeneration is visible — and the debug
 panel reads it back with `try_get<Stats>` (null-safe) to draw the health bar.
 
+Health also *decreases* through the funnel: a `DamagePlayer` command (the `H`
+key) is handled in `apply_command`, which subtracts from the matching player's
+health and clamps it at zero. Because that runs on the server through the funnel,
+a client can't fake damage — it can only ask for it.
+
 ## Extending it
 
 Every one of these is a small, contained change — the system is made to grow
@@ -62,20 +70,19 @@ this way:
 | **A stamina vital** | a `Vital stamina;` field in `Stats`; one `recover(s.stamina, dt);` line in `regenerate_vitals`; a bar in the panel |
 | **Attributes** (strength, agility) | new fields in `Stats`; a system that reads them where they matter (e.g. movement) |
 | **Skills that level with use** | a `Skill {level, xp}` type and a set of them in `Stats`; a system that grants xp on activity |
-| **Damage or healing from gameplay** | a new **command** through the funnel — the clean, cheat-proof path (see below) |
+| **Damage from actual gameplay** | a weapon, trap, or collision that *emits* a damage command instead of a keypress |
 
 ## Where it goes next
 
-The most valuable next step is a **damage/heal command**. Right now nothing
-changes health except passive regen. A `DamageEntity` command sent through the
-[command funnel](skeleton/command-funnel.md) — rather than code reaching into the
-world directly — is how a weapon, a trap, or a healing shrine would affect stats,
-and it keeps the server as the single authority over them. That closes the loop:
-**input → command → funnel → the `Stats` you built.**
+Damage exists, but only from a debug key. The next real step is **damage from
+gameplay** — a collision, a projectile, or a trap that emits a `DamagePlayer`
+command the same way the `H` key does. Nothing about `Stats` changes; a new bit
+of game logic just becomes another sender into the funnel.
 
 Beyond that, the game's design calls for skills that level with activity for both
 players and NPCs (see the master plan). Those slot into `Stats` as new fields with
-their own systems, exactly like `Vital` did.
+their own systems, exactly like `Vital` did — and a health that can reach zero is
+what a future "death" system will watch for.
 
 ## Key files
 

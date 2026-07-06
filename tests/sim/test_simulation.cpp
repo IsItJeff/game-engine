@@ -81,6 +81,31 @@ TEST_CASE("regenerate_vitals heals the health vital over time, capped at max", "
   REQUIRE(health.current == Approx(health.max));  // and never overshot the cap
 }
 
+TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  const float before = world.registry().get<eng::sim::Stats>(player).health.current;
+
+  world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 25.0f));
+  world.step();  // applies the command, THEN regen runs the same tick
+
+  // ~25 removed; the margin absorbs the sliver the regen system heals back in
+  // the same step (8/sec over one 1/60 tick = 0.13).
+  const float after = world.registry().get<eng::sim::Stats>(player).health.current;
+  REQUIRE(after == Approx(before - 25.0f).margin(0.5f));
+}
+
+TEST_CASE("damage clamps health at zero, never negative", "[sim]") {
+  eng::sim::World world;
+
+  world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 9999.0f));  // overkill
+  world.step();
+
+  const float health = world.registry().get<eng::sim::Stats>(world.player()).health.current;
+  REQUIRE(health >= 0.0f);                       // clamped — not negative
+  REQUIRE(health == Approx(0.0f).margin(0.5f));  // and fully drained
+}
+
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {
   eng::sim::World world;
   const auto before = world.registry().storage<eng::sim::Transform>().size();
