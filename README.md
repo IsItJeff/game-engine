@@ -9,10 +9,19 @@ through the game.
 The single source of truth for every decision here is
 [docs/design/master-plan.md](docs/design/master-plan.md).
 
-## Status: pre-M0
+## Status: walking skeleton
 
-Nothing is playable yet. The toolchain, CI, and documentation skeleton are being stood up
-(milestone M0). See [ROADMAP.md](ROADMAP.md) for what comes next and in what order.
+There's a running foundation you can build and play with. Run the client (below) and you get
+a window with a controllable dot, drifting entities, and a live debug panel — driven through
+the whole engine pipeline: input → a **Command** → a **transport** → a **Server** that owns
+the **World** → a fixed-60 Hz ECS simulation → interpolated rendering. It's the load-bearing
+architecture in miniature: no networking-over-the-wire, no 3D, no game yet — those are named
+roadmap milestones.
+
+Start here: **[docs/engine/skeleton/index.md](docs/engine/skeleton/index.md)** explains what
+exists and why, with a page per subsystem and a recipe for extending it. The full plan and
+milestone order live in [docs/design/master-plan.md](docs/design/master-plan.md) and
+[ROADMAP.md](ROADMAP.md).
 
 ## Building
 
