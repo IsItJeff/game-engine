@@ -22,6 +22,17 @@ class WriteBuffer {
     bytes_.push_back(value);
   }
 
+  // Append a 32-bit value as four bytes, most-significant byte first
+  // (big-endian, a.k.a. "network byte order").
+  void write_u32(std::uint32_t value) {
+    // TODO(you): append the four bytes of `value`, high byte first. You can
+    // build this entirely from write_u8, shifts (>>), and masks (& 0xFF).
+    write_u8((value >> 24) & 0xFF);
+    write_u8((value >> 16) & 0xFF);
+    write_u8((value >> 8) & 0xFF);
+    write_u8(value & 0xFF);
+  }
+
   // The bytes written so far, in write order.
   const std::vector<std::uint8_t>& bytes() const { return bytes_; }
 
@@ -39,6 +50,18 @@ class ReadBuffer {
   std::uint8_t read_u8() {
     // TODO(you): return the byte at read_pos_, then advance read_pos_ by one.
     return bytes_[read_pos_++];
+  }
+
+  // Read four bytes as a big-endian 32-bit value (the mirror of write_u32).
+  std::uint32_t read_u32() {
+    // TODO(you): read four bytes, high byte first, and reassemble them with
+    // shifts (<<) and bitwise-or (|). Building on read_u8 works well.
+    std::uint32_t result = 0;
+    result |= static_cast<std::uint32_t>(read_u8()) << 24;
+    result |= static_cast<std::uint32_t>(read_u8()) << 16;
+    result |= static_cast<std::uint32_t>(read_u8()) << 8;
+    result |= static_cast<std::uint32_t>(read_u8());
+    return result;
   }
 
  private:
