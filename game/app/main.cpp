@@ -2,6 +2,7 @@
 #include <imgui.h>
 
 #include <cmath>
+#include <cstdlib>
 
 #include "engine/core/log.hpp"
 #include "engine/core/math.hpp"
@@ -109,6 +110,14 @@ int main(int /*argc*/, char* /*argv*/[]) {
   eng::net::Server server(transport);
   eng::sim::FixedTimestep timestep(eng::sim::kSecondsPerTick);
 
+  // Optional frame cap for automated smoke runs: ENG_MAX_FRAMES=N renders N
+  // frames then exits cleanly. CI sets it so this interactive client returns
+  // instead of looping forever on a machine with no one to close the window. A
+  // normal run leaves it unset (-1) and loops until the window is closed.
+  const char* frames_env = std::getenv("ENG_MAX_FRAMES");
+  const long max_frames = frames_env != nullptr ? std::atol(frames_env) : -1;
+  long frames_rendered = 0;
+
   Uint64 prev_counter = SDL_GetPerformanceCounter();
   const double counter_freq = static_cast<double>(SDL_GetPerformanceFrequency());
   bool paused = false;
@@ -157,6 +166,8 @@ int main(int /*argc*/, char* /*argv*/[]) {
     draw_entities(server.world(), renderer->background_draw_list(),
                   static_cast<float>(timestep.alpha()));
     renderer->end_frame();
+
+    if (max_frames >= 0 && ++frames_rendered >= max_frames) break;
   }
 
   eng::log::info("shutting down cleanly");

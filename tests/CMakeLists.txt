@@ -4,6 +4,7 @@ include(Catch)
 add_executable(eng_tests
   core/test_version.cpp
   core/test_bitstream.cpp
+  sim/test_simulation.cpp
 )
 
 # eng_net transitively brings eng_sim and eng_core, so linking it alone avoids
