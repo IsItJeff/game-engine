@@ -79,6 +79,37 @@ TEST_CASE("reading past the end is safe, not undefined", "[bitstream]") {
   REQUIRE(r.ok());
 
   const std::uint8_t past = r.read_u8();  // nothing left to read
-  REQUIRE(past == 0);      // safe default, no out-of-bounds read
-  REQUIRE_FALSE(r.ok());   // the stream records that it overflowed
+  REQUIRE(past == 0);                     // safe default, no out-of-bounds read
+  REQUIRE_FALSE(r.ok());                  // the stream records that it overflowed
+}
+
+// STEP 5: unify write and read. One serialize() function, written once, saves
+// a struct and loads it back depending only on the stream's direction.
+namespace {
+struct Player {
+  std::uint32_t health = 0;
+  std::uint8_t level = 0;
+};
+
+// The single source of truth for Player's wire format. Note it names each field
+// exactly once — add a field here and BOTH save and load pick it up.
+void serialize(eng::ByteStream& s, Player& p) {
+  s.serialize_u32(p.health);
+  s.serialize_u8(p.level);
+}
+}  // namespace
+
+TEST_CASE("a struct round-trips through one serialize function", "[bitstream]") {
+  Player saved{1000, 7};
+
+  eng::ByteStream writer = eng::ByteStream::writer();
+  serialize(writer, saved);  // same function...
+
+  eng::ByteStream reader = eng::ByteStream::reader(writer.bytes());
+  Player loaded{};
+  serialize(reader, loaded);  // ...opposite direction
+
+  REQUIRE(loaded.health == 1000);
+  REQUIRE(loaded.level == 7);
+  REQUIRE(reader.ok());
 }
