@@ -75,6 +75,15 @@ void World::step() {
 void World::apply_command(const Command& cmd) {
   switch (cmd.kind) {
     case CommandKind::MovePlayer: {
+      // Clamp the input direction to length <= 1 HERE, at the funnel — this is
+      // exactly why a single choke point is worth having. The keyboard builds a
+      // diagonal like (1, 1) whose length is 1.41, which would move the player
+      // 41% faster diagonally than straight. Clamping once covers every sender
+      // (keyboard now, the network later) instead of trusting each to normalize.
+      Vec2 dir = cmd.move_dir;
+      const float magnitude = glm::length(dir);
+      if (magnitude > 1.0f) dir /= magnitude;
+
       // Find every player-controlled entity belonging to this player and set its
       // velocity from the input direction. (In single-player that's one entity;
       // the loop is what makes it correct once there are several players.)
@@ -82,7 +91,7 @@ void World::apply_command(const Command& cmd) {
       for (const entt::entity e : view) {
         const PlayerControlled& pc = view.get<PlayerControlled>(e);
         if (pc.player != cmd.player) continue;
-        view.get<Velocity>(e).value = cmd.move_dir * pc.move_speed;
+        view.get<Velocity>(e).value = dir * pc.move_speed;
       }
       break;
     }

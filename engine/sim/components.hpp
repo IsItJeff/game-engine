@@ -50,7 +50,9 @@ struct Velocity {
 // single-player, essential once several players share a world.
 struct PlayerControlled {
   PlayerId player = kLocalPlayer;
-  // How quickly this entity accelerates toward the input direction (units/s^2).
+  // Top speed while an input is held, in world units per second. The command
+  // funnel sets velocity = clamped_input_direction * move_speed directly — there
+  // is no acceleration or inertia yet, so the entity starts and stops instantly.
   float move_speed = 300.0f;
 };
 

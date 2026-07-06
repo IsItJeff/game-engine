@@ -131,14 +131,17 @@ int main(int /*argc*/, char* /*argv*/[]) {
       if (keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_DOWN]) dir.y += 1.0f;
     }
 
-    // Space, edge-triggered, spawns a mote at the player's position.
-    const bool space_down = !imgui_wants_keys && keys[SDL_SCANCODE_SPACE];
-    if (space_down && !space_was_down) {
+    // Space, edge-triggered, spawns a mote at the player's position. Edge-detect
+    // on the RAW physical key and gate only the ACTION on ImGui focus — if we
+    // folded focus into the remembered state, ImGui gaining then losing the
+    // keyboard while Space stays held would look like a fresh press and spawn twice.
+    const bool space_raw = keys[SDL_SCANCODE_SPACE];
+    if (space_raw && !space_was_down && !imgui_wants_keys) {
       const entt::entity player = server.world().player();
       const eng::Vec2 pos = server.world().registry().get<eng::sim::Transform>(player).position;
       transport.send(eng::net::Message{eng::sim::spawn_mote(pos)});
     }
-    space_was_down = space_down;
+    space_was_down = space_raw;
 
     // --- advance the simulation in fixed steps ---
     const int steps = paused ? 0 : timestep.advance(frame_seconds);

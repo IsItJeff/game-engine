@@ -53,6 +53,21 @@ TEST_CASE("a MovePlayer command moves the player through the funnel", "[sim]") {
   REQUIRE(now_x > start_x);
 }
 
+TEST_CASE("a diagonal input does not exceed the player's move speed", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  // A raw diagonal (1, 1) has length 1.41. The funnel must clamp it so the
+  // resulting speed equals move_speed, not move_speed * 1.41 (the classic
+  // faster-on-the-diagonal bug).
+  world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 1.0f}));
+  world.step();
+
+  const eng::Vec2 vel = world.registry().get<eng::sim::Velocity>(player).value;
+  const float speed = glm::length(vel);
+  REQUIRE(speed == Approx(320.0f).margin(0.5f));  // 320 = the player's move_speed
+}
+
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {
   eng::sim::World world;
   const auto before = world.registry().storage<eng::sim::Transform>().size();
