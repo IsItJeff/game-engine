@@ -94,7 +94,7 @@ jobs:
             libx11-dev libxft-dev libxext-dev \
             libwayland-dev libxkbcommon-dev libegl1-mesa-dev \
             libibus-1.0-dev \
-            autoconf autoconf-archive automake libtool
+            autoconf autoconf-archive automake libtool libltdl-dev
       - name: Enable vcpkg GitHub Actions binary cache
         uses: actions/github-script@v7
         with:
