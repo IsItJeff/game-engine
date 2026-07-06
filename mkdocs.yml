@@ -111,6 +111,75 @@ nav:
           - handbook/physics/jolt-overview.md
           - handbook/physics/physics-on-a-fixed-tick.md
           - handbook/physics/determinism-limits.md
+      - Animation:
+          - handbook/animation/index.md
+          - handbook/animation/skeletal-animation.md
+          - handbook/animation/bind-pose.md
+          - handbook/animation/skinning.md
+          - handbook/animation/animation-clips.md
+          - handbook/animation/blending.md
+          - handbook/animation/gltf-asset-pipeline.md
+          - handbook/animation/retargeting.md
+          - handbook/animation/ozz-overview.md
+      - Netcode:
+          - handbook/netcode/index.md
+          - handbook/netcode/client-server-model.md
+          - handbook/netcode/udp-vs-tcp.md
+          - handbook/netcode/transport-reliability.md
+          - handbook/netcode/server-authority.md
+          - handbook/netcode/snapshots.md
+          - handbook/netcode/entity-interpolation.md
+          - handbook/netcode/client-prediction.md
+          - handbook/netcode/reconciliation.md
+          - handbook/netcode/replication-basics.md
+          - handbook/netcode/bandwidth-basics.md
+          - handbook/netcode/latency-tradeoffs.md
+          - handbook/netcode/nat-traversal.md
+      - AI Navigation:
+          - handbook/ai/index.md
+          - handbook/ai/navmesh.md
+          - handbook/ai/astar-pathfinding.md
+          - handbook/ai/steering.md
+          - handbook/ai/behavior-trees.md
+          - handbook/ai/blackboards.md
+          - handbook/ai/npc-perception.md
+          - handbook/ai/choosing-an-ai-model.md
+          - handbook/ai/recast-detour-overview.md
+          - handbook/ai/staggered-ai-scheduling.md
+      - Scripting:
+          - handbook/scripting/index.md
+          - handbook/scripting/why-embed-scripting.md
+          - handbook/scripting/luau-overview.md
+          - handbook/scripting/sandboxing.md
+          - handbook/scripting/script-resource-budgets.md
+          - handbook/scripting/binding-a-script-api.md
+          - handbook/scripting/handles-not-pointers.md
+          - handbook/scripting/hot-reload.md
+          - handbook/scripting/mod-packaging.md
+          - handbook/scripting/api-versioning.md
+          - handbook/scripting/honest-limits-of-mod-security.md
+      - Tooling:
+          - handbook/tooling/index.md
+          - handbook/tooling/dear-imgui-debug-ui.md
+          - handbook/tooling/profiling-with-tracy.md
+          - handbook/tooling/gpu-frame-capture.md
+          - handbook/tooling/logging-strategy.md
+          - handbook/tooling/assertions.md
+          - handbook/tooling/the-three-testing-lanes.md
+          - handbook/tooling/replay-based-testing.md
+          - handbook/tooling/asset-hot-reload.md
+          - handbook/tooling/crash-reporting.md
+      - Shipping:
+          - handbook/shipping/index.md
+          - handbook/shipping/shipping-builds.md
+          - handbook/shipping/steamworks-overview.md
+          - handbook/shipping/macos-notarization.md
+          - handbook/shipping/the-steam-page.md
+          - handbook/shipping/early-access-operations.md
+          - handbook/shipping/save-compatibility.md
+          - handbook/shipping/accessibility-basics.md
+          - handbook/shipping/localization-readiness.md
+          - handbook/shipping/what-shipping-costs.md
   - Engine Docs:
       - engine/index.md
       - Game Pitch: engine/pitch.md
