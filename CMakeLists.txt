@@ -15,6 +15,10 @@ option(ENG_BUILD_TESTS "Build tests" ON)
 add_library(eng_warnings INTERFACE)
 if(MSVC)
   target_compile_options(eng_warnings INTERFACE /W4 /permissive-)
+  # MSVC flags standard C functions like std::getenv as "unsafe" (C4996). They
+  # are portable and fine; silence that one deprecation so /WX doesn't reject
+  # cross-platform code that Clang/GCC accept without complaint.
+  target_compile_definitions(eng_warnings INTERFACE _CRT_SECURE_NO_WARNINGS)
   if(ENG_WARNINGS_AS_ERRORS)
     target_compile_options(eng_warnings INTERFACE /WX)
   endif()
