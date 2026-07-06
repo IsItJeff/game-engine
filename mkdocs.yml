@@ -184,6 +184,15 @@ nav:
       - engine/index.md
       - Game Pitch: engine/pitch.md
       - Roadmap: engine/roadmap.md
+      - The Engine Right Now:
+          - engine/skeleton/index.md
+          - engine/skeleton/core.md
+          - engine/skeleton/ecs.md
+          - engine/skeleton/tick-and-systems.md
+          - engine/skeleton/command-funnel.md
+          - engine/skeleton/transport-and-server.md
+          - engine/skeleton/client-and-rendering.md
+          - engine/skeleton/extending.md
       - Architecture:
           - engine/architecture/index.md
           - engine/architecture/adr-0001-game-first-strategy.md

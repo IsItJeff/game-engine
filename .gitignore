@@ -5,3 +5,6 @@ compile_commands.json
 site/
 .venv/
 __pycache__/
+
+# ImGui writes window layout here at runtime.
+imgui.ini
