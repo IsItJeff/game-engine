@@ -64,4 +64,39 @@ struct RenderDot {
   float radius = 6.0f;
 };
 
+// Marks an entity as dangerous to touch. An entity with a Hazard deals `damage`
+// to any player it overlaps and is then consumed — destroyed (see the
+// resolve_contacts system). The drifting motes have this: touch one, take a hit,
+// and it's gone.
+struct Hazard {
+  float damage = 20.0f;
+};
+
+// --- Stats system ---
+//
+// The foundation for player and NPC stats. Deliberately small: a reusable Vital
+// building block and a Stats "character sheet" that holds them. This is where
+// the game's stats and skills grow (see docs/engine/skeleton/extending.md), but
+// only as they're actually needed — no speculative RPG scaffolding.
+
+// A depleting, regenerating resource with a cap. Health today; stamina, hunger,
+// and mana will be the same shape, so they share this one type. Floats (not
+// ints) so recovery can accrue smoothly across the fixed 60 Hz ticks.
+struct Vital {
+  float current = 100.0f;
+  float max = 100.0f;
+  float regen_per_second = 0.0f;  // 0 = doesn't recover on its own
+};
+
+// An entity's stat sheet — one component holding everything about its condition,
+// so a player or an NPC-management screen reads a single place. Give an entity a
+// Stats and it participates in the stats systems; leave it off and it doesn't.
+//
+// It starts with just health. To grow the system you add fields HERE — another
+// Vital (e.g. `Vital stamina;`), later a set of attributes or skills — and teach
+// the relevant system to read them. Nothing else in the engine has to change.
+struct Stats {
+  Vital health{100.0f, 100.0f, 5.0f};  // full, and slowly self-heals
+};
+
 }  // namespace eng::sim

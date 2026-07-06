@@ -32,4 +32,21 @@ void integrate_motion(entt::registry& reg, float dt);
 // of view. Keeps the demo self-contained; a real game uses a camera instead.
 void wrap_bounds(entt::registry& reg, Vec2 field_size);
 
+// Recover every entity's vitals toward their max at each vital's regen rate.
+// Runs over exactly the entities that have a Stats component (players, NPCs).
+void regenerate_vitals(entt::registry& reg, float dt);
+
+// Resolve player/hazard collisions: a player overlapping a Hazard takes its
+// `damage`, and the hazard is then consumed (destroyed). A SYSTEM, not a command
+// — collision is the sim's own rule, so it changes state directly (the funnel is
+// only for input from outside the sim). Note it destroys entities only AFTER
+// iterating; destroying during iteration invalidates the view (a classic bug).
+void resolve_contacts(entt::registry& reg);
+
+// React to death: a player-controlled entity whose health hit 0 respawns at
+// `respawn_point` with full health. MUST run before regenerate_vitals, or a
+// just-killed entity gets healed back above 0 the same tick and never dies.
+// (NPCs will instead be destroyed — permadeath — which is a later step.)
+void handle_deaths(entt::registry& reg, Vec2 respawn_point);
+
 }  // namespace eng::sim

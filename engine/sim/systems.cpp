@@ -1,6 +1,7 @@
 #include "engine/sim/systems.hpp"
 
 #include <cmath>
+#include <vector>
 
 #include "engine/sim/components.hpp"
 
@@ -36,6 +37,79 @@ void wrap_bounds(entt::registry& reg, Vec2 field_size) {
     p.x -= std::floor(p.x / field_size.x) * field_size.x;
     p.y -= std::floor(p.y / field_size.y) * field_size.y;
   }
+}
+
+namespace {
+
+// Move one vital toward its cap at its own rate. Splitting this out is what
+// keeps regenerate_vitals a single line per stat as more vitals are added.
+void recover(Vital& v, float dt) {
+  v.current += v.regen_per_second * dt;
+  if (v.current > v.max) v.current = v.max;  // never past the cap
+}
+
+}  // namespace
+
+void regenerate_vitals(entt::registry& reg, float dt) {
+  // view<Stats>() iterates exactly the entities that have stats — the player
+  // here, not the drifting motes — so this can't touch anything without them.
+  // That automatic filtering is the ECS's whole point: behaviour applies to
+  // whoever has the right data, nobody else.
+  auto view = reg.view<Stats>();
+  for (const entt::entity e : view) {
+    Stats& s = view.get<Stats>(e);
+    recover(s.health, dt);
+    // When you add another vital (e.g. Stats::stamina), recover it here too.
+  }
+}
+
+void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
+  // Only player-controlled entities are considered here; when NPCs arrive, a
+  // zero-health NPC would be destroyed instead (permadeath, the game's core
+  // rule). Resetting a few components — no entity creation or destruction — so
+  // iterating the view while writing to it is safe.
+  auto view = reg.view<Stats, PlayerControlled, Transform, Velocity>();
+  for (const entt::entity e : view) {
+    Stats& s = view.get<Stats>(e);
+    if (s.health.current > 0.0f) continue;            // still alive, nothing to do
+    s.health.current = s.health.max;                  // respawn at full health...
+    view.get<Transform>(e).position = respawn_point;  // ...at the spawn point...
+    view.get<Velocity>(e).value = Vec2{0.0f, 0.0f};   // ...and standing still
+  }
+}
+
+void resolve_contacts(entt::registry& reg) {
+  // "In contact" = centres within this many world units. A real engine gives
+  // each entity a collision shape (roadmap M4, Jolt); one distance is plenty for
+  // round dots, and 15 matches the default player+mote radii (10 + 5).
+  constexpr float kContactDistance = 15.0f;
+
+  // Gather the hazards to destroy. We must NOT call reg.destroy() while iterating
+  // the view below: destroying an entity mid-iteration invalidates the view and
+  // is undefined behaviour (the classic ECS trap). So we collect first, then
+  // destroy in a separate pass.
+  std::vector<entt::entity> consumed;
+
+  // Nested loop: every hazard against every player. Fine for a handful of each;
+  // a real game with thousands would use a spatial grid to avoid the O(n*m).
+  auto players = reg.view<PlayerControlled, Stats, Transform>();
+  auto hazards = reg.view<Hazard, Transform>();
+  for (const entt::entity h : hazards) {
+    const Vec2 h_pos = hazards.get<Transform>(h).position;
+    bool hit = false;
+    for (const entt::entity p : players) {
+      if (glm::distance(players.get<Transform>(p).position, h_pos) >= kContactDistance) {
+        continue;  // this player isn't touching it
+      }
+      Vital& health = players.get<Stats>(p).health;
+      health.current -= hazards.get<Hazard>(h).damage;
+      if (health.current < 0.0f) health.current = 0.0f;  // clamp at 0
+      hit = true;
+    }
+    if (hit) consumed.push_back(h);  // consume it once, no matter how many it hit
+  }
+
+  for (const entt::entity e : consumed) reg.destroy(e);  // safe: iteration is done
 }
 
 }  // namespace eng::sim

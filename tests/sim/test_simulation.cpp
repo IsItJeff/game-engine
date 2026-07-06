@@ -68,6 +68,90 @@ TEST_CASE("a diagonal input does not exceed the player's move speed", "[sim]") {
   REQUIRE(speed == Approx(320.0f).margin(0.5f));  // 320 = the player's move_speed
 }
 
+TEST_CASE("regenerate_vitals heals the health vital over time, capped at max", "[sim]") {
+  eng::sim::World world;  // the player spawns at 70/100 and heals 8/sec
+  const entt::entity player = world.player();
+  const float start = world.registry().get<eng::sim::Stats>(player).health.current;
+
+  // Ten seconds of ticks: +8/sec for 10s = +80, so 70 -> 150, clamped to 100.
+  for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) world.step();
+
+  const eng::sim::Vital& health = world.registry().get<eng::sim::Stats>(player).health;
+  REQUIRE(health.current > start);                // it healed
+  REQUIRE(health.current == Approx(health.max));  // and never overshot the cap
+}
+
+TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  const float before = world.registry().get<eng::sim::Stats>(player).health.current;
+
+  world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 25.0f));
+  world.step();  // applies the command, THEN regen runs the same tick
+
+  // ~25 removed; the margin absorbs the sliver the regen system heals back in
+  // the same step (8/sec over one 1/60 tick = 0.13).
+  const float after = world.registry().get<eng::sim::Stats>(player).health.current;
+  REQUIRE(after == Approx(before - 25.0f).margin(0.5f));
+}
+
+TEST_CASE("a lethal hit respawns the player at full health and the spawn point", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  // Move the player off-centre first, so the respawn visibly moves it back.
+  world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+  for (int i = 0; i < 30; ++i) world.step();
+  REQUIRE(world.registry().get<eng::sim::Transform>(player).position.x >
+          eng::sim::kFieldWidth * 0.5f);  // drifted right of centre
+
+  world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 9999.0f));  // lethal
+  world.step();  // damage -> health hits 0 -> handle_deaths respawns before regen
+
+  const eng::sim::Stats& stats = world.registry().get<eng::sim::Stats>(player);
+  const eng::sim::Transform& tf = world.registry().get<eng::sim::Transform>(player);
+  REQUIRE(stats.health.current == Approx(stats.health.max));       // back to full
+  REQUIRE(tf.position.x == Approx(eng::sim::kFieldWidth * 0.5f));  // back to spawn
+  REQUIRE(tf.position.y == Approx(eng::sim::kFieldHeight * 0.5f));
+}
+
+TEST_CASE("touching a hazard damages the player and consumes the hazard", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  entt::registry& reg = world.registry();
+  const eng::Vec2 player_pos = reg.get<eng::sim::Transform>(player).position;
+
+  // A stationary hazard sitting right on the player (no Velocity, so it stays).
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Transform>(hazard, player_pos);
+  reg.emplace<eng::sim::Hazard>(hazard, 20.0f);  // 20 per hit — non-lethal (player has 70)
+
+  const float before = reg.get<eng::sim::Stats>(player).health.current;
+  world.step();
+
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current < before);  // took the hit
+  REQUIRE_FALSE(reg.valid(hazard));  // and the hazard was destroyed (consumed)
+}
+
+TEST_CASE("a hazard out of range does no damage and is not consumed", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  entt::registry& reg = world.registry();
+  const eng::Vec2 player_pos = reg.get<eng::sim::Transform>(player).position;
+
+  // A stationary hazard well out of range.
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Transform>(hazard, player_pos + eng::Vec2{500.0f, 0.0f});
+  reg.emplace<eng::sim::Hazard>(hazard, 20.0f);
+
+  const float before = reg.get<eng::sim::Stats>(player).health.current;
+  world.step();
+
+  // No contact: no damage (regen only nudges up), and the hazard survives.
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current >= before);
+  REQUIRE(reg.valid(hazard));
+}
+
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {
   eng::sim::World world;
   const auto before = world.registry().storage<eng::sim::Transform>().size();

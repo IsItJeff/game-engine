@@ -193,6 +193,8 @@ nav:
           - engine/skeleton/transport-and-server.md
           - engine/skeleton/client-and-rendering.md
           - engine/skeleton/extending.md
+      - Game Systems:
+          - Stats: engine/stats-system.md
       - Architecture:
           - engine/architecture/index.md
           - engine/architecture/adr-0001-game-first-strategy.md

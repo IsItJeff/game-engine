@@ -16,6 +16,7 @@ entt::entity make_mote(entt::registry& reg, Vec2 pos, Vec2 vel, Vec3 color) {
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<Velocity>(e, vel);
   reg.emplace<RenderDot>(e, color, 5.0f);
+  reg.emplace<Hazard>(e);  // motes hurt on contact (default 40 dps)
   return e;
 }
 
@@ -30,6 +31,7 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   reg.emplace<Velocity>(player);
   reg.emplace<PlayerControlled>(player, kLocalPlayer, 320.0f);
   reg.emplace<RenderDot>(player, Vec3{0.3f, 0.8f, 1.0f}, 10.0f);  // bright blue
+  reg.emplace<Stats>(player, Vital{70.0f, 100.0f, 8.0f});         // spawn worn; heals 8/sec
 
   // Deterministic directions from the seeded PRNG so every run starts identically.
   std::uniform_real_distribution<float> vel(-80.0f, 80.0f);
@@ -67,6 +69,12 @@ void World::step() {
   const float dt = static_cast<float>(kSecondsPerTick);
   integrate_motion(registry_, dt);
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
+  // Collision runs after movement (positions are current), then death is checked
+  // from any damage it dealt, then survivors regenerate. This order is the
+  // definition of the tick — collision before death before heal.
+  resolve_contacts(registry_);
+  handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f});
+  regenerate_vitals(registry_, dt);
 
   // 4. One tick done.
   ++tick_;
@@ -99,6 +107,20 @@ void World::apply_command(const Command& cmd) {
       std::uniform_real_distribution<float> vel(-120.0f, 120.0f);
       make_mote(registry_, cmd.spawn_pos, Vec2{vel(rng_), vel(rng_)},
                 Vec3{0.9f, 0.4f, 0.4f});  // reddish, so spawned motes stand out
+      break;
+    }
+    case CommandKind::DamagePlayer: {
+      // Subtract from the matching player's health, clamped at 0 (no negative
+      // health). Only entities that are player-controlled AND have Stats can be
+      // hit — the view filters the rest out for free. Because this runs on the
+      // server through the funnel, a client can't fake damage: it can only ask.
+      auto view = registry_.view<PlayerControlled, Stats>();
+      for (const entt::entity e : view) {
+        if (view.get<PlayerControlled>(e).player != cmd.player) continue;
+        Vital& health = view.get<Stats>(e).health;
+        health.current -= cmd.amount;
+        if (health.current < 0.0f) health.current = 0.0f;
+      }
       break;
     }
   }

@@ -30,8 +30,9 @@
 namespace eng::sim {
 
 enum class CommandKind {
-  MovePlayer,  // push a player's entity in a direction
-  SpawnMote,   // create a new drifting entity
+  MovePlayer,    // push a player's entity in a direction
+  SpawnMote,     // create a new drifting entity
+  DamagePlayer,  // subtract from a player's health
 };
 
 struct Command {
@@ -45,6 +46,9 @@ struct Command {
 
   // SpawnMote: where to create the new entity, in world units.
   Vec2 spawn_pos{0.0f, 0.0f};
+
+  // DamagePlayer: how much health to remove.
+  float amount = 0.0f;
 };
 
 // Convenience constructors, so call sites read as intent, not struct-filling.
@@ -53,6 +57,9 @@ inline Command move_player(PlayerId player, Vec2 dir) {
 }
 inline Command spawn_mote(Vec2 pos) {
   return Command{CommandKind::SpawnMote, kLocalPlayer, {}, pos};
+}
+inline Command damage_player(PlayerId player, float amount) {
+  return Command{CommandKind::DamagePlayer, player, {}, {}, amount};
 }
 
 }  // namespace eng::sim
