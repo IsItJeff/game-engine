@@ -1,4 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators_all.hpp>
+
+#include <cstdint>
+#include <limits>
 
 #include "engine/core/bitstream.hpp"
 
@@ -34,4 +38,31 @@ TEST_CASE("a u32 is written big-endian, high byte first", "[bitstream]") {
 
   const std::vector<std::uint8_t> expected{0xDE, 0xAD, 0xBE, 0xEF};
   REQUIRE(w.bytes() == expected);
+}
+
+// STEP 3: property tests. Instead of one hand-picked value, assert the
+// round-trip rule read(write(x)) == x holds for a flood of values. Catch2's
+// GENERATE re-runs the test body once per generated value.
+
+TEST_CASE("every byte value round-trips", "[bitstream]") {
+  // range(0, 256) is exhaustive: every possible byte, 0..255.
+  const int value = GENERATE(range(0, 256));
+
+  eng::WriteBuffer w;
+  w.write_u8(static_cast<std::uint8_t>(value));
+  eng::ReadBuffer r(w.bytes());
+  REQUIRE(r.read_u8() == value);
+}
+
+TEST_CASE("random u32 values round-trip", "[bitstream]") {
+  // 4 billion values is too many to check exhaustively, so sample 1000 at
+  // random across the whole range, plus the boundary values by hand.
+  const std::uint32_t value =
+      GENERATE(std::uint32_t{0}, std::numeric_limits<std::uint32_t>::max(),
+               take(1000, random(std::uint32_t{0}, std::numeric_limits<std::uint32_t>::max())));
+
+  eng::WriteBuffer w;
+  w.write_u32(value);
+  eng::ReadBuffer r(w.bytes());
+  REQUIRE(r.read_u32() == value);
 }
