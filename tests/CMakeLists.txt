@@ -3,7 +3,7 @@ include(Catch)
 
 add_executable(eng_tests
   core/test_version.cpp
-  sim/test_simulation.cpp
+  core/test_bitstream.cpp
 )
 
 # eng_net transitively brings eng_sim and eng_core, so linking it alone avoids
