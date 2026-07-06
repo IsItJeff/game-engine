@@ -3,6 +3,7 @@ include(Catch)
 
 add_executable(eng_tests
   core/test_version.cpp
+  core/test_bitstream.cpp
 )
 
 target_link_libraries(eng_tests
