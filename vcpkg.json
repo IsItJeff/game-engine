@@ -11,6 +11,11 @@
       "platform": "linux",
       "$reason": "Linux target is the headless dedicated server; dbus/ibus default features drag in the whole systemd build chain for nothing"
     },
+    {
+      "name": "imgui",
+      "features": ["sdl3-binding", "sdlgpu3-binding"],
+      "$reason": "Dear ImGui debug layer with the SDL3 platform + SDL_GPU renderer backends (adr-0022)"
+    },
     "entt",
     "glm",
     "spdlog",

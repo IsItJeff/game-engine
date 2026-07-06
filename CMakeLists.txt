@@ -31,6 +31,8 @@ if(ENG_SANITIZERS AND NOT MSVC)
 endif()
 
 add_subdirectory(engine/core)
+add_subdirectory(engine/sim)
+add_subdirectory(engine/net)
 add_subdirectory(game/app)
 
 if(ENG_BUILD_TESTS)
