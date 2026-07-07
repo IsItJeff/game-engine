@@ -105,6 +105,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   if (const eng::sim::Attributes* attr = world.registry().try_get<eng::sim::Attributes>(player)) {
     ImGui::Text("endurance: %d", attr->endurance.level - 1);  // level 1 = 0 bonus
   }
+  if (const eng::sim::CharacterLevel* cl =
+          world.registry().try_get<eng::sim::CharacterLevel>(player)) {
+    ImGui::Text("character level: %d", cl->level);  // the slow "veteran" multiplier on earned stats
+  }
   if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
     if (const eng::sim::Skill* c = skills->find(eng::sim::SkillId::Conditioning)) {
       ImGui::Text("conditioning: lvl %d", c->level);

@@ -150,6 +150,30 @@ TEST_CASE("an idle character does not train conditioning", "[sim]") {
   REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance.level == 1);  // bonus 0
 }
 
+TEST_CASE("sustained activity raises the character level, which compounds the pools", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  // Move for a good while. The Character Level earns only a quarter-share of the
+  // activity, so it climbs slower than the skill — long enough here to cross into
+  // level 2, where its POWER(level - 1) multiplier first bites.
+  for (int i = 0; i < 25 * eng::sim::kTicksPerSecond; ++i) {
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+    world.step();
+  }
+
+  const eng::sim::CharacterLevel& character =
+      world.registry().get<eng::sim::CharacterLevel>(player);
+  const eng::sim::Attributes& attr = world.registry().get<eng::sim::Attributes>(player);
+  const eng::sim::Stats& stats = world.registry().get<eng::sim::Stats>(player);
+
+  REQUIRE(character.level >= 2);  // accrued from activity and leveled
+  // The veteran multiplier scales the EARNED endurance bonus, so the pool is
+  // strictly bigger than endurance alone (base 100 + bonus x 10/point) would give.
+  const float endurance_only = 100.0f + static_cast<float>(attr.endurance.level - 1) * 10.0f;
+  REQUIRE(stats.health.max > endurance_only);
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

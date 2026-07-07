@@ -24,11 +24,11 @@ One system, `advance_progression`, runs each tick over every entity that has
 
 ```mermaid
 flowchart LR
-  act[moving this tick] --> xp[conditioning.xp AND endurance.xp += rate]
+  act[moving this tick] --> xp[conditioning + endurance += rate; character += ¼ rate]
   xp --> lvl{a bar full?}
   lvl -->|yes| up[level that one up, carry the remainder]
   lvl -->|no| keep[wait]
-  up --> stat[max health & stamina = base + endurance level × per-point]
+  up --> stat[max = base + endurance bonus × per-point × POWER of character level]
   keep --> stat
 ```
 
@@ -36,17 +36,23 @@ flowchart LR
    the `conditioning` **skill** and, because Endurance is its main attribute, feeds
    **`endurance`** its own XP too. (A skill with several contributing attributes
    would split the share — the main a lot, the rest a little; conditioning has just
-   the one, so it takes the whole share.) Standing still trains nothing.
-2. **A full bar levels it up** — the same `while`-loop carry works on both the
-   skill and the attribute; each has its own `{level, Fixed xp}` and climbs
-   independently. (XP is a `Fixed` so 20/sec accrues cleanly as ~0.33 per 60 Hz
-   tick — an `int` would round every tick's gain to nothing.)
+   the one, so it takes the whole share.) A **quarter-share** of the same activity
+   also feeds the global **`CharacterLevel`**. Standing still trains nothing.
+2. **A full bar levels it up** — the same `while`-loop carry works on the skill,
+   the attribute, and the character level; each has its own `{level, Fixed xp}` and
+   climbs independently. (XP is a `Fixed` so 20/sec accrues cleanly as ~0.33 per
+   60 Hz tick — an `int` would round every tick's gain to nothing.)
 3. **The attribute's level shapes derived stats** — each Endurance level past the
    first adds to the pools, on top of each Vital's own `base`. Only the **max**
    grows: a longer bar, not a free heal, and regen fills the new room in.
+4. **The character level compounds the earned bonus** — that pool bonus is scaled
+   by `POWER(character level − 1)`, the same diminishing curve skills use. Level 1
+   is `POWER(0)` = 1.0 (no head start); a veteran's earned toughness then compounds
+   a little. It multiplies what you *earned*, never the base floor.
 
-Because the view targets `Skills + Attributes + Stats + Velocity`, it lands on the
-player and the NPCs and skips the motes — one system, everyone who should grow.
+Because the view targets `Skills + Attributes + Stats + Velocity + CharacterLevel`,
+it lands on the player and the NPCs and skips the motes — one system, everyone who
+should grow.
 
 !!! info "Learn by doing, not spend points"
     There is no XP pool to allocate and no level-up screen. Doing the thing levels
@@ -82,7 +88,7 @@ attribute → stat — is what stays as it widens into a full character sheet.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes`.
+- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes`, `CharacterLevel`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression`.
 - `engine/sim/world.cpp` — `Skills`/`Attributes` on the player and NPCs; the `advance_progression` line in `step()`.
 - `game/app/main.cpp` — the endurance readout and conditioning XP bar in the panel.
