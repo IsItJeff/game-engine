@@ -57,6 +57,13 @@ void update_stamina(entt::registry& reg, float dt);
 // invalidates the view (a classic bug).
 void resolve_contacts(entt::registry& reg);
 
+// Train Toughness on a hit: surviving `damage` grows the victim's Toughness skill
+// and its main attribute Endurance (a VIT skill — you toughen by enduring hardship),
+// which advance_progression turns into a bigger HP pool. The single place damage
+// feeds progression, so every damage source — contact now, weapons later — trains
+// it the same way just by calling this. A no-op for entities without Skills.
+void train_on_damage(entt::registry& reg, entt::entity victim, float damage);
+
 // Advance progression, the whole "learn by doing" chain in one pass over every
 // entity with Skills + Attributes + Stats + Velocity + CharacterLevel: activity
 // earns XP for the skill it trains, that skill's main attribute, AND a fraction to

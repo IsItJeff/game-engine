@@ -1,6 +1,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <limits>
+
 #include "engine/net/loopback.hpp"
 #include "engine/net/server.hpp"
 #include "engine/sim/components.hpp"
@@ -172,6 +174,49 @@ TEST_CASE("sustained activity raises the character level, which compounds the po
   // strictly bigger than endurance alone (base 100 + bonus x 10/point) would give.
   const float endurance_only = 100.0f + static_cast<float>(attr.endurance.level - 1) * 10.0f;
   REQUIRE(stats.health.max > endurance_only);
+}
+
+TEST_CASE("taking damage trains Toughness, which feeds Endurance", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  // The player starts knowing only Conditioning; enduring hits should teach Toughness.
+  REQUIRE(world.registry().get<eng::sim::Skills>(player).find(eng::sim::SkillId::Toughness) ==
+          nullptr);
+
+  // Take a few non-lethal hits through the funnel (spawns at 70/100 and heals, so
+  // 3 x 10 damage won't down them). The player never moves, so any progression XP
+  // here can only have come from the damage.
+  for (int i = 0; i < 3; ++i) {
+    world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 10.0f));
+    world.step();
+  }
+
+  const eng::sim::Skill* toughness =
+      world.registry().get<eng::sim::Skills>(player).find(eng::sim::SkillId::Toughness);
+  REQUIRE(toughness != nullptr);          // enduring hits taught it
+  REQUIRE(toughness->xp > eng::Fixed{});  // ...and it is accruing XP
+  REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance.xp > eng::Fixed{});
+}
+
+TEST_CASE("train_on_damage ignores non-finite and non-positive damage", "[sim]") {
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Skills>(e);
+  reg.emplace<eng::sim::Attributes>(e);
+
+  // train_on_damage is the funnel every damage source flows through, so garbage in
+  // must be a no-op — never reaching the float->int cast (UB on NaN/Inf).
+  eng::sim::train_on_damage(reg, e, std::numeric_limits<float>::quiet_NaN());
+  eng::sim::train_on_damage(reg, e, std::numeric_limits<float>::infinity());
+  eng::sim::train_on_damage(reg, e, -5.0f);
+  eng::sim::train_on_damage(reg, e, 0.0f);
+  REQUIRE(reg.get<eng::sim::Skills>(e).find(eng::sim::SkillId::Toughness) == nullptr);
+  REQUIRE(reg.get<eng::sim::Attributes>(e).endurance.xp == eng::Fixed{});
+
+  // ...but a real hit still trains it (the guard rejects only the bad input).
+  eng::sim::train_on_damage(reg, e, 10.0f);
+  REQUIRE(reg.get<eng::sim::Skills>(e).find(eng::sim::SkillId::Toughness) != nullptr);
 }
 
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {

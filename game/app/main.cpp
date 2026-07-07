@@ -110,12 +110,18 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::Text("character level: %d", cl->level);  // the slow "veteran" multiplier on earned stats
   }
   if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
-    if (const eng::sim::Skill* c = skills->find(eng::sim::SkillId::Conditioning)) {
-      ImGui::Text("conditioning: lvl %d", c->level);
+    // Show one learned skill's level + progress bar. Toughness only appears once the
+    // player has taken a hit (it isn't in `owned` until then), so guard on find().
+    const auto show_skill = [&](const char* label, eng::sim::SkillId id) {
+      const eng::sim::Skill* s = skills->find(id);
+      if (s == nullptr) return;
+      ImGui::Text("%s: lvl %d", label, s->level);
       const eng::Fixed threshold =
-          eng::Fixed::from_int(static_cast<std::int32_t>(eng::sim::xp_to_next(c->level)));
-      ImGui::ProgressBar(static_cast<float>((c->xp / threshold).to_double()));
-    }
+          eng::Fixed::from_int(static_cast<std::int32_t>(eng::sim::xp_to_next(s->level)));
+      ImGui::ProgressBar(static_cast<float>((s->xp / threshold).to_double()));
+    };
+    show_skill("conditioning", eng::sim::SkillId::Conditioning);
+    show_skill("toughness", eng::sim::SkillId::Toughness);
   }
 
   ImGui::Checkbox("pause simulation", &paused);
