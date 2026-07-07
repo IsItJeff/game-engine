@@ -57,6 +57,18 @@ void update_stamina(entt::registry& reg, float dt);
 // invalidates the view (a classic bug).
 void resolve_contacts(entt::registry& reg);
 
+// XP required to advance a skill from `level` to the next. This IS the
+// progression curve — linear, so each level costs more than the last and growth
+// slows as you get strong. Exposed (not file-local) so the UI can draw an XP bar.
+float xp_to_next(int level);
+
+// Advance progression, the whole "learn by doing" chain in one pass over every
+// entity with Skills + Attributes + Stats: activity earns XP in the skill it
+// trains, a full XP bar levels the skill up, attributes are recomputed from the
+// new skill levels, and derived stats (max health & stamina) are recomputed from
+// the attributes. Runs on the player and NPCs alike — the same growth for both.
+void advance_progression(entt::registry& reg, float dt);
+
 // React to death, two ways: a player at 0 health respawns at `respawn_point` with
 // full health; an NPC at 0 health is destroyed instead — permadeath, the game's
 // core rule. MUST run before regenerate_vitals, or a just-killed entity gets

@@ -116,6 +116,39 @@ TEST_CASE("an exhausted player is slowed to a crawl", "[sim]") {
   REQUIRE(speed == Approx(320.0f * 0.4f).margin(0.5f));  // a crawl, not a sprint
 }
 
+TEST_CASE("staying active trains conditioning, which raises endurance and max health", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  const float base_max = world.registry().get<eng::sim::Stats>(player).health.max;  // 100 at start
+
+  // Move continuously for several seconds: activity trains the conditioning skill,
+  // which (once it levels) feeds Endurance, which grows the health pool.
+  for (int i = 0; i < 6 * eng::sim::kTicksPerSecond; ++i) {
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+    world.step();
+  }
+
+  const eng::sim::Skills& skills = world.registry().get<eng::sim::Skills>(player);
+  const eng::sim::Attributes& attr = world.registry().get<eng::sim::Attributes>(player);
+  const eng::sim::Stats& stats = world.registry().get<eng::sim::Stats>(player);
+  REQUIRE(skills.conditioning.level >= 2);  // the skill leveled from use
+  REQUIRE(attr.endurance >= 1);             // the skill fed the attribute
+  REQUIRE(stats.health.max > base_max);     // the attribute grew the pool
+}
+
+TEST_CASE("an idle character does not train conditioning", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  // Stand still (submit no movement) for several seconds.
+  for (int i = 0; i < 6 * eng::sim::kTicksPerSecond; ++i) world.step();
+
+  const eng::sim::Skills& skills = world.registry().get<eng::sim::Skills>(player);
+  REQUIRE(skills.conditioning.level == 1);  // no activity, no training...
+  REQUIRE(skills.conditioning.xp == 0.0f);  // ...not even a sliver of XP
+  REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance == 0);
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
