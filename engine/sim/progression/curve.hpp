@@ -23,6 +23,12 @@
 // gated, replace the `std::log` bake with a generated constant table or a
 // fixed-point `ln` (tracked as a follow-up). `power(0)` is exact everywhere already:
 // log(1) is exactly +0 by the C standard, so it needs no special-casing.
+//
+// BLAST RADIUS (as of the Character Level): `power()` now feeds authoritative state
+// — advance_progression scales `health.max` by it, and handle_deaths respawns to
+// that max. So the half-step caveat above is no longer cosmetic: a one-raw-unit
+// cross-OS table difference could flow into respawn health. Still within the
+// per-platform bar, but the cross-OS follow-up now gates gameplay, not a spare fn.
 
 namespace eng::sim {
 

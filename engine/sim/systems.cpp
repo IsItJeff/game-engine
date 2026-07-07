@@ -160,6 +160,9 @@ void advance_progression(entt::registry& reg) {
   // playtest).
   const Fixed kCharLevelShare = Fixed::from_ratio(1, 4);
 
+  // NB: CharacterLevel is required here, so any new progression-capable entity must
+  // be spawned WITH it (see world.cpp: player + NPC) — miss it and that entity
+  // silently never grows, no error. Keep the progression components together.
   auto view = reg.view<Skills, Attributes, Stats, Velocity, CharacterLevel>();
   for (const entt::entity e : view) {
     Skill& conditioning = view.get<Skills>(e).train(SkillId::Conditioning);
