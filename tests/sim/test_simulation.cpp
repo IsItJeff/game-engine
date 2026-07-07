@@ -236,7 +236,7 @@ TEST_CASE("an NPC ignores a hazard beyond its senses", "[sim]") {
   const entt::entity npc = reg.create();
   reg.emplace<eng::sim::Npc>(npc);
   reg.emplace<eng::sim::Transform>(npc, eng::Vec2{100.0f, 100.0f});
-  reg.emplace<eng::sim::Velocity>(npc);  // starts still
+  reg.emplace<eng::sim::Velocity>(npc, eng::Vec2{55.0f, 0.0f});  // already drifting right
 
   // A hazard 300 units away — well outside the 120-unit sense radius.
   const entt::entity hazard = reg.create();
@@ -245,9 +245,12 @@ TEST_CASE("an NPC ignores a hazard beyond its senses", "[sim]") {
 
   eng::sim::steer_npcs(reg);
 
-  // Out of range: the NPC never reacted, so it is still standing still.
+  // Out of range: no threat sensed, so the NPC's existing velocity is left
+  // untouched — it drifts on. Asserting the exact prior value (not just "nonzero")
+  // pins the "leave velocity alone" contract: a version that zeroed or otherwise
+  // changed it here would fail, which a start-from-still test could never catch.
   const eng::Vec2 vel = reg.get<eng::sim::Velocity>(npc).value;
-  REQUIRE(vel.x == 0.0f);
+  REQUIRE(vel.x == 55.0f);
   REQUIRE(vel.y == 0.0f);
 }
 
