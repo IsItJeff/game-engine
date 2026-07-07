@@ -131,6 +131,12 @@ namespace {
 // xp_to_next(level) from the curve (the cost half of the one law). A while loop, so
 // one big grant can cross several levels at once.
 void apply_levels(int& level, Fixed& xp) {
+  // ponytail: threshold is held in Q16.16, which saturates at 32767.99998, so
+  // xp_to_next (100·level) stops growing once it reaches 32768 — i.e. past level
+  // ~327. Beyond there leveling diverges from the true curve. That's ~5.3M XP / ~74h
+  // of one-skill grind, well past the 255-entry POWER table, so it's a
+  // known ceiling, not a bug to fix now: widen xp/threshold past Q16.16 (or an
+  // int64 XP path) when levels can actually reach it.
   Fixed threshold = Fixed::from_int(static_cast<std::int32_t>(xp_to_next(level)));
   while (xp >= threshold) {
     xp -= threshold;
