@@ -202,17 +202,23 @@ void advance_progression(entt::registry& reg) {
 }
 
 void train_on_damage(entt::registry& reg, entt::entity victim, float damage) {
-  // Only a progression entity (Skills + Attributes) toughens; a bare-Stats target,
-  // or a non-damaging call, trains nothing.
+  // Only a progression entity (Skills + Attributes) toughens; a bare-Stats target
+  // trains nothing. This is THE funnel every damage source will flow through
+  // (weapons, crits, falloff…), so validate the input HERE: reject non-finite or
+  // non-positive damage before the float→int cast below. A bare `<= 0` check misses
+  // NaN (`NaN <= 0` is false) and Inf, and casting those to int is UB — cheap to
+  // guard now, a real hazard once a computed-damage source can produce one.
   Skills* skills = reg.try_get<Skills>(victim);
   Attributes* attrs = reg.try_get<Attributes>(victim);
-  if (skills == nullptr || attrs == nullptr || damage <= 0.0f) return;
+  if (skills == nullptr || attrs == nullptr || !std::isfinite(damage) || damage <= 0.0f) return;
 
   // 1 XP per point of damage survived — a tunable, so ~100 damage endured earns a
   // Toughness level. Snap the float pool damage to an int BEFORE the Fixed XP path
-  // so the deterministic accumulator never sees a float. Toughness's main attribute
-  // is Endurance, so (like Conditioning) it feeds the whole share there.
-  const Fixed gained = Fixed::from_int(static_cast<std::int32_t>(damage));
+  // so the deterministic accumulator never sees a float; cap first, since casting a
+  // float past int range is UB (from_int saturates in Fixed anyway). Toughness's
+  // main attribute is Endurance, so (like Conditioning) it feeds the whole share.
+  const float bounded = damage < 1.0e6f ? damage : 1.0e6f;
+  const Fixed gained = Fixed::from_int(static_cast<std::int32_t>(bounded));
   skills->train(SkillId::Toughness).xp += gained;
   attrs->endurance.xp += gained;
   // ponytail: the Character Level is fed by movement only for now; routing every

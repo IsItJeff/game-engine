@@ -1,6 +1,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <limits>
+
 #include "engine/net/loopback.hpp"
 #include "engine/net/server.hpp"
 #include "engine/sim/components.hpp"
@@ -195,6 +197,26 @@ TEST_CASE("taking damage trains Toughness, which feeds Endurance", "[sim]") {
   REQUIRE(toughness != nullptr);          // enduring hits taught it
   REQUIRE(toughness->xp > eng::Fixed{});  // ...and it is accruing XP
   REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance.xp > eng::Fixed{});
+}
+
+TEST_CASE("train_on_damage ignores non-finite and non-positive damage", "[sim]") {
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Skills>(e);
+  reg.emplace<eng::sim::Attributes>(e);
+
+  // train_on_damage is the funnel every damage source flows through, so garbage in
+  // must be a no-op — never reaching the float->int cast (UB on NaN/Inf).
+  eng::sim::train_on_damage(reg, e, std::numeric_limits<float>::quiet_NaN());
+  eng::sim::train_on_damage(reg, e, std::numeric_limits<float>::infinity());
+  eng::sim::train_on_damage(reg, e, -5.0f);
+  eng::sim::train_on_damage(reg, e, 0.0f);
+  REQUIRE(reg.get<eng::sim::Skills>(e).find(eng::sim::SkillId::Toughness) == nullptr);
+  REQUIRE(reg.get<eng::sim::Attributes>(e).endurance.xp == eng::Fixed{});
+
+  // ...but a real hit still trains it (the guard rejects only the bad input).
+  eng::sim::train_on_damage(reg, e, 10.0f);
+  REQUIRE(reg.get<eng::sim::Skills>(e).find(eng::sim::SkillId::Toughness) != nullptr);
 }
 
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
