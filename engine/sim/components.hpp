@@ -143,7 +143,8 @@ struct Skill {
 // Identifies a skill. An enum (not a string) so lookups are cheap and the wire/
 // save formats stay small. New skills append here.
 enum class SkillId : std::uint16_t {
-  Conditioning,
+  Conditioning,  // trained by moving; main attribute Endurance
+  Toughness,     // trained by taking damage; main attribute Endurance (a VIT skill)
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a

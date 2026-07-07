@@ -174,6 +174,29 @@ TEST_CASE("sustained activity raises the character level, which compounds the po
   REQUIRE(stats.health.max > endurance_only);
 }
 
+TEST_CASE("taking damage trains Toughness, which feeds Endurance", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  // The player starts knowing only Conditioning; enduring hits should teach Toughness.
+  REQUIRE(world.registry().get<eng::sim::Skills>(player).find(eng::sim::SkillId::Toughness) ==
+          nullptr);
+
+  // Take a few non-lethal hits through the funnel (spawns at 70/100 and heals, so
+  // 3 x 10 damage won't down them). The player never moves, so any progression XP
+  // here can only have come from the damage.
+  for (int i = 0; i < 3; ++i) {
+    world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 10.0f));
+    world.step();
+  }
+
+  const eng::sim::Skill* toughness =
+      world.registry().get<eng::sim::Skills>(player).find(eng::sim::SkillId::Toughness);
+  REQUIRE(toughness != nullptr);          // enduring hits taught it
+  REQUIRE(toughness->xp > eng::Fixed{});  // ...and it is accruing XP
+  REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance.xp > eng::Fixed{});
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

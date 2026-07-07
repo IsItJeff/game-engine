@@ -160,6 +160,7 @@ void World::apply_command(const Command& cmd) {
         Vital& health = view.get<Stats>(e).health;
         health.current -= cmd.amount;
         if (health.current < 0.0f) health.current = 0.0f;
+        train_on_damage(registry_, e, cmd.amount);  // toughen on a hit, same as contact damage
       }
       break;
     }

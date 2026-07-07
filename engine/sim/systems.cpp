@@ -179,10 +179,11 @@ void advance_progression(entt::registry& reg) {
       character.xp += kConditioningPerTick * kCharLevelShare;
     }
 
-    // 2. Turn full XP bars into levels — the skill, the attribute, and the character
-    //    level each climb on their own accumulator (the first two in lock-step here,
-    //    since endurance takes the whole conditioning share).
-    apply_levels(conditioning.level, conditioning.xp);
+    // 2. Turn full XP bars into levels — EVERY trained skill, the attribute, and the
+    //    character level each climb on their own {level, Fixed xp}. Iterating all
+    //    owned skills means a skill trained elsewhere (Toughness, fed by
+    //    train_on_damage) levels here too, without this system knowing the source.
+    for (auto& entry : view.get<Skills>(e).owned) apply_levels(entry.second.level, entry.second.xp);
     apply_levels(endurance.level, endurance.xp);
     apply_levels(character.level, character.xp);
 
@@ -198,6 +199,25 @@ void advance_progression(entt::registry& reg) {
     stats.health.max = stats.health.base + bonus * kHealthPerEndurance * veteran;
     stats.stamina.max = stats.stamina.base + bonus * kStaminaPerEndurance * veteran;
   }
+}
+
+void train_on_damage(entt::registry& reg, entt::entity victim, float damage) {
+  // Only a progression entity (Skills + Attributes) toughens; a bare-Stats target,
+  // or a non-damaging call, trains nothing.
+  Skills* skills = reg.try_get<Skills>(victim);
+  Attributes* attrs = reg.try_get<Attributes>(victim);
+  if (skills == nullptr || attrs == nullptr || damage <= 0.0f) return;
+
+  // 1 XP per point of damage survived — a tunable, so ~100 damage endured earns a
+  // Toughness level. Snap the float pool damage to an int BEFORE the Fixed XP path
+  // so the deterministic accumulator never sees a float. Toughness's main attribute
+  // is Endurance, so (like Conditioning) it feeds the whole share there.
+  const Fixed gained = Fixed::from_int(static_cast<std::int32_t>(damage));
+  skills->train(SkillId::Toughness).xp += gained;
+  attrs->endurance.xp += gained;
+  // ponytail: the Character Level is fed by movement only for now; routing every
+  // damage source into "fraction of all activity" waits until combat gives more
+  // sources to balance against. advance_progression levels Toughness next tick.
 }
 
 void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
@@ -252,9 +272,11 @@ void resolve_contacts(entt::registry& reg) {
       if (glm::distance(targets.get<Transform>(t).position, h_pos) >= kContactDistance) {
         continue;  // this target isn't touching it
       }
+      const float dmg = hazards.get<Hazard>(h).damage;
       Vital& health = targets.get<Stats>(t).health;
-      health.current -= hazards.get<Hazard>(h).damage;
+      health.current -= dmg;
       if (health.current < 0.0f) health.current = 0.0f;  // clamp at 0
+      train_on_damage(reg, t, dmg);                      // enduring the hit toughens the survivor
       hit = true;
     }
     if (hit) consumed.push_back(h);  // consume it once, no matter how many it hit
