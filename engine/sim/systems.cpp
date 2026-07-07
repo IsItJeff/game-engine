@@ -130,7 +130,11 @@ float xp_to_next(int level) {
 
 void advance_progression(entt::registry& reg, float dt) {
   constexpr float kConditioningPerSecond = 20.0f;  // XP/sec while active — tune the pace
-  constexpr float kBaseMaxHealth = 100.0f;         // the pool at 0 endurance (matches spawn)
+  // ponytail: these bases recompute .max from scratch each tick, so they must equal
+  // the max a Skills-bearing entity spawns with — every such entity spawns at 100
+  // today, so it holds. The day one needs a different pool (a tanky NPC at 150),
+  // move the base onto a component instead of this constant, or tick 1 caps it to 100.
+  constexpr float kBaseMaxHealth = 100.0f;
   constexpr float kBaseMaxStamina = 100.0f;
   constexpr float kHealthPerEndurance = 10.0f;  // how much tougher each point makes you
   constexpr float kStaminaPerEndurance = 5.0f;
