@@ -4,6 +4,7 @@ include(Catch)
 add_executable(eng_tests
   core/test_version.cpp
   core/test_bitstream.cpp
+  core/test_fixed.cpp
   sim/test_simulation.cpp
 )
 
