@@ -145,6 +145,7 @@ struct Skill {
 enum class SkillId : std::uint16_t {
   Conditioning,  // trained by moving; main attribute Endurance
   Toughness,     // trained by taking damage; main attribute Endurance (a VIT skill)
+  Striking,      // trained by attacking; main attribute Strength
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
@@ -183,7 +184,8 @@ struct Attribute {
 };
 
 struct Attributes {
-  Attribute endurance;  // fed by Conditioning; each level past 1 grows the pools
+  Attribute endurance;  // fed by Conditioning + Toughness; each level past 1 grows the pools
+  Attribute strength;   // fed by Striking; each level past 1 lengthens attack reach
 };
 
 // A single global "how experienced overall" level, fed by a fraction of ALL
