@@ -11,8 +11,10 @@ Three strands are wired end to end so far, across two attributes:
 - **attacking** trains **Striking**, which raises **Strength**, which lengthens your
   **attack reach**.
 
-The player and NPCs run the identical machinery, so a long-lived NPC that has moved,
-been hurt, *and* fought gets genuinely tougher and stronger — no special-casing.
+The player and NPCs run the identical progression machinery, so a long-lived NPC
+that has moved and been hurt gets genuinely tougher — no special-casing. (Attacking
+is player-only for now: NPCs flee and take damage but don't yet swing, so they build
+Endurance but not Strength. Giving them combat AI is a later step.)
 
 ## Why it matters
 
