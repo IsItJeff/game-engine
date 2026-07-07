@@ -11,6 +11,7 @@
 #include "engine/net/server.hpp"
 #include "engine/sim/components.hpp"
 #include "engine/sim/simulation.hpp"
+#include "engine/sim/systems.hpp"
 #include "engine/sim/types.hpp"
 #include "engine/sim/world.hpp"
 
@@ -96,16 +97,29 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::ProgressBar(s.current / s.max);
   }
 
+  // Progression: the attribute the player has grown, and progress toward the next
+  // conditioning level. Move around and watch endurance climb, then the health and
+  // stamina bars above lengthen as the bigger pools take effect.
+  if (const eng::sim::Attributes* attr = world.registry().try_get<eng::sim::Attributes>(player)) {
+    ImGui::Text("endurance: %d", attr->endurance);
+  }
+  if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
+    const eng::sim::Skill& c = skills->conditioning;
+    ImGui::Text("conditioning: lvl %d", c.level);
+    ImGui::ProgressBar(c.xp / eng::sim::xp_to_next(c.level));
+  }
+
   ImGui::Checkbox("pause simulation", &paused);
 
   ImGui::Separator();
   ImGui::TextWrapped(
       "WASD / arrows: move — and dodge, the drifting motes hurt and vanish on "
       "contact. Moving drains stamina; run it dry and you slow to a crawl until "
-      "you rest. The green dots are NPCs: they take the same contact damage you "
-      "do, but when they die they're gone for good (permadeath) — you respawn. "
-      "Space: spawn a mote. H: take 15 damage. Your keypresses become Commands; "
-      "the motes, the stamina, and the NPCs dying are all systems on the server.");
+      "you rest. The green dots are NPCs: they now flee motes they sense, take the "
+      "same contact damage you do, and when they die they're gone for good "
+      "(permadeath) — you respawn. Space: spawn a mote (watch nearby NPCs scatter). "
+      "H: take 15 damage. Your keypresses become Commands; the NPCs fleeing, the "
+      "motes, and the deaths are all systems on the server.");
   ImGui::End();
 }
 

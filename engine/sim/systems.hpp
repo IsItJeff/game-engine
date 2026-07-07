@@ -24,6 +24,13 @@ namespace eng::sim {
 // timestep explanation in simulation.hpp). Runs first, before anything moves.
 void snapshot_previous(entt::registry& reg);
 
+// Steer NPCs: each NPC looks for the nearest Hazard within its senses and, if it
+// finds one, sets its Velocity to flee directly away from it (otherwise it keeps
+// drifting). The first taste of NPC behaviour — perception (find the threat) then
+// action (set the velocity). MUST run before integrate_motion, which is what
+// turns the velocity it sets into actual movement this tick.
+void steer_npcs(entt::registry& reg);
+
 // Move every entity with a Transform and Velocity: position += velocity * dt.
 // This is Euler integration — the simplest way to turn a velocity into motion.
 void integrate_motion(entt::registry& reg, float dt);
@@ -49,6 +56,18 @@ void update_stamina(entt::registry& reg, float dt);
 // Note it destroys entities only AFTER iterating; destroying during iteration
 // invalidates the view (a classic bug).
 void resolve_contacts(entt::registry& reg);
+
+// XP required to advance a skill from `level` to the next. This IS the
+// progression curve — linear, so each level costs more than the last and growth
+// slows as you get strong. Exposed (not file-local) so the UI can draw an XP bar.
+float xp_to_next(int level);
+
+// Advance progression, the whole "learn by doing" chain in one pass over every
+// entity with Skills + Attributes + Stats: activity earns XP in the skill it
+// trains, a full XP bar levels the skill up, attributes are recomputed from the
+// new skill levels, and derived stats (max health & stamina) are recomputed from
+// the attributes. Runs on the player and NPCs alike — the same growth for both.
+void advance_progression(entt::registry& reg, float dt);
 
 // React to death, two ways: a player at 0 health respawns at `respawn_point` with
 // full health; an NPC at 0 health is destroyed instead — permadeath, the game's

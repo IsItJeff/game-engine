@@ -116,6 +116,39 @@ TEST_CASE("an exhausted player is slowed to a crawl", "[sim]") {
   REQUIRE(speed == Approx(320.0f * 0.4f).margin(0.5f));  // a crawl, not a sprint
 }
 
+TEST_CASE("staying active trains conditioning, which raises endurance and max health", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  const float base_max = world.registry().get<eng::sim::Stats>(player).health.max;  // 100 at start
+
+  // Move continuously for several seconds: activity trains the conditioning skill,
+  // which (once it levels) feeds Endurance, which grows the health pool.
+  for (int i = 0; i < 6 * eng::sim::kTicksPerSecond; ++i) {
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+    world.step();
+  }
+
+  const eng::sim::Skills& skills = world.registry().get<eng::sim::Skills>(player);
+  const eng::sim::Attributes& attr = world.registry().get<eng::sim::Attributes>(player);
+  const eng::sim::Stats& stats = world.registry().get<eng::sim::Stats>(player);
+  REQUIRE(skills.conditioning.level >= 2);  // the skill leveled from use
+  REQUIRE(attr.endurance >= 1);             // the skill fed the attribute
+  REQUIRE(stats.health.max > base_max);     // the attribute grew the pool
+}
+
+TEST_CASE("an idle character does not train conditioning", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  // Stand still (submit no movement) for several seconds.
+  for (int i = 0; i < 6 * eng::sim::kTicksPerSecond; ++i) world.step();
+
+  const eng::sim::Skills& skills = world.registry().get<eng::sim::Skills>(player);
+  REQUIRE(skills.conditioning.level == 1);  // no activity, no training...
+  REQUIRE(skills.conditioning.xp == 0.0f);  // ...not even a sliver of XP
+  REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance == 0);
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
@@ -209,6 +242,49 @@ TEST_CASE("a dead NPC is destroyed (permadeath), not respawned", "[sim]") {
   // and the hazard that killed it was consumed.
   REQUIRE_FALSE(reg.valid(npc));
   REQUIRE_FALSE(reg.valid(hazard));
+}
+
+TEST_CASE("an NPC steers away from a nearby hazard", "[sim]") {
+  entt::registry reg;
+
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::Velocity>(npc);  // starts still
+
+  // A hazard 50 units to the NPC's right — inside its 120-unit senses.
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Hazard>(hazard);
+  reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{150.0f, 100.0f});
+
+  eng::sim::steer_npcs(reg);
+
+  // It should now be moving left — directly away from the hazard on its right.
+  REQUIRE(reg.get<eng::sim::Velocity>(npc).value.x < 0.0f);
+}
+
+TEST_CASE("an NPC ignores a hazard beyond its senses", "[sim]") {
+  entt::registry reg;
+
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::Velocity>(npc, eng::Vec2{55.0f, 0.0f});  // already drifting right
+
+  // A hazard 300 units away — well outside the 120-unit sense radius.
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Hazard>(hazard);
+  reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{400.0f, 100.0f});
+
+  eng::sim::steer_npcs(reg);
+
+  // Out of range: no threat sensed, so the NPC's existing velocity is left
+  // untouched — it drifts on. Asserting the exact prior value (not just "nonzero")
+  // pins the "leave velocity alone" contract: a version that zeroed or otherwise
+  // changed it here would fail, which a start-from-still test could never catch.
+  const eng::Vec2 vel = reg.get<eng::sim::Velocity>(npc).value;
+  REQUIRE(vel.x == 55.0f);
+  REQUIRE(vel.y == 0.0f);
 }
 
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {

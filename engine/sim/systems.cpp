@@ -17,6 +17,44 @@ void snapshot_previous(entt::registry& reg) {
   }
 }
 
+void steer_npcs(entt::registry& reg) {
+  // How far an NPC can "see" a hazard, and how fast it flees one. Plain constants
+  // until an NPC ever needs its own values — then they'd become fields on a
+  // component (rule 12: write the concrete thing first, abstract on the 2nd use).
+  constexpr float kSenseRadius = 120.0f;
+  constexpr float kFleeSpeed = 90.0f;
+
+  // Nested loop: every NPC against every hazard — O(n*m), fine for a handful. A
+  // real crowd would query a spatial grid, the same upgrade resolve_contacts wants.
+  auto npcs = reg.view<Npc, Transform, Velocity>();
+  auto hazards = reg.view<Hazard, Transform>();
+  for (const entt::entity n : npcs) {
+    const Vec2 pos = npcs.get<Transform>(n).position;
+
+    // Perception: find the single nearest hazard within sense range.
+    float nearest = kSenseRadius;
+    Vec2 threat{0.0f, 0.0f};
+    bool sees_threat = false;
+    for (const entt::entity h : hazards) {
+      const Vec2 h_pos = hazards.get<Transform>(h).position;
+      const float d = glm::distance(pos, h_pos);
+      if (d < nearest) {
+        nearest = d;
+        threat = h_pos;
+        sees_threat = true;
+      }
+    }
+
+    // Action: flee straight away from the threat. With nothing in range the NPC
+    // keeps whatever velocity it already had, so it just drifts on.
+    if (sees_threat) {
+      const Vec2 away = pos - threat;
+      const float len = glm::length(away);
+      if (len > 0.0f) npcs.get<Velocity>(n).value = (away / len) * kFleeSpeed;
+    }
+  }
+}
+
 void integrate_motion(entt::registry& reg, float dt) {
   // The classic update: new position = old position + velocity * time. Runs over
   // every entity that has both a Transform and a Velocity, and no others — that
@@ -81,6 +119,54 @@ void update_stamina(entt::registry& reg, float dt) {
     } else {
       recover(stamina, dt);  // resting: recover at the vital's own regen rate
     }
+  }
+}
+
+float xp_to_next(int level) {
+  // Linear curve: level 1->2 costs 100, 2->3 costs 200, and so on. This single
+  // constant sets the whole pace — raise it and everyone levels more slowly.
+  return 100.0f * static_cast<float>(level);
+}
+
+void advance_progression(entt::registry& reg, float dt) {
+  constexpr float kConditioningPerSecond = 20.0f;  // XP/sec while active — tune the pace
+  // ponytail: these bases recompute .max from scratch each tick, so they must equal
+  // the max a Skills-bearing entity spawns with — every such entity spawns at 100
+  // today, so it holds. The day one needs a different pool (a tanky NPC at 150),
+  // move the base onto a component instead of this constant, or tick 1 caps it to 100.
+  constexpr float kBaseMaxHealth = 100.0f;
+  constexpr float kBaseMaxStamina = 100.0f;
+  constexpr float kHealthPerEndurance = 10.0f;  // how much tougher each point makes you
+  constexpr float kStaminaPerEndurance = 5.0f;
+
+  auto view = reg.view<Skills, Attributes, Stats, Velocity>();
+  for (const entt::entity e : view) {
+    Skills& skills = view.get<Skills>(e);
+
+    // 1. Activity earns XP: moving trains conditioning (the same "is it moving?"
+    //    signal update_stamina reads). Standing still trains nothing.
+    if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
+      skills.conditioning.xp += kConditioningPerSecond * dt;
+    }
+
+    // 2. Spend a full XP bar on a level. A while loop, so one big grant can cross
+    //    several levels at once (and it carries the remainder forward).
+    while (skills.conditioning.xp >= xp_to_next(skills.conditioning.level)) {
+      skills.conditioning.xp -= xp_to_next(skills.conditioning.level);
+      ++skills.conditioning.level;
+    }
+
+    // 3. Skills feed attributes: endurance follows conditioning (level 1 = 0
+    //    bonus, so a fresh character is unchanged).
+    Attributes& attr = view.get<Attributes>(e);
+    attr.endurance = skills.conditioning.level - 1;
+
+    // 4. Attributes shape derived stats: more endurance = bigger pools. Only the
+    //    MAX grows — a longer bar, not a free heal; regen fills the new room in.
+    Stats& stats = view.get<Stats>(e);
+    const float end = static_cast<float>(attr.endurance);
+    stats.health.max = kBaseMaxHealth + end * kHealthPerEndurance;
+    stats.stamina.max = kBaseMaxStamina + end * kStaminaPerEndurance;
   }
 }
 

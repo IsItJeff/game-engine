@@ -110,4 +110,38 @@ struct Stats {
   Vital stamina{100.0f, 100.0f, 20.0f};  // spent by moving; recovers when resting
 };
 
+// --- Progression: skills feed attributes ---
+//
+// The game grows characters the "learn by doing" way, and in three layers:
+//
+//   activity  ->  a SKILL levels up  ->  an ATTRIBUTE rises  ->  a derived stat grows
+//
+// A Skill improves with the activity that uses it; skills roll up into broad
+// Attributes; attributes shape the Vitals you feel in play. The player and NPCs
+// share this exact machinery — anyone carrying these components levels the same
+// way, which is the whole point of doing it in the ECS.
+
+// One trainable skill: XP accrues from doing the related activity, and crossing a
+// threshold raises the level (see the advance_progression system). Levels are what
+// attributes read; xp is the progress toward the next one.
+struct Skill {
+  int level = 1;
+  float xp = 0.0f;
+};
+
+// The skills an entity can train, bundled like Stats. One so far — conditioning,
+// built by staying active, which feeds Endurance. A new skill is a new field here
+// plus the activity that trains it.
+struct Skills {
+  Skill conditioning;
+};
+
+// Broad character attributes, DERIVED from skills every tick (skills feed
+// attributes). They are the dial between "what you practise" and "how strong you
+// are". Endurance is the first: it makes you tougher — a bigger health and stamina
+// pool. Recomputed by advance_progression, so nothing sets these by hand.
+struct Attributes {
+  int endurance = 0;  // from conditioning; raises max health & stamina
+};
+
 }  // namespace eng::sim
