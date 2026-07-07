@@ -94,6 +94,11 @@ struct Vital {
   float current = 100.0f;
   float max = 100.0f;
   float regen_per_second = 0.0f;  // 0 = doesn't recover on its own
+  // The un-bonused pool size. `max` is recomputed each tick as base + attribute
+  // bonuses (see advance_progression), so an entity that should be tankier just
+  // spawns with a bigger base — no hardcoded constant to trip over. Defaults to
+  // 100 so every Vital{current, max, regen} literal keeps today's numbers.
+  float base = 100.0f;
 };
 
 // An entity's stat sheet — one component holding everything about its condition,

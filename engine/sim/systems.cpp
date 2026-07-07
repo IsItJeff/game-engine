@@ -130,13 +130,7 @@ float xp_to_next(int level) {
 
 void advance_progression(entt::registry& reg, float dt) {
   constexpr float kConditioningPerSecond = 20.0f;  // XP/sec while active — tune the pace
-  // ponytail: these bases recompute .max from scratch each tick, so they must equal
-  // the max a Skills-bearing entity spawns with — every such entity spawns at 100
-  // today, so it holds. The day one needs a different pool (a tanky NPC at 150),
-  // move the base onto a component instead of this constant, or tick 1 caps it to 100.
-  constexpr float kBaseMaxHealth = 100.0f;
-  constexpr float kBaseMaxStamina = 100.0f;
-  constexpr float kHealthPerEndurance = 10.0f;  // how much tougher each point makes you
+  constexpr float kHealthPerEndurance = 10.0f;     // how much tougher each point makes you
   constexpr float kStaminaPerEndurance = 5.0f;
 
   auto view = reg.view<Skills, Attributes, Stats, Velocity>();
@@ -161,12 +155,13 @@ void advance_progression(entt::registry& reg, float dt) {
     Attributes& attr = view.get<Attributes>(e);
     attr.endurance = skills.conditioning.level - 1;
 
-    // 4. Attributes shape derived stats: more endurance = bigger pools. Only the
-    //    MAX grows — a longer bar, not a free heal; regen fills the new room in.
+    // 4. Attributes shape derived stats: more endurance = bigger pools, added on
+    //    top of each Vital's own `base`. Only the MAX grows — a longer bar, not a
+    //    free heal; regen fills the new room in.
     Stats& stats = view.get<Stats>(e);
     const float end = static_cast<float>(attr.endurance);
-    stats.health.max = kBaseMaxHealth + end * kHealthPerEndurance;
-    stats.stamina.max = kBaseMaxStamina + end * kStaminaPerEndurance;
+    stats.health.max = stats.health.base + end * kHealthPerEndurance;
+    stats.stamina.max = stats.stamina.base + end * kStaminaPerEndurance;
   }
 }
 
