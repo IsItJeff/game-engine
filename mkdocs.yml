@@ -195,6 +195,7 @@ nav:
           - engine/skeleton/extending.md
       - Game Systems:
           - Stats: engine/stats-system.md
+          - Progression: engine/progression.md
           - NPC behaviour: engine/npc-behaviour.md
       - Architecture:
           - engine/architecture/index.md

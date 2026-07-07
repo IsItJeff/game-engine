@@ -122,6 +122,54 @@ void update_stamina(entt::registry& reg, float dt) {
   }
 }
 
+float xp_to_next(int level) {
+  // Linear curve: level 1->2 costs 100, 2->3 costs 200, and so on. This single
+  // constant sets the whole pace — raise it and everyone levels more slowly.
+  return 100.0f * static_cast<float>(level);
+}
+
+void advance_progression(entt::registry& reg, float dt) {
+  constexpr float kConditioningPerSecond = 20.0f;  // XP/sec while active — tune the pace
+  // ponytail: these bases recompute .max from scratch each tick, so they must equal
+  // the max a Skills-bearing entity spawns with — every such entity spawns at 100
+  // today, so it holds. The day one needs a different pool (a tanky NPC at 150),
+  // move the base onto a component instead of this constant, or tick 1 caps it to 100.
+  constexpr float kBaseMaxHealth = 100.0f;
+  constexpr float kBaseMaxStamina = 100.0f;
+  constexpr float kHealthPerEndurance = 10.0f;  // how much tougher each point makes you
+  constexpr float kStaminaPerEndurance = 5.0f;
+
+  auto view = reg.view<Skills, Attributes, Stats, Velocity>();
+  for (const entt::entity e : view) {
+    Skills& skills = view.get<Skills>(e);
+
+    // 1. Activity earns XP: moving trains conditioning (the same "is it moving?"
+    //    signal update_stamina reads). Standing still trains nothing.
+    if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
+      skills.conditioning.xp += kConditioningPerSecond * dt;
+    }
+
+    // 2. Spend a full XP bar on a level. A while loop, so one big grant can cross
+    //    several levels at once (and it carries the remainder forward).
+    while (skills.conditioning.xp >= xp_to_next(skills.conditioning.level)) {
+      skills.conditioning.xp -= xp_to_next(skills.conditioning.level);
+      ++skills.conditioning.level;
+    }
+
+    // 3. Skills feed attributes: endurance follows conditioning (level 1 = 0
+    //    bonus, so a fresh character is unchanged).
+    Attributes& attr = view.get<Attributes>(e);
+    attr.endurance = skills.conditioning.level - 1;
+
+    // 4. Attributes shape derived stats: more endurance = bigger pools. Only the
+    //    MAX grows — a longer bar, not a free heal; regen fills the new room in.
+    Stats& stats = view.get<Stats>(e);
+    const float end = static_cast<float>(attr.endurance);
+    stats.health.max = kBaseMaxHealth + end * kHealthPerEndurance;
+    stats.stamina.max = kBaseMaxStamina + end * kStaminaPerEndurance;
+  }
+}
+
 void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
   // A zero-health entity meets one of two fates, and which one is the game's core
   // rule made concrete: the PLAYER respawns; an NPC dies for good (permadeath).

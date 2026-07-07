@@ -32,6 +32,8 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel) {
   reg.emplace<RenderDot>(e, Vec3{0.4f, 0.85f, 0.4f},
                          8.0f);                       // green, a touch smaller than the player
   reg.emplace<Stats>(e, Vital{60.0f, 100.0f, 4.0f});  // frailer than the player; heals slowly
+  reg.emplace<Skills>(e);  // NPCs train and grow, exactly like the player
+  reg.emplace<Attributes>(e);
   reg.emplace<Npc>(e);
   return e;
 }
@@ -49,6 +51,8 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   reg.emplace<PlayerControlled>(player, kLocalPlayer, 320.0f);
   reg.emplace<RenderDot>(player, Vec3{0.3f, 0.8f, 1.0f}, 10.0f);  // bright blue
   reg.emplace<Stats>(player, Vital{70.0f, 100.0f, 8.0f});         // spawn worn; heals 8/sec
+  reg.emplace<Skills>(player);  // trains with activity; feeds Attributes (see advance_progression)
+  reg.emplace<Attributes>(player);
 
   // Deterministic directions from the seeded PRNG so every run starts identically.
   std::uniform_real_distribution<float> vel(-80.0f, 80.0f);
@@ -95,7 +99,8 @@ void World::step() {
   const float dt = static_cast<float>(kSecondsPerTick);
   steer_npcs(registry_);  // NPCs decide where to go (may set their velocity)
   integrate_motion(registry_, dt);
-  update_stamina(registry_, dt);  // moving costs stamina; resting restores it
+  update_stamina(registry_, dt);       // moving costs stamina; resting restores it
+  advance_progression(registry_, dt);  // activity -> skill XP -> level -> attribute -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
   // Collision runs after movement (positions are current), then death is checked
   // from any damage it dealt, then survivors regenerate. This order is the

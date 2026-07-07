@@ -110,7 +110,7 @@ this way:
 | **A passive vital** (mana) | a `Vital mana;` field in `Stats`; one `recover(s.mana, dt);` line in `regenerate_vitals`; a bar in the panel |
 | **A spent vital** (hunger) | a `Vital` field in `Stats` plus its own small system for *when* it drains — the shape `update_stamina` follows |
 | **Attributes** (strength, agility) | new fields in `Stats`; a system that reads them where they matter (e.g. movement) |
-| **Skills that level with use** | a `Skill {level, xp}` type and a set of them in `Stats`; a system that grants xp on activity |
+| **Skills & attributes** (now built) | see [Progression](progression.md) — `Skill`/`Skills`/`Attributes` components fed by the `advance_progression` system |
 | **A new hazard or weapon** | a component marking it (like `Hazard`) plus a system that applies its effect (like `resolve_contacts`) |
 
 ## Where it goes next
@@ -127,9 +127,11 @@ That is the `handle_deaths` branch this page kept pointing at; the first wanderi
 NPCs (the green dots) exercise it live — watch "NPCs alive" in the panel only ever
 fall as they drift into motes.
 
-Beyond that, the game's design calls for skills that level with activity for both
-players and NPCs (see the master plan). Those slot into `Stats` as new fields with
-their own systems, exactly like `Vital` did.
+Beyond that, characters *grow*: skills that level with activity feed attributes
+that shape these vitals, for players and NPCs alike. That is now its own layer on
+top of stats — see [Progression](progression.md), where staying active grows an
+Endurance attribute that enlarges the very `health` and `stamina` pools defined
+here.
 
 ## Key files
 
