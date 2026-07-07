@@ -204,7 +204,14 @@ void World::apply_command(const Command& cmd) {
           attrs.strength.xp += kStrikingPerHit;
         }
       }
-      for (const entt::entity t : struck) registry_.destroy(t);
+      // Guard the destroy with valid(): today one entity owns each PlayerId so a
+      // target appears at most once, but this is written as a multi-attacker loop
+      // (the co-op "several units share a PlayerId" case the MovePlayer comment
+      // anticipates), where two attackers could pick the same nearest mote — a
+      // double destroy() is UB. Skipping an already-dead handle keeps that safe.
+      for (const entt::entity t : struck) {
+        if (registry_.valid(t)) registry_.destroy(t);
+      }
       break;
     }
   }
