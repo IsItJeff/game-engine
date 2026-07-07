@@ -14,10 +14,13 @@ namespace {
 constexpr int kTableSize = 256;
 
 // Build the table ONCE. This is the only place a float touches the curve, and it
-// runs at static-init, never per tick. Snapping each value to Q16.16 makes the
-// bake cross-platform-identical: `std::log` may differ across libms in its last
-// ~1e-15, which is ten orders of magnitude below the Q16.16 step (~1.5e-5), so the
-// rounded fixed-point value is the same on every machine.
+// runs at static-init, never per tick. Snapping each value to Q16.16 hides MOST
+// libm variance: `std::log` may differ across platforms in its last ~1e-15, ten
+// orders of magnitude below the Q16.16 step (~1.5e-5), so the rounded value is
+// almost always identical. The exception is a value landing right on a half-step
+// boundary, where two libms can straddle the rounding point and snap one raw unit
+// apart — fine for per-platform replay, not yet cross-OS bit-exact. See the
+// determinism caveat in curve.hpp.
 std::array<Fixed, kTableSize> build_table() {
   std::array<Fixed, kTableSize> table{};
   for (int level = 0; level < kTableSize; ++level) {
@@ -45,6 +48,10 @@ Fixed power(int level) {
   const Fixed last = table()[kTableSize - 1];
   const Fixed step = last - table()[kTableSize - 2];
   return last + step * Fixed::from_int(level - (kTableSize - 1));
+}
+
+std::int64_t xp_to_next(int level) {
+  return static_cast<std::int64_t>(100) * level;
 }
 
 }  // namespace eng::sim

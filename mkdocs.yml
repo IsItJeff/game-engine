@@ -194,6 +194,7 @@ nav:
           - engine/skeleton/client-and-rendering.md
           - engine/skeleton/extending.md
       - Game Systems:
+          - Deterministic numbers: engine/deterministic-numbers.md
           - Stats: engine/stats-system.md
           - Progression: engine/progression.md
           - NPC behaviour: engine/npc-behaviour.md

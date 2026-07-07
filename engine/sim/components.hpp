@@ -1,5 +1,10 @@
 #pragma once
 
+#include <cstdint>
+#include <utility>
+#include <vector>
+
+#include "engine/core/fixed.hpp"
 #include "engine/core/math.hpp"
 #include "engine/sim/types.hpp"
 
@@ -126,27 +131,58 @@ struct Stats {
 // share this exact machinery — anyone carrying these components levels the same
 // way, which is the whole point of doing it in the ECS.
 
-// One trainable skill: XP accrues from doing the related activity, and crossing a
-// threshold raises the level (see the advance_progression system). Levels are what
-// attributes read; xp is the progress toward the next one.
+// One trainable skill. XP accrues from doing the related activity and crossing a
+// threshold raises the level. `xp` is a Fixed so it can gain a *fraction* each
+// 60 Hz tick (20 XP/sec is 0.333/tick) and still be deterministic — an int would
+// round every tick's gain to zero.
 struct Skill {
   int level = 1;
-  float xp = 0.0f;
+  Fixed xp{};
 };
 
-// The skills an entity can train, bundled like Stats. One so far — conditioning,
-// built by staying active, which feeds Endurance. A new skill is a new field here
-// plus the activity that trains it.
+// Identifies a skill. An enum (not a string) so lookups are cheap and the wire/
+// save formats stay small. New skills append here.
+enum class SkillId : std::uint16_t {
+  Conditioning,
+};
+
+// The skills an entity is training — a KEYED collection, so a character can hold a
+// whole branching tree of skills rather than one struct field each. A small
+// append-ordered vector: deterministic iteration (a hash map's order is not) and
+// no per-entity heap churn until a character actually learns many. Everyone starts
+// knowing Conditioning (trained by staying active).
 struct Skills {
-  Skill conditioning;
+  std::vector<std::pair<SkillId, Skill>> owned{{SkillId::Conditioning, Skill{}}};
+
+  // Find a learned skill, or nullptr.
+  const Skill* find(SkillId id) const {
+    for (const auto& [key, skill] : owned) {
+      if (key == id) return &skill;
+    }
+    return nullptr;
+  }
+  // Get a skill to train, learning it at level 1 if it's new.
+  Skill& train(SkillId id) {
+    for (auto& [key, skill] : owned) {
+      if (key == id) return skill;
+    }
+    owned.emplace_back(id, Skill{});
+    return owned.back().second;
+  }
 };
 
-// Broad character attributes, DERIVED from skills every tick (skills feed
-// attributes). They are the dial between "what you practise" and "how strong you
-// are". Endurance is the first: it makes you tougher — a bigger health and stamina
-// pool. Recomputed by advance_progression, so nothing sets these by hand.
+// A broad character attribute — now with its OWN level + XP (revised). The skills
+// that use it feed it: a skill grants its MAIN attribute a lot of XP and each
+// contributor a little, so an attribute levels in parallel with the skills that
+// train it, rather than being recomputed from one skill. Endurance is the first;
+// its level shapes the health & stamina pools (see advance_progression).
+struct Attribute {
+  int level = 1;
+  Fixed xp{};
+};
+
 struct Attributes {
-  int endurance = 0;  // from conditioning; raises max health & stamina
+  Attribute endurance;  // fed by Conditioning; each level past 1 grows the pools
 };
 
 }  // namespace eng::sim

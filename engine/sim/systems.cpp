@@ -1,9 +1,11 @@
 #include "engine/sim/systems.hpp"
 
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 #include "engine/sim/components.hpp"
+#include "engine/sim/progression/curve.hpp"
 
 namespace eng::sim {
 
@@ -122,46 +124,63 @@ void update_stamina(entt::registry& reg, float dt) {
   }
 }
 
-float xp_to_next(int level) {
-  // Linear curve: level 1->2 costs 100, 2->3 costs 200, and so on. This single
-  // constant sets the whole pace — raise it and everyone levels more slowly.
-  return 100.0f * static_cast<float>(level);
+namespace {
+
+// Spend full XP bars to raise a {level, xp} pair, carrying the remainder — shared
+// by skills and attributes (both are an int level + Fixed xp). The threshold is
+// xp_to_next(level) from the curve (the cost half of the one law). A while loop, so
+// one big grant can cross several levels at once.
+void apply_levels(int& level, Fixed& xp) {
+  // ponytail: threshold is held in Q16.16, which saturates at 32767.99998, so
+  // xp_to_next (100·level) stops growing once it reaches 32768 — i.e. past level
+  // ~327. Beyond there leveling diverges from the true curve. That's ~5.3M XP / ~74h
+  // of one-skill grind, well past the 255-entry POWER table, so it's a
+  // known ceiling, not a bug to fix now: widen xp/threshold past Q16.16 (or an
+  // int64 XP path) when levels can actually reach it.
+  Fixed threshold = Fixed::from_int(static_cast<std::int32_t>(xp_to_next(level)));
+  while (xp >= threshold) {
+    xp -= threshold;
+    ++level;
+    threshold = Fixed::from_int(static_cast<std::int32_t>(xp_to_next(level)));
+  }
 }
 
-void advance_progression(entt::registry& reg, float dt) {
-  constexpr float kConditioningPerSecond = 20.0f;  // XP/sec while active — tune the pace
-  constexpr float kHealthPerEndurance = 10.0f;     // how much tougher each point makes you
+}  // namespace
+
+void advance_progression(entt::registry& reg) {
+  constexpr float kHealthPerEndurance = 10.0f;  // how much tougher each point makes you
   constexpr float kStaminaPerEndurance = 5.0f;
+  // XP earned per tick of activity. The timestep is fixed (1/60 s), so a
+  // per-second rate is a constant per-tick Fixed amount — deterministic, no float
+  // in the loop (20 XP/sec ÷ 60 ticks).
+  const Fixed kConditioningPerTick = Fixed::from_ratio(20, 60);
 
   auto view = reg.view<Skills, Attributes, Stats, Velocity>();
   for (const entt::entity e : view) {
-    Skills& skills = view.get<Skills>(e);
+    Skill& conditioning = view.get<Skills>(e).train(SkillId::Conditioning);
+    Attribute& endurance = view.get<Attributes>(e).endurance;
 
-    // 1. Activity earns XP: moving trains conditioning (the same "is it moving?"
-    //    signal update_stamina reads). Standing still trains nothing.
+    // 1. Activity earns XP for the SKILL and its MAIN attribute. Conditioning's
+    //    main attribute is Endurance, so it takes the full share for now (skills
+    //    with contributors will split it later). Standing still trains nothing.
     if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
-      skills.conditioning.xp += kConditioningPerSecond * dt;
+      conditioning.xp += kConditioningPerTick;
+      endurance.xp += kConditioningPerTick;
     }
 
-    // 2. Spend a full XP bar on a level. A while loop, so one big grant can cross
-    //    several levels at once (and it carries the remainder forward).
-    while (skills.conditioning.xp >= xp_to_next(skills.conditioning.level)) {
-      skills.conditioning.xp -= xp_to_next(skills.conditioning.level);
-      ++skills.conditioning.level;
-    }
+    // 2. Turn full XP bars into levels — the skill and the attribute each climb on
+    //    their own accumulator (in lock-step here, since endurance takes the whole
+    //    conditioning share).
+    apply_levels(conditioning.level, conditioning.xp);
+    apply_levels(endurance.level, endurance.xp);
 
-    // 3. Skills feed attributes: endurance follows conditioning (level 1 = 0
-    //    bonus, so a fresh character is unchanged).
-    Attributes& attr = view.get<Attributes>(e);
-    attr.endurance = skills.conditioning.level - 1;
-
-    // 4. Attributes shape derived stats: more endurance = bigger pools, added on
-    //    top of each Vital's own `base`. Only the MAX grows — a longer bar, not a
-    //    free heal; regen fills the new room in.
+    // 3. Attributes shape derived stats: each Endurance level past the first adds
+    //    to the pools, on top of each Vital's own `base`. Only the MAX grows — a
+    //    longer bar, not a free heal; regen fills the new room in.
+    const float bonus = static_cast<float>(endurance.level - 1);
     Stats& stats = view.get<Stats>(e);
-    const float end = static_cast<float>(attr.endurance);
-    stats.health.max = stats.health.base + end * kHealthPerEndurance;
-    stats.stamina.max = stats.stamina.base + end * kStaminaPerEndurance;
+    stats.health.max = stats.health.base + bonus * kHealthPerEndurance;
+    stats.stamina.max = stats.stamina.base + bonus * kStaminaPerEndurance;
   }
 }
 

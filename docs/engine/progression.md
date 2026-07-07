@@ -24,24 +24,26 @@ One system, `advance_progression`, runs each tick over every entity that has
 
 ```mermaid
 flowchart LR
-  act[moving this tick] --> xp[conditioning.xp += rate]
-  xp --> lvl{xp full?}
-  lvl -->|yes| up[level up, carry the remainder]
+  act[moving this tick] --> xp[conditioning.xp AND endurance.xp += rate]
+  xp --> lvl{a bar full?}
+  lvl -->|yes| up[level that one up, carry the remainder]
   lvl -->|no| keep[wait]
-  up --> attr[endurance = conditioning.level - 1]
-  keep --> attr
-  attr --> stat[max health & stamina = base + endurance × per-point]
+  up --> stat[max health & stamina = base + endurance level × per-point]
+  keep --> stat
 ```
 
-1. **Activity earns XP** — moving trains conditioning (the same "is it moving?"
-   signal `update_stamina` reads). Standing still trains nothing.
-2. **A full bar levels the skill** — a `while` loop, so one big grant can cross
-   several levels and carries the remainder forward.
-3. **Skills feed attributes** — `endurance` follows `conditioning.level` (level 1
-   is zero bonus, so a fresh character is unchanged).
-4. **Attributes shape derived stats** — more endurance means bigger pools. Only
-   the **max** grows: you get a longer bar, not a free heal, and regen fills the
-   new room over the next seconds.
+1. **Activity earns XP for the skill *and* its main attribute** — moving trains
+   the `conditioning` **skill** and, because Endurance is its main attribute, feeds
+   **`endurance`** its own XP too. (A skill with several contributing attributes
+   would split the share — the main a lot, the rest a little; conditioning has just
+   the one, so it takes the whole share.) Standing still trains nothing.
+2. **A full bar levels it up** — the same `while`-loop carry works on both the
+   skill and the attribute; each has its own `{level, Fixed xp}` and climbs
+   independently. (XP is a `Fixed` so 20/sec accrues cleanly as ~0.33 per 60 Hz
+   tick — an `int` would round every tick's gain to nothing.)
+3. **The attribute's level shapes derived stats** — each Endurance level past the
+   first adds to the pools, on top of each Vital's own `base`. Only the **max**
+   grows: a longer bar, not a free heal, and regen fills the new room in.
 
 Because the view targets `Skills + Attributes + Stats + Velocity`, it lands on the
 player and the NPCs and skips the motes — one system, everyone who should grow.

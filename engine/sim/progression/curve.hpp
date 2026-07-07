@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "engine/core/fixed.hpp"
 
 // The progression curve — "the one law: uncapped, ever-slower, never zero."
@@ -27,9 +29,11 @@ namespace eng::sim {
 // The diminishing effect multiplier for a level. power(0) == 1.0; it rises forever
 // but ever more slowly (log growth), never plateauing.
 //
-// (The cost half of the law — `xp_to_next(level) = 100·level` — currently lives in
-// systems.cpp as the shipped float version; it moves here, as an integer, in the
-// attribute-XP refactor.)
 Fixed power(int level);
+
+// XP required to advance from `level` to the next. Linear, so each level costs more
+// than the last — the COST half of the law. Whole (XP thresholds are integers; the
+// accumulated xp is Fixed so it can accrue fractionally per tick).
+std::int64_t xp_to_next(int level);
 
 }  // namespace eng::sim

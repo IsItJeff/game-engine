@@ -131,9 +131,9 @@ TEST_CASE("staying active trains conditioning, which raises endurance and max he
   const eng::sim::Skills& skills = world.registry().get<eng::sim::Skills>(player);
   const eng::sim::Attributes& attr = world.registry().get<eng::sim::Attributes>(player);
   const eng::sim::Stats& stats = world.registry().get<eng::sim::Stats>(player);
-  REQUIRE(skills.conditioning.level >= 2);  // the skill leveled from use
-  REQUIRE(attr.endurance >= 1);             // the skill fed the attribute
-  REQUIRE(stats.health.max > base_max);     // the attribute grew the pool
+  REQUIRE(skills.find(eng::sim::SkillId::Conditioning)->level >= 2);  // the skill leveled from use
+  REQUIRE(attr.endurance.level >= 2);    // the attribute leveled in parallel (bonus >= 1)
+  REQUIRE(stats.health.max > base_max);  // the attribute grew the pool
 }
 
 TEST_CASE("an idle character does not train conditioning", "[sim]") {
@@ -144,9 +144,10 @@ TEST_CASE("an idle character does not train conditioning", "[sim]") {
   for (int i = 0; i < 6 * eng::sim::kTicksPerSecond; ++i) world.step();
 
   const eng::sim::Skills& skills = world.registry().get<eng::sim::Skills>(player);
-  REQUIRE(skills.conditioning.level == 1);  // no activity, no training...
-  REQUIRE(skills.conditioning.xp == 0.0f);  // ...not even a sliver of XP
-  REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance == 0);
+  const eng::sim::Skill* cond = skills.find(eng::sim::SkillId::Conditioning);
+  REQUIRE(cond->level == 1);          // no activity, no training...
+  REQUIRE(cond->xp == eng::Fixed{});  // ...not even a sliver of XP
+  REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance.level == 1);  // bonus 0
 }
 
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {

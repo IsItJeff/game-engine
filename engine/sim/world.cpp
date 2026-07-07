@@ -99,8 +99,8 @@ void World::step() {
   const float dt = static_cast<float>(kSecondsPerTick);
   steer_npcs(registry_);  // NPCs decide where to go (may set their velocity)
   integrate_motion(registry_, dt);
-  update_stamina(registry_, dt);       // moving costs stamina; resting restores it
-  advance_progression(registry_, dt);  // activity -> skill XP -> level -> attribute -> bigger pools
+  update_stamina(registry_, dt);   // moving costs stamina; resting restores it
+  advance_progression(registry_);  // activity -> skill+attribute XP -> level -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
   // Collision runs after movement (positions are current), then death is checked
   // from any damage it dealt, then survivors regenerate. This order is the
