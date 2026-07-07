@@ -185,4 +185,14 @@ struct Attributes {
   Attribute endurance;  // fed by Conditioning; each level past 1 grows the pools
 };
 
+// A single global "how experienced overall" level, fed by a fraction of ALL
+// activity (not one skill). Its level is a gentle multiplier on earned stats via
+// the same POWER curve, so a long-lived character is generally a bit better across
+// the board — the "veteran" layer on top of specific skills and attributes. Starts
+// at level 1 = POWER(0) = no head start, exactly like the other {level, xp} pairs.
+struct CharacterLevel {
+  int level = 1;
+  Fixed xp{};
+};
+
 }  // namespace eng::sim

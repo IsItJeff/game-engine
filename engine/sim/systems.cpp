@@ -154,33 +154,49 @@ void advance_progression(entt::registry& reg) {
   // per-second rate is a constant per-tick Fixed amount — deterministic, no float
   // in the loop (20 XP/sec ÷ 60 ticks).
   const Fixed kConditioningPerTick = Fixed::from_ratio(20, 60);
+  // The Character Level earns a FRACTION of the same activity — a quarter here — so
+  // it climbs slower than the skill it comes from and stays the gentle "veteran"
+  // layer, not a second fast track. A balance knob, not a law (design: tune at
+  // playtest).
+  const Fixed kCharLevelShare = Fixed::from_ratio(1, 4);
 
-  auto view = reg.view<Skills, Attributes, Stats, Velocity>();
+  // NB: CharacterLevel is required here, so any new progression-capable entity must
+  // be spawned WITH it (see world.cpp: player + NPC) — miss it and that entity
+  // silently never grows, no error. Keep the progression components together.
+  auto view = reg.view<Skills, Attributes, Stats, Velocity, CharacterLevel>();
   for (const entt::entity e : view) {
     Skill& conditioning = view.get<Skills>(e).train(SkillId::Conditioning);
     Attribute& endurance = view.get<Attributes>(e).endurance;
+    CharacterLevel& character = view.get<CharacterLevel>(e);
 
-    // 1. Activity earns XP for the SKILL and its MAIN attribute. Conditioning's
-    //    main attribute is Endurance, so it takes the full share for now (skills
-    //    with contributors will split it later). Standing still trains nothing.
+    // 1. Activity earns XP for the SKILL and its MAIN attribute, plus a fraction to
+    //    the global Character Level. Conditioning's main attribute is Endurance, so
+    //    it takes the full share for now (skills with contributors will split it
+    //    later). Standing still trains nothing.
     if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
       conditioning.xp += kConditioningPerTick;
       endurance.xp += kConditioningPerTick;
+      character.xp += kConditioningPerTick * kCharLevelShare;
     }
 
-    // 2. Turn full XP bars into levels — the skill and the attribute each climb on
-    //    their own accumulator (in lock-step here, since endurance takes the whole
-    //    conditioning share).
+    // 2. Turn full XP bars into levels — the skill, the attribute, and the character
+    //    level each climb on their own accumulator (the first two in lock-step here,
+    //    since endurance takes the whole conditioning share).
     apply_levels(conditioning.level, conditioning.xp);
     apply_levels(endurance.level, endurance.xp);
+    apply_levels(character.level, character.xp);
 
-    // 3. Attributes shape derived stats: each Endurance level past the first adds
-    //    to the pools, on top of each Vital's own `base`. Only the MAX grows — a
-    //    longer bar, not a free heal; regen fills the new room in.
+    // 3. Attributes shape derived stats: each Endurance level past the first adds to
+    //    the pools, on top of each Vital's own `base`. The Character Level then
+    //    scales that EARNED bonus (not the base) by POWER(char_level - 1) — level 1
+    //    is POWER(0) = 1.0, so a fresh character is unchanged and a veteran's earned
+    //    toughness compounds a little. Only the MAX grows — a longer bar, not a free
+    //    heal; regen fills the new room in.
     const float bonus = static_cast<float>(endurance.level - 1);
+    const float veteran = static_cast<float>(power(character.level - 1).to_double());
     Stats& stats = view.get<Stats>(e);
-    stats.health.max = stats.health.base + bonus * kHealthPerEndurance;
-    stats.stamina.max = stats.stamina.base + bonus * kStaminaPerEndurance;
+    stats.health.max = stats.health.base + bonus * kHealthPerEndurance * veteran;
+    stats.stamina.max = stats.stamina.base + bonus * kStaminaPerEndurance * veteran;
   }
 }
 

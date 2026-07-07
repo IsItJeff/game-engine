@@ -34,6 +34,7 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel) {
   reg.emplace<Stats>(e, Vital{60.0f, 100.0f, 4.0f});  // frailer than the player; heals slowly
   reg.emplace<Skills>(e);  // NPCs train and grow, exactly like the player
   reg.emplace<Attributes>(e);
+  reg.emplace<CharacterLevel>(e);
   reg.emplace<Npc>(e);
   return e;
 }
@@ -53,6 +54,7 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   reg.emplace<Stats>(player, Vital{70.0f, 100.0f, 8.0f});         // spawn worn; heals 8/sec
   reg.emplace<Skills>(player);  // trains with activity; feeds Attributes (see advance_progression)
   reg.emplace<Attributes>(player);
+  reg.emplace<CharacterLevel>(player);
 
   // Deterministic directions from the seeded PRNG so every run starts identically.
   std::uniform_real_distribution<float> vel(-80.0f, 80.0f);

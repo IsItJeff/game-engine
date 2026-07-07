@@ -58,11 +58,13 @@ void update_stamina(entt::registry& reg, float dt);
 void resolve_contacts(entt::registry& reg);
 
 // Advance progression, the whole "learn by doing" chain in one pass over every
-// entity with Skills + Attributes + Stats + Velocity: activity earns XP for the
-// skill it trains AND that skill's main attribute; full XP bars level each up; and
-// derived stats (max health & stamina) grow from the attribute's level. Runs on
-// the player and NPCs alike. No `dt` — the timestep is fixed, so XP is a constant
-// per-tick amount. (The XP curve `xp_to_next` lives in progression/curve.hpp.)
+// entity with Skills + Attributes + Stats + Velocity + CharacterLevel: activity
+// earns XP for the skill it trains, that skill's main attribute, AND a fraction to
+// the global Character Level; full XP bars level each up; and derived stats (max
+// health & stamina) grow from the attribute's level, scaled a little by the
+// Character Level's veteran multiplier. Runs on the player and NPCs alike. No `dt`
+// — the timestep is fixed, so XP is a constant per-tick amount. (The XP curve
+// `xp_to_next` and the effect curve `power` live in progression/curve.hpp.)
 void advance_progression(entt::registry& reg);
 
 // React to death, two ways: a player at 0 health respawns at `respawn_point` with
