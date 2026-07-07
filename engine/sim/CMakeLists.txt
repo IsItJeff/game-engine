@@ -8,6 +8,7 @@ find_package(glm CONFIG REQUIRED)
 add_library(eng_sim STATIC
   world.cpp
   systems.cpp
+  progression/curve.cpp
 )
 
 # EnTT and glm are "vocabulary" libraries used directly in our public headers,
