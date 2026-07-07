@@ -2,6 +2,7 @@
 #include <imgui.h>
 
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 
 #include "engine/core/log.hpp"
@@ -10,6 +11,7 @@
 #include "engine/net/loopback.hpp"
 #include "engine/net/server.hpp"
 #include "engine/sim/components.hpp"
+#include "engine/sim/progression/curve.hpp"
 #include "engine/sim/simulation.hpp"
 #include "engine/sim/systems.hpp"
 #include "engine/sim/types.hpp"
@@ -101,12 +103,15 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   // conditioning level. Move around and watch endurance climb, then the health and
   // stamina bars above lengthen as the bigger pools take effect.
   if (const eng::sim::Attributes* attr = world.registry().try_get<eng::sim::Attributes>(player)) {
-    ImGui::Text("endurance: %d", attr->endurance);
+    ImGui::Text("endurance: %d", attr->endurance.level - 1);  // level 1 = 0 bonus
   }
   if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
-    const eng::sim::Skill& c = skills->conditioning;
-    ImGui::Text("conditioning: lvl %d", c.level);
-    ImGui::ProgressBar(c.xp / eng::sim::xp_to_next(c.level));
+    if (const eng::sim::Skill* c = skills->find(eng::sim::SkillId::Conditioning)) {
+      ImGui::Text("conditioning: lvl %d", c->level);
+      const eng::Fixed threshold =
+          eng::Fixed::from_int(static_cast<std::int32_t>(eng::sim::xp_to_next(c->level)));
+      ImGui::ProgressBar(static_cast<float>((c->xp / threshold).to_double()));
+    }
   }
 
   ImGui::Checkbox("pause simulation", &paused);

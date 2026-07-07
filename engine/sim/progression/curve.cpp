@@ -47,4 +47,8 @@ Fixed power(int level) {
   return last + step * Fixed::from_int(level - (kTableSize - 1));
 }
 
+std::int64_t xp_to_next(int level) {
+  return static_cast<std::int64_t>(100) * level;
+}
+
 }  // namespace eng::sim
