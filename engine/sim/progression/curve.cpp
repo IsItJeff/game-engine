@@ -24,6 +24,10 @@ std::array<Fixed, kTableSize> build_table() {
     const double p = 1.0 + 0.35 * std::log(1.0 + static_cast<double>(level) / 10.0);
     table[static_cast<std::size_t>(level)] = Fixed::from_float(p);
   }
+  // Anchor "no head start" exactly: power(0) must be 1.0 on every platform, not
+  // whatever std::log(1) + rounding happens to land on (MSVC and Clang can differ
+  // by one raw unit at a half-step boundary). See the determinism note in the .hpp.
+  table[0] = Fixed::from_int(1);
   return table;
 }
 
