@@ -10,7 +10,11 @@
 using eng::Fixed;
 using eng::sim::power;
 
-TEST_CASE("power(0) is exactly 1.0 — no head start", "[curve]") {
+// Test names stay ASCII-only: CTest passes the name to the Catch2 binary as a
+// filter, and on Windows a non-ASCII char (this was an em-dash) gets mangled by the
+// console codepage so the filter matches zero cases and the test "fails". ASCII is
+// the portable contract — keep new TEST_CASE names to it.
+TEST_CASE("power(0) is exactly 1.0 (no head start)", "[curve]") {
   REQUIRE(power(0) == Fixed::from_int(1));
 }
 

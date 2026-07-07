@@ -19,7 +19,8 @@
 // values one unit apart. That is fine for per-platform replay (the master plan's
 // current bar) but would break *cross-OS* lockstep. When cross-OS determinism is
 // gated, replace the `std::log` bake with a generated constant table or a
-// fixed-point `ln` (tracked as a follow-up). `power(0)` is already anchored exact.
+// fixed-point `ln` (tracked as a follow-up). `power(0)` is exact everywhere already:
+// log(1) is exactly +0 by the C standard, so it needs no special-casing.
 
 namespace eng::sim {
 

@@ -24,7 +24,9 @@ std::array<Fixed, kTableSize> build_table() {
     const double p = 1.0 + 0.35 * std::log(1.0 + static_cast<double>(level) / 10.0);
     table[static_cast<std::size_t>(level)] = Fixed::from_float(p);
   }
-  return table;  // power(0) is anchored in power() itself, not here
+  // power(0) needs no special-casing: log(1) is exactly +0 (guaranteed by the C
+  // standard), so table[0] = from_float(1.0) is exactly 1.0 on every platform.
+  return table;
 }
 
 const std::array<Fixed, kTableSize>& table() {
@@ -35,11 +37,7 @@ const std::array<Fixed, kTableSize>& table() {
 }  // namespace
 
 Fixed power(int level) {
-  // Anchor "no head start" in the FUNCTION, not just the table: power(0) is exactly
-  // 1.0 by the most direct path (from_int, no float, no table lookup), so it can't
-  // depend on a libm quirk or a table-init subtlety. (MSVC was landing table[0] one
-  // raw unit off; this makes the invariant bit-exact everywhere.)
-  if (level <= 0) return Fixed::from_int(1);
+  if (level < 0) level = 0;
   if (level < kTableSize) return table()[static_cast<std::size_t>(level)];
 
   // Past the table (astronomically high levels): extend by the final step so the
