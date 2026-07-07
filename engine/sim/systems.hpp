@@ -24,6 +24,13 @@ namespace eng::sim {
 // timestep explanation in simulation.hpp). Runs first, before anything moves.
 void snapshot_previous(entt::registry& reg);
 
+// Steer NPCs: each NPC looks for the nearest Hazard within its senses and, if it
+// finds one, sets its Velocity to flee directly away from it (otherwise it keeps
+// drifting). The first taste of NPC behaviour — perception (find the threat) then
+// action (set the velocity). MUST run before integrate_motion, which is what
+// turns the velocity it sets into actual movement this tick.
+void steer_npcs(entt::registry& reg);
+
 // Move every entity with a Transform and Velocity: position += velocity * dt.
 // This is Euler integration — the simplest way to turn a velocity into motion.
 void integrate_motion(entt::registry& reg, float dt);

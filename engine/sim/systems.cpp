@@ -17,6 +17,44 @@ void snapshot_previous(entt::registry& reg) {
   }
 }
 
+void steer_npcs(entt::registry& reg) {
+  // How far an NPC can "see" a hazard, and how fast it flees one. Plain constants
+  // until an NPC ever needs its own values — then they'd become fields on a
+  // component (rule 12: write the concrete thing first, abstract on the 2nd use).
+  constexpr float kSenseRadius = 120.0f;
+  constexpr float kFleeSpeed = 90.0f;
+
+  // Nested loop: every NPC against every hazard — O(n*m), fine for a handful. A
+  // real crowd would query a spatial grid, the same upgrade resolve_contacts wants.
+  auto npcs = reg.view<Npc, Transform, Velocity>();
+  auto hazards = reg.view<Hazard, Transform>();
+  for (const entt::entity n : npcs) {
+    const Vec2 pos = npcs.get<Transform>(n).position;
+
+    // Perception: find the single nearest hazard within sense range.
+    float nearest = kSenseRadius;
+    Vec2 threat{0.0f, 0.0f};
+    bool sees_threat = false;
+    for (const entt::entity h : hazards) {
+      const Vec2 h_pos = hazards.get<Transform>(h).position;
+      const float d = glm::distance(pos, h_pos);
+      if (d < nearest) {
+        nearest = d;
+        threat = h_pos;
+        sees_threat = true;
+      }
+    }
+
+    // Action: flee straight away from the threat. With nothing in range the NPC
+    // keeps whatever velocity it already had, so it just drifts on.
+    if (sees_threat) {
+      const Vec2 away = pos - threat;
+      const float len = glm::length(away);
+      if (len > 0.0f) npcs.get<Velocity>(n).value = (away / len) * kFleeSpeed;
+    }
+  }
+}
+
 void integrate_motion(entt::registry& reg, float dt) {
   // The classic update: new position = old position + velocity * time. Runs over
   // every entity that has both a Transform and a Velocity, and no others — that

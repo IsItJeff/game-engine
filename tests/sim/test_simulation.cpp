@@ -211,6 +211,46 @@ TEST_CASE("a dead NPC is destroyed (permadeath), not respawned", "[sim]") {
   REQUIRE_FALSE(reg.valid(hazard));
 }
 
+TEST_CASE("an NPC steers away from a nearby hazard", "[sim]") {
+  entt::registry reg;
+
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::Velocity>(npc);  // starts still
+
+  // A hazard 50 units to the NPC's right — inside its 120-unit senses.
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Hazard>(hazard);
+  reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{150.0f, 100.0f});
+
+  eng::sim::steer_npcs(reg);
+
+  // It should now be moving left — directly away from the hazard on its right.
+  REQUIRE(reg.get<eng::sim::Velocity>(npc).value.x < 0.0f);
+}
+
+TEST_CASE("an NPC ignores a hazard beyond its senses", "[sim]") {
+  entt::registry reg;
+
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::Velocity>(npc);  // starts still
+
+  // A hazard 300 units away — well outside the 120-unit sense radius.
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Hazard>(hazard);
+  reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{400.0f, 100.0f});
+
+  eng::sim::steer_npcs(reg);
+
+  // Out of range: the NPC never reacted, so it is still standing still.
+  const eng::Vec2 vel = reg.get<eng::sim::Velocity>(npc).value;
+  REQUIRE(vel.x == 0.0f);
+  REQUIRE(vel.y == 0.0f);
+}
+
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {
   eng::sim::World world;
   const auto before = world.registry().storage<eng::sim::Transform>().size();

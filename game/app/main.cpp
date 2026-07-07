@@ -102,10 +102,11 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   ImGui::TextWrapped(
       "WASD / arrows: move — and dodge, the drifting motes hurt and vanish on "
       "contact. Moving drains stamina; run it dry and you slow to a crawl until "
-      "you rest. The green dots are NPCs: they take the same contact damage you "
-      "do, but when they die they're gone for good (permadeath) — you respawn. "
-      "Space: spawn a mote. H: take 15 damage. Your keypresses become Commands; "
-      "the motes, the stamina, and the NPCs dying are all systems on the server.");
+      "you rest. The green dots are NPCs: they now flee motes they sense, take the "
+      "same contact damage you do, and when they die they're gone for good "
+      "(permadeath) — you respawn. Space: spawn a mote (watch nearby NPCs scatter). "
+      "H: take 15 damage. Your keypresses become Commands; the NPCs fleeing, the "
+      "motes, and the deaths are all systems on the server.");
   ImGui::End();
 }
 
