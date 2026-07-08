@@ -37,6 +37,13 @@ inline constexpr float kFieldHeight = 720.0f;
 inline constexpr float kCreatureSpawnInterval = 6.0f;
 inline constexpr int kMaxCreatures = 5;
 
+// Keep the colony alive too: colonists wander in on a SLOWER timer (creatures now hunt
+// NPCs, so without replenishment the field slowly empties of the people whose skirmishes
+// make the world feel alive). Deliberately slower than the creature interval so the world
+// stays net-hostile — reinforcements, not safety. Tuning knobs.
+inline constexpr float kNpcSpawnInterval = 12.0f;
+inline constexpr int kMaxNpcs = 6;
+
 class World {
  public:
   // Builds the opening scene: one player-controlled entity plus a few drifting
@@ -73,10 +80,20 @@ class World {
   // (later) lockstep-free networking debuggable — never call rand().
   std::mt19937 rng_{1234};
 
+  // A SEPARATE deterministic stream for the NPC spawner's own draws (when/where a colonist
+  // arrives), so those rolls stay off the rng_ stream the creatures + combat use. It keeps
+  // the spawner's placement/timing from directly perturbing the creature waves that tests
+  // pin; the NPCs it spawns can still touch rng_ later (combat dodge rolls), so it's not
+  // full invariance to colony tuning. Different seed = an independent, reproducible stream.
+  std::mt19937 npc_spawn_rng_{5678};
+
   // Counts down each step; when it reaches 0 the world spawns a creature (if under
   // the cap) and resets. Starts at a full interval so the opening two hunters get a
   // head start before reinforcements arrive.
   float creature_spawn_timer_ = kCreatureSpawnInterval;
+
+  // The colony's own reinforcement timer, mirroring creature_spawn_timer_.
+  float npc_spawn_timer_ = kNpcSpawnInterval;
 
   entt::entity player_ = entt::null;
 };
