@@ -267,8 +267,9 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker) {
 
 void npc_attack(entt::registry& reg) {
   // Every NPC swings at the nearest hazard in reach — the same perform_attack the
-  // player's command uses, so NPCs build Strength too. Collect-then-destroy (the
-  // valid() guard makes a mote two NPCs both target a harmless double-destroy).
+  // player's command uses, so NPCs build Strength too. Collect-then-destroy: if two
+  // NPCs pick the same mote, the valid() guard below makes the second destroy a
+  // no-op, and both trained on the swing — fine, they both connected on it.
   //
   // ponytail: NPCs swing at their FULL Strength reach every tick, so they clear
   // motes that drift near them quickly. If the field empties too fast in play, gate
