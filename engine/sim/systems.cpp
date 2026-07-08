@@ -373,6 +373,19 @@ void npc_attack(entt::registry& reg) {
   }
 }
 
+namespace {
+
+// Drop a health pickup at `pos` — a small cyan orb a slain creature leaves behind.
+void spawn_pickup(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.3f, 0.9f, 0.8f}, 4.0f);  // small cyan orb
+  reg.emplace<Pickup>(e);
+}
+
+}  // namespace
+
 void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
   // A zero-health entity meets one of two fates, and which one is the game's core
   // rule made concrete: the PLAYER respawns; an NPC dies for good (permadeath).
@@ -393,15 +406,40 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
   // then-destroy pattern resolve_contacts uses to consume motes). A slain Enemy
   // dies here too, the same way an NPC does — one death path for everyone non-player.
   std::vector<entt::entity> dead;
+  std::vector<Vec2> loot_drops;  // where slain creatures fell — a pickup lands at each
   auto npcs = reg.view<Stats, Npc>();
   for (const entt::entity e : npcs) {
     if (npcs.get<Stats>(e).health.current <= 0.0f) dead.push_back(e);
   }
   auto creatures = reg.view<Stats, Enemy>();
   for (const entt::entity e : creatures) {
-    if (creatures.get<Stats>(e).health.current <= 0.0f) dead.push_back(e);
+    if (creatures.get<Stats>(e).health.current <= 0.0f) {
+      dead.push_back(e);
+      loot_drops.push_back(reg.get<Transform>(e).position);
+    }
   }
   for (const entt::entity e : dead) reg.destroy(e);
+  for (const Vec2& pos : loot_drops) spawn_pickup(reg, pos);  // loot for the win
+}
+
+void collect_pickups(entt::registry& reg) {
+  constexpr float kPickupDistance = 15.0f;  // same reach as a contact
+
+  std::vector<entt::entity> taken;  // collect, then destroy (never mid-view)
+  auto players = reg.view<PlayerControlled, Stats, Transform>();
+  auto pickups = reg.view<Pickup, Transform>();
+  for (const entt::entity item : pickups) {
+    const Vec2 item_pos = pickups.get<Transform>(item).position;
+    for (const entt::entity p : players) {
+      if (glm::distance(players.get<Transform>(p).position, item_pos) >= kPickupDistance) continue;
+      Vital& health = players.get<Stats>(p).health;
+      health.current += pickups.get<Pickup>(item).heal;
+      if (health.current > health.max) health.current = health.max;  // capped, no overheal
+      taken.push_back(item);
+      break;  // consumed by the first collector
+    }
+  }
+  for (const entt::entity item : taken) reg.destroy(item);
 }
 
 void resolve_contacts(entt::registry& reg) {

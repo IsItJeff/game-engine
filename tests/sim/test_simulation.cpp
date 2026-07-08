@@ -570,3 +570,32 @@ TEST_CASE("the world respawns creatures after they're cleared, up to a cap", "[s
 
   REQUIRE(static_cast<int>(reg.storage<eng::sim::Enemy>().size()) == eng::sim::kMaxCreatures);
 }
+
+TEST_CASE("a slain creature drops a health pickup", "[sim]") {
+  entt::registry reg;
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // already dead (0 HP)
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f});
+
+  REQUIRE(!reg.valid(foe));                              // reaped for good (permadeath)
+  REQUIRE(reg.storage<eng::sim::Pickup>().size() == 1);  // ...and it left loot
+}
+
+TEST_CASE("a player collects a pickup and heals", "[sim]") {
+  entt::registry reg;
+  const entt::entity p = reg.create();
+  reg.emplace<eng::sim::Transform>(p, eng::Vec2{50.0f, 50.0f});
+  reg.emplace<eng::sim::PlayerControlled>(p);
+  reg.emplace<eng::sim::Stats>(p, eng::sim::Vital{40.0f, 100.0f, 0.0f});  // hurt: 40/100
+  const entt::entity item = reg.create();
+  reg.emplace<eng::sim::Transform>(item, eng::Vec2{50.0f, 50.0f});  // right on the player
+  reg.emplace<eng::sim::Pickup>(item);                              // heals 25
+
+  eng::sim::collect_pickups(reg);
+
+  REQUIRE(reg.get<eng::sim::Stats>(p).health.current == Approx(65.0f));  // 40 + 25
+  REQUIRE(!reg.valid(item));                                             // consumed
+}
