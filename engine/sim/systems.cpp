@@ -10,6 +10,14 @@
 
 namespace eng::sim {
 
+namespace {
+// How close a living ally must be to haul a downed player up. Shared by the two halves of
+// the rescue: steer_npcs runs a colonist TOWARD a fallen ally until it is within this reach,
+// and handle_deaths does the actual revive at this reach — one constant so "close enough to
+// run to" and "close enough to lift" can never drift apart.
+constexpr float kReviveDistance = 20.0f;
+}  // namespace
+
 void snapshot_previous(entt::registry& reg) {
   // For every entity that has both a current and previous position, copy current
   // -> previous. After this, PrevTransform holds "where it was", and the systems
@@ -32,14 +40,20 @@ void steer_npcs(entt::registry& reg) {
   constexpr float kHungerSeekFraction = 0.6f;
   constexpr float kForageRadius = 260.0f;
   constexpr float kForageSpeed = 80.0f;
+  // Rescue: a colonist runs to a fallen ally from this far, at this speed. The radius is
+  // wide, and speed/radius are tuned so an NPC at the edge can close it (≈(300-20)/90 ≈ 3s)
+  // BEFORE the ~5s Downed timer expires — otherwise the heroism is invisible. Knobs.
+  constexpr float kRescueRadius = 300.0f;
+  constexpr float kRescueSpeed = 90.0f;
 
-  // Nested loops: every NPC against every hazard / every orb — O(n*m), fine for a handful.
-  // A real crowd would query a spatial grid, the same upgrade resolve_contacts wants.
+  // Nested loops: every NPC against every hazard / orb / fallen ally — O(n*m), fine for a
+  // handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts wants.
   // ponytail: no orb-reservation — several hungry NPCs can converge on one orb and the
   // first to reach it eats (collect_pickups); add claims only if the scramble looks bad.
   auto npcs = reg.view<Npc, Transform, Velocity>();
   auto hazards = reg.view<Hazard, Transform>();
   auto food = reg.view<Pickup, Transform>();
+  auto downed = reg.view<Downed, Transform>();
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
 
@@ -57,7 +71,7 @@ void steer_npcs(entt::registry& reg) {
       }
     }
 
-    // Fear beats hunger: flee straight away from a threat, ignoring food.
+    // Fear beats everything: flee straight away from a threat, ignoring ally and food alike.
     if (sees_threat) {
       const Vec2 away = pos - threat;
       const float len = glm::length(away);
@@ -65,7 +79,33 @@ void steer_npcs(entt::registry& reg) {
       continue;
     }
 
-    // Priority 2 — hunger: a safe but hungry colonist seeks the nearest orb (its FIRST
+    // Priority 2 — HEROISM: run to a fallen ally. A downed person (only players go Downed
+    // today) can't save themselves, so a safe colonist sprints over; handle_deaths hauls up
+    // anyone it reaches (kReviveDistance). The FIRST NPC behaviour about another *person*
+    // rather than food or fear — the concrete seed of the design's PROTECT stance. Reuses the
+    // same "nearest X in radius, steer toward" shape as foraging, and outranks it: you drop
+    // what you're doing to save someone.
+    // ponytail: no self-preservation gate — a rescuer will cross a creature swarm to reach
+    // you and may die en route; a P7 bravery-axis check is the upgrade path.
+    entt::entity fallen = entt::null;
+    float nearest_fallen = kRescueRadius;
+    for (const entt::entity f : downed) {
+      const float d = glm::distance(pos, downed.get<Transform>(f).position);
+      if (d < nearest_fallen) {
+        nearest_fallen = d;
+        fallen = f;
+      }
+    }
+    if (fallen != entt::null) {
+      const Vec2 toward = downed.get<Transform>(fallen).position - pos;
+      const float len = glm::length(toward);
+      // Only steer while still OUTSIDE revive range: an NPC already close enough must HOLD, or
+      // it could nudge itself back out of range before handle_deaths (later this tick) revives.
+      if (len > kReviveDistance) npcs.get<Velocity>(n).value = (toward / len) * kRescueSpeed;
+      continue;  // committed to the rescue — don't also forage
+    }
+
+    // Priority 3 — hunger: a safe but hungry colonist seeks the nearest orb (its FIRST
     // want-driven motion; until now NPCs only ever fled). A fed one just drifts. It eats
     // when it arrives, in collect_pickups — this only steers it there.
     const Stats* stats = reg.try_get<Stats>(n);
@@ -533,7 +573,7 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // A zero-health entity meets one of two fates, and which one is the game's core rule
   // made concrete: a PLAYER goes DOWNED (helpless where they fell, then rescued-in-place
   // by an ally or respawned when the timer runs out); an NPC dies for good (permadeath).
-  constexpr float kReviveDistance = 20.0f;  // a living ally this close hauls a downed player up
+  // (kReviveDistance is the file-scope constant steer_npcs also runs rescuers toward.)
 
   // Back on your feet WHOLE — every vital, not just health. Hunger especially must reset
   // (it never self-recovers, so reviving with an empty stomach would drop a starved player

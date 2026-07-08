@@ -3,13 +3,22 @@
 ## What it is
 
 The first thing an NPC does on its own. Until now NPCs were data that drifted;
-the `steer_npcs` system gives each one a *decision* every tick — sense the nearest
-hazard, and if it is close, flee it. Perception, then action, in about twenty
-lines. It is the seed of the engine's NPC AI (the master plan's sensors,
-blackboard, and behaviour trees).
+the `steer_npcs` system gives each one a *decision* every tick. It started as one
+choice — flee the nearest hazard — and has grown into a small **priority ladder** of
+wants, still perception-then-action, still hard-coded leaves:
 
-- **`steer_npcs`** — a system that, for each NPC, finds the nearest `Hazard`
-  within a sense radius and sets its velocity to run directly away from it.
+1. **Flee** the nearest `Hazard` (fear beats everything).
+2. **Rescue** — run to the nearest **Downed** ally to haul them up (the first want about
+   another *person*, added with the [Downed death beat](combat.md)).
+3. **Forage** — if hungry, head for the nearest food orb (a `Pickup`).
+4. Otherwise **drift**.
+
+It is the seed of the engine's NPC AI (the master plan's sensors, blackboard, and
+behaviour trees) — each rung is exactly the kind of leaf a behaviour tree will one day
+select among.
+
+- **`steer_npcs`** — a system that, for each NPC, senses the nearest target of each kind
+  in priority order (hazard → downed ally → food) and sets its velocity accordingly.
 
 ## Why it matters
 
@@ -24,15 +33,21 @@ decision at the centre.
 Each tick, **before anything moves**, `steer_npcs` runs over every NPC:
 
 ```mermaid
-flowchart LR
-  step[World::step] --> steer[steer_npcs]
-  steer -->|view&lt;Npc, Transform, Velocity&gt;| npc[each NPC]
-  npc --> look[nearest Hazard within sense radius?]
-  look -->|yes| flee[set velocity: straight away from it]
-  look -->|no| drift[leave velocity alone — drift on]
-  flee --> move[integrate_motion turns velocity into movement]
-  drift --> move
+flowchart TD
+  npc[each NPC] --> haz{nearest Hazard<br/>in range?}
+  haz -->|yes| flee[flee: velocity straight away]
+  haz -->|no| dwn{nearest Downed<br/>ally in range?}
+  dwn -->|yes| rescue[rescue: velocity toward them]
+  dwn -->|no| hun{hungry AND<br/>food orb in range?}
+  hun -->|yes| forage[forage: velocity toward the orb]
+  hun -->|no| drift[drift: leave velocity alone]
 ```
+
+The first matching want wins and the NPC commits to it that tick (a `continue`), so a
+fleeing NPC never also forages, and a rescuer drops its meal to save someone. One
+load-bearing detail in the rescue rung: an NPC *already* within revive range holds
+position rather than steering, so it doesn't nudge itself back out before
+`handle_deaths` (later the same tick) hauls the ally up.
 
 Two details carry the whole idea:
 
@@ -55,10 +70,11 @@ the player (no `Npc`) and the motes (no `Npc`) without a single `if`.
 
 ## What to expect
 
-Spawn a mote (`Space`) near the green dots in the demo and watch them scatter. The
-"NPCs alive" counter falls *slower* than it used to, because NPCs now actively
-dodge — but motes wrap in from every edge, so some still get cornered and die
-(permadeath). Fleeing buys time; it is not immortality.
+Spawn a mote (`Space`) near the green dots in the demo and watch them scatter — fleeing
+still buys time, not immortality (some get cornered and die, permadeath). But there's more
+life to watch now: a hungry colonist peels off to grab a dropped health orb, and — most
+strikingly — if *you* go down, a nearby colonist will break off and **run to revive you**
+before your respawn timer fires. Three wants, one ladder, chosen fresh each tick.
 
 ## The tradeoffs
 
@@ -79,9 +95,9 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage ladder); `handle_deaths` does the actual revive at `kReviveDistance`.
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()`, before `integrate_motion`.
-- `tests/sim/test_simulation.cpp` — the flee-in-range and ignore-out-of-range tests.
+- `tests/sim/test_simulation.cpp` — flee-in-range / ignore-out-of-range, forage-toward-orb, and steer-to-rescue / rescue-beats-forage / revive-in-place tests.
 
 ## Go deeper
 

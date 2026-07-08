@@ -569,6 +569,77 @@ TEST_CASE("a downed player ignores movement input", "[sim]") {
   REQUIRE(glm::length(world.registry().get<eng::sim::Velocity>(player).value) == Approx(0.0f));
 }
 
+TEST_CASE("a colonist steers toward a downed ally to rescue it", "[sim]") {
+  entt::registry reg;
+  const entt::entity fallen = reg.create();
+  reg.emplace<eng::sim::Transform>(fallen, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Downed>(fallen);  // a player crumpled here
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(
+      npc, eng::Vec2{100.0f, 0.0f});  // in rescue range, outside revive range
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc);  // a living colonist
+
+  eng::sim::steer_npcs(reg);
+
+  const eng::Vec2 v = reg.get<eng::sim::Velocity>(npc).value;
+  REQUIRE(v.x < 0.0f);           // running LEFT toward the fallen ally at the origin...
+  REQUIRE(v.y == Approx(0.0f));  // ...straight at them
+}
+
+TEST_CASE("rescuing a downed ally outranks foraging", "[sim]") {
+  entt::registry reg;
+  const entt::entity fallen = reg.create();
+  reg.emplace<eng::sim::Transform>(fallen, eng::Vec2{-100.0f, 0.0f});  // ally to the LEFT
+  reg.emplace<eng::sim::Downed>(fallen);
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc).hunger.current = 5.0f;  // starving...
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{100.0f, 0.0f});  // ...with food to the RIGHT
+  reg.emplace<eng::sim::Pickup>(orb);
+
+  eng::sim::steer_npcs(reg);
+
+  // Even starving, it runs to the ally (left), not the food (right) — a life beats a meal.
+  REQUIRE(reg.get<eng::sim::Velocity>(npc).value.x < 0.0f);
+}
+
+TEST_CASE("a colonist runs in and revives a downed ally, beating the timer", "[sim]") {
+  // End to end: an NPC sees a fallen player, closes the gap, and hauls them up IN PLACE well
+  // before the ~5s timer would have respawned them at the centre.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Velocity>(player);
+  reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // goes down on the first tick
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc,
+                                   eng::Vec2{250.0f, 100.0f});  // 150 units off — in rescue range
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc);
+
+  // Drive the systems in step() order. 120 ticks (2s) is far short of the 5s timer, so a
+  // revive here is the NPC's doing, not an expiry respawn.
+  const eng::Vec2 centre{640.0f, 360.0f};
+  const float dt = 1.0f / 60.0f;
+  for (int i = 0; i < 120; ++i) {
+    eng::sim::steer_npcs(reg);
+    eng::sim::integrate_motion(reg, dt);
+    eng::sim::handle_deaths(reg, centre, dt);
+    if (!reg.all_of<eng::sim::Downed>(player)) break;
+  }
+
+  REQUIRE_FALSE(reg.all_of<eng::sim::Downed>(player));  // revived by the colonist...
+  REQUIRE(reg.get<eng::sim::Transform>(player).position.x == Approx(100.0f));  // ...IN PLACE...
+  REQUIRE(reg.get<eng::sim::Transform>(player).position.y == Approx(100.0f));  // ...not at centre
+}
+
 TEST_CASE("touching a hazard damages the player and consumes the hazard", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

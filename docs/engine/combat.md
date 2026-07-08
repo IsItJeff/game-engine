@@ -195,10 +195,11 @@ suspended), a `Downed{timer}` marker counting down. Two ways back up:
 This is the design's faithful death beat — *"player → Downed: ally-rescuable / expiry
 respawns / (hardcore) permadeath"* — replacing the old instant teleport-to-safety-plus-heal,
 which rewarded getting swarmed with a free escape. Either way back you return **whole** (all
-vitals refilled, so a starved player doesn't revive still starving). Today an ally rescues
-only if they *happen* to be near; making NPCs deliberately **seek** a downed ally is the next
-step, and reuses the same "seek the nearest X" steering the [foraging](stats-system.md) NPCs
-already run.
+vitals refilled, so a starved player doesn't revive still starving). And the rescue is
+**deliberate**, not incidental: a safe colonist who spots a fallen ally within range
+*sprints over* to haul them up ([`steer_npcs`](npc-behaviour.md) runs them there faster than
+the timer expires) — the first NPC behaviour about another *person* rather than food or fear,
+and the concrete seed of the design's PROTECT stance.
 
 `handle_deaths` runs *before* `regenerate_vitals` (and a Downed player is excluded from
 regen), so a just-killed thing can't heal back above 0 the same tick.
