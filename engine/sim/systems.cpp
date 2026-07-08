@@ -439,6 +439,9 @@ void collect_pickups(entt::registry& reg, float dt) {
     for (const entt::entity p : players) {
       if (glm::distance(players.get<Transform>(p).position, item_pos) >= kPickupDistance) continue;
       Vital& health = players.get<Stats>(p).health;
+      health.base +=
+          pk.bonus_max_hp;            // permanent — advance_progression keeps growing max from base
+      health.max += pk.bonus_max_hp;  // ...and reflect the bigger pool right away, not next tick
       health.current += pk.heal;
       if (health.current > health.max) health.current = health.max;  // capped, no overheal
       taken.push_back(item);

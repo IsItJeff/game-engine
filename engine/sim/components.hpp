@@ -99,13 +99,15 @@ struct Enemy {
 };
 
 // A collectible a slain creature leaves behind: walk over it (collect_pickups) to
-// restore `heal` health and consume it. The first loot — a reward for winning the
-// fight that lets kills sustain you, and the seed of a fuller item system later.
-// `lifetime` counts down so an ungrabbed orb fades rather than piling up forever
-// (creatures die all over the field, many far from the player).
+// restore `heal` health AND permanently raise your max HP by `bonus_max_hp`, then it's
+// consumed. The first loot — winning the fight patches you up now and hardens you a
+// little for good, so kills both sustain and grow you. The seed of a fuller item
+// system later. `lifetime` counts down so an ungrabbed orb fades rather than piling up
+// forever (creatures die all over the field, many far from the player).
 struct Pickup {
   float heal = 25.0f;
-  float lifetime = 20.0f;  // seconds before an uncollected orb fades away
+  float bonus_max_hp = 2.0f;  // permanent max-HP gain on collect (a small loot reward)
+  float lifetime = 20.0f;     // seconds before an uncollected orb fades away
 };
 
 // --- Stats system ---

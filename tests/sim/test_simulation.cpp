@@ -584,7 +584,7 @@ TEST_CASE("a slain creature drops a health pickup", "[sim]") {
   REQUIRE(reg.storage<eng::sim::Pickup>().size() == 1);  // ...and it left loot
 }
 
-TEST_CASE("a player collects a pickup and heals", "[sim]") {
+TEST_CASE("a player collects a pickup: heals and grows max HP", "[sim]") {
   entt::registry reg;
   const entt::entity p = reg.create();
   reg.emplace<eng::sim::Transform>(p, eng::Vec2{50.0f, 50.0f});
@@ -592,12 +592,14 @@ TEST_CASE("a player collects a pickup and heals", "[sim]") {
   reg.emplace<eng::sim::Stats>(p, eng::sim::Vital{40.0f, 100.0f, 0.0f});  // hurt: 40/100
   const entt::entity item = reg.create();
   reg.emplace<eng::sim::Transform>(item, eng::Vec2{50.0f, 50.0f});  // right on the player
-  reg.emplace<eng::sim::Pickup>(item);                              // heals 25
+  reg.emplace<eng::sim::Pickup>(item);                              // heals 25, +2 max HP
 
   eng::sim::collect_pickups(reg, 1.0f / 60.0f);
 
-  REQUIRE(reg.get<eng::sim::Stats>(p).health.current == Approx(65.0f));  // 40 + 25
-  REQUIRE(!reg.valid(item));                                             // consumed
+  const eng::sim::Vital& health = reg.get<eng::sim::Stats>(p).health;
+  REQUIRE(health.current == Approx(65.0f));  // 40 + 25 healed
+  REQUIRE(health.max > 100.0f);              // ...and a permanent max-HP bump
+  REQUIRE(!reg.valid(item));                 // consumed
 }
 
 TEST_CASE("an uncollected pickup fades after its lifetime", "[sim]") {
