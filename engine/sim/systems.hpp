@@ -80,6 +80,11 @@ void resolve_contacts(entt::registry& reg);
 // not a command (collision is the sim's own rule).
 void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng);
 
+// Age every entity's HitFlash and remove the ones that have burned out. Pure
+// presentation upkeep — HitFlash is stamped at the damage sites so the renderer can
+// blink a struck dot white, and this fades it over kHitFlashSeconds. No rule reads it.
+void decay_flashes(entt::registry& reg, float dt);
+
 // Train Toughness on a hit: surviving `damage` grows the victim's Toughness skill
 // and its main attribute Endurance (a VIT skill — you toughen by enduring hardship),
 // which advance_progression turns into a bigger HP pool. The single place damage

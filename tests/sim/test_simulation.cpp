@@ -1014,6 +1014,34 @@ TEST_CASE("a creature's blow is softened by the player's VIT", "[sim]") {
   REQUIRE(dealt < 15.0f);  // ...but VIT softened it below the raw 15
 }
 
+TEST_CASE("a landed blow stamps a hit-flash that then decays away", "[sim]") {
+  // Presentation juice: any blow leaves a brief HitFlash so the renderer can blink
+  // the struck dot white. It's stamped at the damage site and decayed by dt.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Stats>(player);
+  reg.emplace<eng::sim::Skills>(player);
+  reg.emplace<eng::sim::Attributes>(player);  // DEX 1 -> never dodges, so the blow lands
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  REQUIRE_FALSE(reg.all_of<eng::sim::HitFlash>(player));  // no blow yet, no flash
+
+  std::mt19937 rng{1234};
+  eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+
+  const eng::sim::HitFlash* flash = reg.try_get<eng::sim::HitFlash>(player);
+  REQUIRE(flash != nullptr);                                        // the blow lit it up
+  REQUIRE(flash->remaining == Approx(eng::sim::kHitFlashSeconds));  // a fresh, full flash
+
+  // Age it past its lifetime (0.15s ~ 9 ticks); after ~10 ticks it's removed entirely.
+  for (int i = 0; i < 10; ++i) eng::sim::decay_flashes(reg, 1.0f / 60.0f);
+  REQUIRE_FALSE(reg.all_of<eng::sim::HitFlash>(player));  // faded and gone
+}
+
 TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it lands", "[sim]") {
   // The bootstrap: at Dexterity 1 you can't dodge yet, so the blow lands — but facing
   // it still trains Evasion and its Dexterity, which is what eventually lets you dodge.

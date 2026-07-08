@@ -87,6 +87,22 @@ struct RenderDot {
   float radius = 6.0f;
 };
 
+// How long a hit-flash lasts, in seconds (~9 ticks at 60Hz). A knob: bigger =
+// blows linger longer on screen. Shared because the sim STAMPS it (systems.cpp)
+// and the renderer READS it to fade the flash (main.cpp).
+inline constexpr float kHitFlashSeconds = 0.15f;
+
+// Presentation-only, like RenderDot: a brief white blink so a blow REGISTERS on
+// screen. `remaining` counts down from kHitFlashSeconds; the renderer whitens the
+// dot in proportion, so a fresh hit is near-white and fades. It is sim-side state
+// only so it stays deterministic and testable (stamped at the damage sites, decayed
+// by the fixed dt) — but the simulation MUST NOT branch on it for any rule. Only the
+// renderer reads it. The moment a system reads HitFlash for a decision, it stops
+// being presentation and this invariant is broken.
+struct HitFlash {
+  float remaining = 0.0f;
+};
+
 // Marks an entity as dangerous to touch. An entity with a Hazard deals `damage`
 // to any player it overlaps and is then consumed — destroyed (see the
 // resolve_contacts system). The drifting motes have this: touch one, take a hit,

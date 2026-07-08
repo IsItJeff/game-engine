@@ -235,6 +235,23 @@ and the concrete seed of the design's PROTECT stance.
 `handle_deaths` runs *before* `regenerate_vitals` (and a Downed player is excluded from
 regen), so a just-killed thing can't heal back above 0 the same tick.
 
+### Seeing the blows — the hit-flash
+
+A fight you can't *see* landing feels dead: dots silently lose health and vanish. So
+every blow now leaves a mark the eye catches. Wherever damage is applied —
+`resolve_contacts` (a mote), `resolve_creature_contacts` (a creature's swing), and
+`perform_attack` (your or an NPC's strike) — the struck entity is stamped with a
+**`HitFlash`**, a tiny countdown. The renderer mixes that dot toward white in proportion
+to the time left, so a fresh hit blinks bright and fades over ~9 ticks. `decay_flashes`
+ages the timer each tick and drops it at zero.
+
+`HitFlash` is **presentation only**, exactly like `RenderDot`: it lives on the sim side
+so it stays deterministic and testable (stamped at a fixed point, decayed by the fixed
+`dt`, drawing no RNG), but **no rule ever reads it** — the moment a system branches on a
+hit-flash it stops being a visual and becomes gameplay, and that invariant is the whole
+point. The stamp is unconditional on a landed hit (no roll), so the seeded streams stay
+byte-for-byte identical to before it existed.
+
 ### Where it sits in the tick
 
 Order is the definition of a tick (see [the tick and the systems](skeleton/tick-and-systems.md)):
@@ -261,12 +278,15 @@ every creature (your 320 vs a brute's 70, a swarmer's 130), so a swarm is surviv
 kiting. Stand and trade blows and you'll slowly train **Dexterity** — after a while some
 hits simply whiff, dodged outright. Kill a **brute** and it drops a steel-grey **weapon**:
 press `E` to wield it for a longer, harder swing — but you'll feel the weight slow you, so
-weigh the extra reach against the speed a swarm makes you want.
+weigh the extra reach against the speed a swarm makes you want. And now every blow *shows*:
+struck dots blink white and fade, so you can read the whole skirmish at a glance — where
+the fighting is, who's trading hits, which colonist is getting worn down.
 
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy`, `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash).
+- `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`) and `Equip` (`E`) commands.
 - `engine/sim/components.hpp` — `Weapon` (dropped gear) and `Equipped` (the wielded mods cache).
