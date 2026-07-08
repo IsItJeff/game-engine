@@ -152,6 +152,33 @@ TEST_CASE("an idle character does not train conditioning", "[sim]") {
   REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance.level == 1);  // bonus 0
 }
 
+TEST_CASE("resting to recover spent stamina trains Recovery", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  // Spend stamina by moving for a second (spawns full at 100, drains 40/sec).
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) {
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+    world.step();
+  }
+  const float spent = world.registry().get<eng::sim::Stats>(player).stamina.current;
+  REQUIRE(spent < 100.0f);  // stamina was actually spent
+
+  // Now rest: a zero-move each tick stops the player (velocity persists otherwise),
+  // so stamina recovers — and recovering spent stamina trains Recovery.
+  for (int i = 0; i < 2 * eng::sim::kTicksPerSecond; ++i) {
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {0.0f, 0.0f}));
+    world.step();
+  }
+
+  const eng::sim::Skill* recovery =
+      world.registry().get<eng::sim::Skills>(player).find(eng::sim::SkillId::Recovery);
+  REQUIRE(recovery != nullptr);          // resting-to-recover taught it
+  REQUIRE(recovery->xp > eng::Fixed{});  // ...with XP
+  REQUIRE(world.registry().get<eng::sim::Stats>(player).stamina.current >
+          spent);  // and it recovered
+}
+
 TEST_CASE("sustained activity raises the character level, which compounds the pools", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

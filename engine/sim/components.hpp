@@ -146,6 +146,7 @@ enum class SkillId : std::uint16_t {
   Conditioning,  // trained by moving; main attribute Endurance
   Toughness,     // trained by taking damage; main attribute Endurance (a VIT skill)
   Striking,      // trained by attacking; main attribute Strength
+  Recovery,      // trained by resting to recover spent stamina; main attribute Endurance
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
