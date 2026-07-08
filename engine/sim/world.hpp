@@ -32,6 +32,11 @@ namespace eng::sim {
 inline constexpr float kFieldWidth = 1280.0f;
 inline constexpr float kFieldHeight = 720.0f;
 
+// Keep a steady threat coming: every kCreatureSpawnInterval seconds the world spawns
+// a hunting creature, up to kMaxCreatures alive at once, so the fight never runs dry.
+inline constexpr float kCreatureSpawnInterval = 6.0f;
+inline constexpr int kMaxCreatures = 5;
+
 class World {
  public:
   // Builds the opening scene: one player-controlled entity plus a few drifting
@@ -67,6 +72,11 @@ class World {
   // always produces the same world. Determinism is what makes replay and
   // (later) lockstep-free networking debuggable — never call rand().
   std::mt19937 rng_{1234};
+
+  // Counts down each step; when it reaches 0 the world spawns a creature (if under
+  // the cap) and resets. Starts at a full interval so the opening two hunters get a
+  // head start before reinforcements arrive.
+  float creature_spawn_timer_ = kCreatureSpawnInterval;
 
   entt::entity player_ = entt::null;
 };

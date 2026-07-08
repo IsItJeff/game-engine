@@ -550,3 +550,23 @@ TEST_CASE("motes drift through creatures without hurting them", "[sim]") {
   REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == Approx(40.0f));
   REQUIRE(reg.valid(mote));
 }
+
+TEST_CASE("the world respawns creatures after they're cleared, up to a cap", "[sim]") {
+  eng::sim::World world;
+  entt::registry& reg = world.registry();
+
+  // Wipe every creature AND NPC. (NPCs fight creatures too, via the shared
+  // perform_attack — a nice emergent ally, but here it would cull the spawns and
+  // confound the count, so remove them to isolate the spawner.)
+  std::vector<entt::entity> doomed;
+  for (const entt::entity e : reg.view<eng::sim::Enemy>()) doomed.push_back(e);
+  for (const entt::entity e : reg.view<eng::sim::Npc>()) doomed.push_back(e);
+  for (const entt::entity e : doomed) reg.destroy(e);
+  REQUIRE(reg.storage<eng::sim::Enemy>().size() == 0);  // the fight is empty
+
+  // Run well past several spawn intervals: the spawner refills the fight and then
+  // holds at the cap — reinforcements, not an unbounded flood.
+  for (int i = 0; i < 60 * eng::sim::kTicksPerSecond; ++i) world.step();
+
+  REQUIRE(static_cast<int>(reg.storage<eng::sim::Enemy>().size()) == eng::sim::kMaxCreatures);
+}
