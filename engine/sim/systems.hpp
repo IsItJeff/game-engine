@@ -144,6 +144,11 @@ void advance_progression(entt::registry& reg);
 // same tick and never dies (a downed player is also excluded from regen for the same reason).
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt);
 
+// Spawn a Weapon on the ground at `pos` — the one canonical grounded-weapon entity, shared by
+// a slain brute's drop (handle_deaths) and the player's Drop command so both look and behave
+// identically. Draws no RNG.
+void spawn_weapon(entt::registry& reg, Vec2 pos);
+
 // Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
 // player overlaps restores its `heal` health (capped) AND permanently raises max HP by
 // its `bonus_max_hp`, then is consumed; an orb whose lifetime runs out fades away

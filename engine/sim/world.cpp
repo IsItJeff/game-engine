@@ -337,6 +337,25 @@ void World::apply_command(const Command& cmd) {
       }
       break;
     }
+    case CommandKind::Drop: {
+      // Ditch the wielded weapon at your feet — the inverse of Equip, turning the heft bane
+      // you took on into a choice you can undo (drop to sprint clear of a swarm, re-grab later).
+      // The <..., Equipped> view means a bare-handed player simply isn't matched (no-op). Skip a
+      // downed player. Collect-then-act: spawn_weapon creates a new entity (emplacing Transform),
+      // which could reallocate the Transform pool this view is walking, so spawn + remove AFTER.
+      std::vector<entt::entity> droppers;
+      auto players = registry_.view<PlayerControlled, Transform, Equipped>();
+      for (const entt::entity p : players) {
+        if (players.get<PlayerControlled>(p).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(p)) continue;  // helpless — can't drop
+        droppers.push_back(p);
+      }
+      for (const entt::entity p : droppers) {
+        spawn_weapon(registry_, registry_.get<Transform>(p).position);  // a weapon where you stand
+        registry_.remove<Equipped>(p);                                  // ...and the heft is shed
+      }
+      break;
+    }
   }
 }
 

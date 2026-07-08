@@ -187,7 +187,8 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "them skirmish (and sometimes an NPC fall). Fresh creatures keep arriving — and "
       "fresh colonists wander in over time to replace the fallen, so the war sustains "
       "itself. "
-      "Space: spawn a mote. H: take 15 damage. E: wield the nearest dropped weapon. "
+      "Space: spawn a mote. H: take 15 damage. E: wield the nearest dropped weapon; "
+      "Q: drop it again to shed the heft and move free. "
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "brute takes several, fewer as your Strength climbs (it hits harder), while "
       "your VIT softens its blows — and standing to trade blows slowly trains Dexterity, "
@@ -241,6 +242,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool hurt_was_down = false;
   bool attack_was_down = false;
   bool equip_was_down = false;
+  bool drop_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -296,6 +298,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::equip(eng::sim::kLocalPlayer)});
     }
     equip_was_down = equip_raw;
+
+    // Q, edge-triggered, drops the wielded weapon at your feet — the inverse of E. Shed the
+    // heft to sprint clear of a swarm, then circle back and re-wield it (or let a colonist grab
+    // it). Same funnel: input becomes a Drop command the server applies.
+    const bool drop_raw = keys[SDL_SCANCODE_Q];
+    if (drop_raw && !drop_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::drop(eng::sim::kLocalPlayer)});
+    }
+    drop_was_down = drop_raw;
 
     // --- advance the simulation in fixed steps ---
     const int steps = paused ? 0 : timestep.advance(frame_seconds);

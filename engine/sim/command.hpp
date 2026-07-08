@@ -35,6 +35,7 @@ enum class CommandKind {
   DamagePlayer,  // subtract from a player's health
   Attack,        // strike the nearest hazard within reach
   Equip,         // wield the nearest dropped Weapon within reach
+  Drop,          // ditch the wielded weapon at your feet, shedding its heft
 };
 
 struct Command {
@@ -72,6 +73,11 @@ inline Command attack(PlayerId player) {
 // server-side, so the intent carries only who is reaching for one.
 inline Command equip(PlayerId player) {
   return Command{CommandKind::Equip, player, {}, {}, 0.0f};
+}
+// Drop: the inverse of Equip — the actor sheds whatever it's wielding at its own feet, so
+// the intent carries only who is dropping.
+inline Command drop(PlayerId player) {
+  return Command{CommandKind::Drop, player, {}, {}, 0.0f};
 }
 
 }  // namespace eng::sim
