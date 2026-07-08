@@ -114,6 +114,41 @@ void spawn_creature_if_due(entt::registry& reg, float& timer, std::mt19937& rng,
   }
 }
 
+// Keep the colony alive: on its own (slower) timer, wander a fresh colonist in from a
+// field edge when we're under the cap, so the NPCs creatures pick off (permadeath) are
+// replaced and the field doesn't slowly empty of the very people whose skirmishes make
+// the world feel alive. The mirror of spawn_creature_if_due, but drawing from its OWN
+// `rng` stream so the spawner's placement/timing rolls stay off the creature stream. (The
+// NPCs it spawns still influence that stream later via their combat dodge rolls — so this
+// isn't full invariance to colony tuning; it just keeps the spawner's own draws separate.)
+void spawn_npc_if_due(entt::registry& reg, float& timer, std::mt19937& rng, float dt) {
+  timer -= dt;
+  if (timer > 0.0f) return;
+  timer = kNpcSpawnInterval;
+  if (static_cast<int>(reg.storage<Npc>().size()) >= kMaxNpcs) return;
+  // Arrive from a random field edge, like the creatures — a colonist walks in from
+  // outside rather than popping into the middle of the field.
+  std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+  std::uniform_real_distribution<float> vel(-80.0f, 80.0f);
+  const float along = unit(rng);
+  Vec2 pos{};
+  switch (static_cast<int>(unit(rng) * 4.0f)) {  // unit is [0,1) so this is 0..3
+    case 0:
+      pos = {along * kFieldWidth, 0.0f};
+      break;  // top
+    case 1:
+      pos = {along * kFieldWidth, kFieldHeight};
+      break;  // bottom
+    case 2:
+      pos = {0.0f, along * kFieldHeight};
+      break;  // left
+    default:
+      pos = {kFieldWidth, along * kFieldHeight};
+      break;  // right
+  }
+  make_npc(reg, pos, Vec2{vel(rng), vel(rng)});
+}
+
 // Build the opening scene: a controllable player in the centre, a few wandering
 // NPCs, a couple of hunting creatures, and a dozen ambient motes drifting in
 // deterministic directions. Returns the player entity.
@@ -199,6 +234,7 @@ void World::step() {
   // Reinforcements: after deaths are resolved, top the creature population back up
   // on a timer so the fight keeps coming.
   spawn_creature_if_due(registry_, creature_spawn_timer_, rng_, dt);
+  spawn_npc_if_due(registry_, npc_spawn_timer_, npc_spawn_rng_, dt);  // colony reinforcements
 
   // 4. One tick done.
   ++tick_;

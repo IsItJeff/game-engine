@@ -17,7 +17,7 @@ The moving parts, in one place:
 | **`chase_prey`** | steers creatures toward the nearest person, player or NPC (the hostile mirror of `steer_npcs`) |
 | **`resolve_creature_contacts`** | a creature's contact blow, softened by your VIT — or dodged by your DEX |
 | **`dodge_chance`** | a DEX-driven roll to slip a blow entirely (trains Evasion) |
-| **the spawner** | keeps creatures coming, so the fight never runs dry |
+| **the spawners** | `spawn_creature_if_due` keeps creatures coming; `spawn_npc_if_due` refills the colony |
 | **`Pickup`** | a health orb a slain creature drops — loot that keeps you fighting |
 | **`handle_deaths`** | permadeath for creatures/NPCs, respawn for the player |
 
@@ -118,7 +118,8 @@ The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips 
     creatures hunt and hurt NPCs too. So the two actually **war**: NPCs and creatures
     skirmish across the field, and an NPC caught in the open can be run down and killed
     for good (permadeath), not just the player. Same machinery for both — that's the
-    player == NPC parity guardrail.
+    player == NPC parity guardrail. The colony refills its losses over time (see
+    [the spawners](#keeping-the-fight-alive-the-spawners)), so the war is self-sustaining.
 
 ### Slipping the blow — Evasion (Dexterity)
 
@@ -147,13 +148,28 @@ replay dodges the same blows every time.
     only the damage is skipped. Creatures don't grow, so their DEX is a fixed archetype
     trait, not something they train.
 
-### Keeping the fight alive — the spawner
+### Keeping the fight alive — the spawners
 
 Killing everything used to leave the world quiet. `spawn_creature_if_due` (end of
 `step()`) tops the population up on a timer — every `kCreatureSpawnInterval` (6 s), if
 under `kMaxCreatures` (5), it spawns a creature at a random **field edge** (so it
 arrives from outside, never on top of you) — mostly swarmers with the occasional
 brute, rolled from the seeded RNG. Deterministic.
+
+Its mirror keeps the *colony* alive: `spawn_npc_if_due` wanders a fresh colonist in from
+an edge on a **slower** timer (`kNpcSpawnInterval` 12 s, up to `kMaxNpcs` 6). Because
+creatures now hunt NPCs too, without this the field would slowly empty of the very people
+whose skirmishes make the world feel alive — so the two-sided war stays self-sustaining
+(you come back to a populated field, not a graveyard). It's deliberately slower than the
+creature timer, so the world stays net-hostile — reinforcements, not safety.
+
+!!! note "A separate RNG stream"
+    The NPC spawner draws from its **own** seeded generator (`npc_spawn_rng_`), not the one
+    the creatures use. That keeps the spawner's *own* rolls (when/where a colonist arrives)
+    off the creature stream, so they never directly shift the creature waves. (The NPCs it
+    creates do still touch `rng_` later — their dodge rolls in combat — so raising the colony
+    cap *does* change the creature sequence; the point is the spawner's placement/timing rolls
+    don't.) Determinism holds regardless: a given seed always replays bit-identically.
 
 ### Winning pays — loot
 
@@ -177,7 +193,8 @@ Order is the definition of a tick (see [the tick and the systems](skeleton/tick-
 
 ```
 steer_npcs → chase_prey → integrate_motion → npc_attack → … →
-resolve_contacts → resolve_creature_contacts → handle_deaths → collect_pickups → … → spawn_creature_if_due
+resolve_contacts → resolve_creature_contacts → handle_deaths → collect_pickups → … →
+spawn_creature_if_due → spawn_npc_if_due
 ```
 
 Chase/steer set velocities *before* movement; contacts resolve *after* (positions are
@@ -187,7 +204,8 @@ current); death is checked *after* damage; loot is dropped by death, then collec
 
 Run the demo: red creatures close in from the edges and go for whoever's nearest — you
 *or* a green NPC — so you'll see NPCs and creatures skirmish across the field (and an
-unlucky NPC get run down and killed for good). Press `J` to fight (watch a weak Strength
+unlucky NPC get run down and killed for good, though fresh colonists wander in over time
+to replace the fallen). Press `J` to fight (watch a weak Strength
 take several hits, a grown one fewer); your health bar dips under their blows but you
 steady it by grabbing the orbs they drop, and the NPCs chip in. Keep moving — you outrun
 every creature (your 320 vs a brute's 70, a swarmer's 130), so a swarm is survivable by
@@ -198,7 +216,7 @@ hits simply whiff, dodged outright.
 
 - `engine/sim/components.hpp` — `Enemy`, `Pickup`; `Hazard`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers.
-- `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due`, and the system order in `step()`.
+- `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` command (`J`).
 - `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, LCK crits + Scavenging training, creature spawn/cap, loot drop + collect + fade.
 

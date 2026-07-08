@@ -696,9 +696,10 @@ TEST_CASE("the world respawns creatures after they're cleared, up to a cap", "[s
   eng::sim::World world;
   entt::registry& reg = world.registry();
 
-  // Wipe every creature AND NPC. (NPCs fight creatures too, via the shared
-  // perform_attack — a nice emergent ally, but here it would cull the spawns and
-  // confound the count, so remove them to isolate the spawner.)
+  // Wipe every creature to empty the fight. NPCs fight creatures too (shared
+  // perform_attack — a nice emergent ally) AND the colony now refills its own NPCs,
+  // so to isolate the CREATURE spawner we keep NPCs cleared every tick below; otherwise
+  // reinforcing NPCs would cull the spawns and confound the count.
   std::vector<entt::entity> doomed;
   for (const entt::entity e : reg.view<eng::sim::Enemy>()) doomed.push_back(e);
   for (const entt::entity e : reg.view<eng::sim::Npc>()) doomed.push_back(e);
@@ -706,10 +707,43 @@ TEST_CASE("the world respawns creatures after they're cleared, up to a cap", "[s
   REQUIRE(reg.storage<eng::sim::Enemy>().size() == 0);  // the fight is empty
 
   // Run well past several spawn intervals: the spawner refills the fight and then
-  // holds at the cap — reinforcements, not an unbounded flood.
-  for (int i = 0; i < 60 * eng::sim::kTicksPerSecond; ++i) world.step();
+  // holds at the cap — reinforcements, not an unbounded flood. Clear NPCs each tick so
+  // the creature spawner is measured in isolation (see the colony-refill test for NPCs).
+  for (int i = 0; i < 60 * eng::sim::kTicksPerSecond; ++i) {
+    std::vector<entt::entity> npcs;
+    for (const entt::entity e : reg.view<eng::sim::Npc>()) npcs.push_back(e);
+    for (const entt::entity e : npcs) reg.destroy(e);
+    world.step();
+  }
 
   REQUIRE(static_cast<int>(reg.storage<eng::sim::Enemy>().size()) == eng::sim::kMaxCreatures);
+}
+
+TEST_CASE("the colony refills its NPCs after they're lost, up to a cap", "[sim]") {
+  eng::sim::World world;
+  entt::registry& reg = world.registry();
+
+  // Wipe every colonist (all lost). We keep the field non-lethal below — no creatures,
+  // no hazardous motes — so the refilled NPCs can't be culled, isolating the NPC spawner
+  // (the mirror of the creature-cap test). The colony should refill on its own timer.
+  std::vector<entt::entity> lost;
+  for (const entt::entity e : reg.view<eng::sim::Npc>()) lost.push_back(e);
+  for (const entt::entity e : lost) reg.destroy(e);
+  REQUIRE(reg.storage<eng::sim::Npc>().size() == 0);
+
+  // Run well past several NPC-spawn intervals. Each tick, clear creatures and motes so
+  // nothing kills the recovering colony (the creature spawner keeps adding creatures,
+  // so this must be every tick, not once).
+  for (int i = 0; i < 90 * eng::sim::kTicksPerSecond; ++i) {
+    std::vector<entt::entity> threats;
+    for (const entt::entity e : reg.view<eng::sim::Enemy>()) threats.push_back(e);
+    for (const entt::entity e : reg.view<eng::sim::Hazard>()) threats.push_back(e);
+    for (const entt::entity e : threats) reg.destroy(e);
+    world.step();
+  }
+
+  // Refilled to the cap and held there — reinforcements, not an unbounded flood.
+  REQUIRE(static_cast<int>(reg.storage<eng::sim::Npc>().size()) == eng::sim::kMaxNpcs);
 }
 
 TEST_CASE("a slain creature drops a health pickup", "[sim]") {
