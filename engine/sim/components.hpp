@@ -231,9 +231,15 @@ struct Attribute {
 struct Attributes {
   Attribute endurance;  // fed by Conditioning + Toughness; each level past 1 grows the pools
   Attribute strength;   // fed by Striking; each level past 1 lengthens attack reach + damage
-  Attribute dexterity;  // fed by Evasion; each level past 1 raises the chance to dodge a blow
+  Attribute dexterity;  // fed by Evasion + Striking; each level past 1 raises the dodge chance
   Attribute luck;       // fed by Scavenging; each level past 1 raises the chance to crit a strike
 };
+
+// Names an attribute so a data-driven `SkillDef` can say which attribute(s) a skill feeds
+// (a skill's XP flows to its MAIN attribute a lot, and to each CONTRIBUTOR a little). An
+// enum, not a member pointer, keeps the defs plain data — the shape mods will add rows to.
+// New attributes append here (and get a case in `attr_ref`, guarded by -Wswitch).
+enum class AttrId : std::uint8_t { Endurance, Strength, Dexterity, Luck };
 
 // A single global "how experienced overall" level, fed by a fraction of ALL
 // activity (not one skill). Its level is a gentle multiplier on earned stats via
