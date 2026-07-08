@@ -166,6 +166,49 @@ TEST_CASE("an empty stomach starves health", "[sim]") {
   REQUIRE(reg.get<eng::sim::Stats>(e).health.current < before);
 }
 
+TEST_CASE("a starving character cannot heal, so starvation always nets health down", "[sim]") {
+  // The invariant the starve-gate hardens: even a high-Endurance character whose BOOSTED
+  // regen (13.6/s) would out-pace starvation (12/s) still loses health while starving,
+  // because regenerate_vitals skips healing at hunger 0. Without the gate this entity would
+  // net upward (+1.6/s) and never die — the gate makes starvation lethal at any regen rate.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  auto& s = reg.emplace<eng::sim::Stats>(e);
+  s.health = eng::sim::Vital{50.0f, 100.0f, 8.0f};           // wounded, heals 8/s base
+  s.hunger.current = 0.0f;                                   // starving
+  reg.emplace<eng::sim::Attributes>(e).endurance.level = 8;  // boost 1.7 -> 13.6/s, would beat 12/s
+
+  const float before = s.health.current;
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) {  // one second, the real tick order
+    eng::sim::drain_hunger(reg, dt);                     // chips health while at 0 hunger...
+    eng::sim::regenerate_vitals(reg, dt);                // ...and heal is gated off, so no clawback
+  }
+  REQUIRE(reg.get<eng::sim::Stats>(e).health.current < before);  // strictly down despite high VIT
+}
+
+TEST_CASE("health regen scales with Endurance (VIT) when fed", "[sim]") {
+  // The other half: a FED tougher character heals faster — VIT now speeds HP regen, mirroring
+  // how it already speeds stamina recovery. Two wounded, fed entities differing only in Endurance.
+  entt::registry reg;
+  const entt::entity tough = reg.create();
+  reg.emplace<eng::sim::Stats>(tough).health = eng::sim::Vital{50.0f, 100.0f, 8.0f};
+  reg.emplace<eng::sim::Attributes>(tough).endurance.level = 8;  // hardy -> faster heal
+  const entt::entity frail = reg.create();
+  reg.emplace<eng::sim::Stats>(frail).health = eng::sim::Vital{50.0f, 100.0f, 8.0f};
+  reg.emplace<eng::sim::Attributes>(frail);  // Endurance 1 -> base rate (boost 1.0)
+  // (Both spawn with full default hunger, so the starve-gate never fires.)
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::regenerate_vitals(reg, dt);  // 1s
+
+  const float tough_hp = reg.get<eng::sim::Stats>(tough).health.current;
+  const float frail_hp = reg.get<eng::sim::Stats>(frail).health.current;
+  REQUIRE(frail_hp > 50.0f);     // the frail one still healed at the base rate...
+  REQUIRE(tough_hp > frail_hp);  // ...but the hardy one healed strictly more
+  REQUIRE(tough_hp < 100.0f);    // and neither hit the cap (so the comparison is real)
+}
+
 TEST_CASE("eating a loot orb refills hunger", "[sim]") {
   entt::registry reg;
   const entt::entity player = reg.create();

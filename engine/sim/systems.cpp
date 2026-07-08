@@ -225,16 +225,24 @@ void wrap_bounds(entt::registry& reg, Vec2 field_size) {
 
 namespace {
 
-// Move one vital toward its cap at its own rate. Splitting this out is what
-// keeps regenerate_vitals a single line per stat as more vitals are added.
-void recover(Vital& v, float dt) {
-  v.current += v.regen_per_second * dt;
+// Move one vital toward its cap at its own rate, optionally sped by `boost` (a >=1
+// multiplier from an attribute — e.g. VIT quickening health regen, mirroring how
+// update_stamina speeds stamina recovery). Default 1.0 leaves the base rate untouched.
+// Splitting this out keeps regenerate_vitals a single line per stat.
+void recover(Vital& v, float dt, float boost = 1.0f) {
+  v.current += v.regen_per_second * boost * dt;
   if (v.current > v.max) v.current = v.max;  // never past the cap
 }
 
 }  // namespace
 
 void regenerate_vitals(entt::registry& reg, float dt) {
+  // Each Endurance level past the first speeds HEALTH regen by this fraction — the mirror
+  // of update_stamina's kRecoveryPerEndurance for stamina, completing VIT's "governs the
+  // resources' capacity AND regen" role (it already grows the pool via advance_progression).
+  // Kept a SEPARATE knob from stamina's so HP and stamina sustain tune independently.
+  constexpr float kHealthRegenPerEndurance = 0.10f;  // ponytail: playtest value
+
   // view<Stats>() iterates exactly the entities that have stats — the player
   // here, not the drifting motes — so this can't touch anything without them.
   // That automatic filtering is the ECS's whole point: behaviour applies to
@@ -244,7 +252,26 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   auto view = reg.view<Stats>(entt::exclude<Downed>);
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
-    recover(s.health, dt);
+
+    // No mending on an empty stomach. This gate is load-bearing: drain_hunger runs BEFORE
+    // this system in step(), so hunger.current is already this tick's value. Skipping heal
+    // while starving is what makes "starvation always nets health DOWNWARD" a structural
+    // guarantee rather than fragile arithmetic — it holds at ANY regen rate, so speeding
+    // regen below can't accidentally out-pace starvation. ponytail/BALANCE: this deepens
+    // starvation (a wounded starver no longer claws back the +regen), deliberately — and it
+    // applies to NPCs too (parity: they run the identical rules), who lack the player's
+    // Downed/revive net, so a colonist that can't reach food permadies a bit sooner. If that
+    // reads too harsh in play, the knobs are food-drop rate, drain rate, and NPC regen — not a
+    // special-case here (special-casing NPCs would break the player==NPC parity that's the point).
+    if (s.hunger.current <= 0.0f) continue;
+
+    // Tougher characters heal faster (VIT). No Attributes -> boost 1.0 (bit-identical to
+    // before), so creatures and bare entities are unchanged. Same shape as update_stamina.
+    const Attributes* attrs = reg.try_get<Attributes>(e);
+    const float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
+                                                      kHealthRegenPerEndurance
+                                         : 1.0f;
+    recover(s.health, dt, boost);
     // Health only ever ticks back up, so it recovers here. Stamina is different —
     // it's spent by moving — so it has its own system (update_stamina) instead of
     // a passive line here.
@@ -288,9 +315,10 @@ void drain_hunger(entt::registry& reg, float dt) {
   // and long-running tests don't accidentally starve their entities. Tuning knobs.
   constexpr float kDrainPerSecond = 0.3f;          // at rest
   constexpr float kExertionDrainPerSecond = 0.3f;  // added while moving
-  // Health lost per second once hunger hits 0. MUST exceed the fastest self-heal in play
-  // (the player regenerates 8/s) or regenerate_vitals would out-pace it and starvation
-  // could never actually kill — so a starving character's health nets downward.
+  // Health lost per second once hunger hits 0. It no longer needs to out-race the self-heal:
+  // regenerate_vitals GATES healing off while starving (hunger <= 0), so starvation nets a
+  // character's health strictly downward at any regen rate — a structural guarantee, not the
+  // old fragile "12 must stay above 8". This value now just sets how FAST starvation kills.
   constexpr float kStarvationPerSecond = 12.0f;
 
   // Every PERSON gets hungry — the player and NPCs (Stats without the Enemy marker, the
