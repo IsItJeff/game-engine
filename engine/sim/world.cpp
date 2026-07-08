@@ -220,6 +220,7 @@ void World::step() {
   integrate_motion(registry_, dt);
   npc_attack(registry_, rng_);     // NPCs strike any hazard now in reach (positions are current)
   update_stamina(registry_, dt);   // moving costs stamina; resting restores it
+  drain_hunger(registry_, dt);     // people get hungry; starving (0) chips health before deaths
   advance_progression(registry_);  // activity -> skill+attribute XP -> level -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
   // Collision runs after movement (positions are current), then death is checked

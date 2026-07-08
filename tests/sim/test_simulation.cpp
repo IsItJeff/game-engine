@@ -123,6 +123,66 @@ TEST_CASE("an exhausted player is slowed to a crawl", "[sim]") {
   REQUIRE(speed == Approx(320.0f * 0.4f).margin(0.5f));  // a crawl, not a sprint
 }
 
+TEST_CASE("hunger drains over time and never self-recovers", "[sim]") {
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Stats>(e);  // hunger starts full (100)
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) eng::sim::drain_hunger(reg, dt);
+
+  const float hunger = reg.get<eng::sim::Stats>(e).hunger.current;
+  REQUIRE(hunger < 100.0f);  // it fell (no regen ever adds it back)...
+  REQUIRE(hunger > 0.0f);    // ...but a gentle drain hasn't emptied it in 10s
+}
+
+TEST_CASE("hunger drains faster while moving than at rest", "[sim]") {
+  entt::registry reg;
+  const entt::entity rester = reg.create();
+  reg.emplace<eng::sim::Stats>(rester);
+  reg.emplace<eng::sim::Velocity>(rester);  // zero velocity — at rest
+  const entt::entity mover = reg.create();
+  reg.emplace<eng::sim::Stats>(mover);
+  reg.emplace<eng::sim::Velocity>(mover, eng::Vec2{50.0f, 0.0f});  // moving = exerting
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) eng::sim::drain_hunger(reg, dt);
+
+  REQUIRE(reg.get<eng::sim::Stats>(mover).hunger.current <
+          reg.get<eng::sim::Stats>(rester).hunger.current);  // exertion costs extra hunger
+}
+
+TEST_CASE("an empty stomach starves health", "[sim]") {
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  auto& stats = reg.emplace<eng::sim::Stats>(e);
+  stats.hunger.current = 0.0f;  // already starving
+
+  const float before = stats.health.current;  // full (100)
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::drain_hunger(reg, dt);  // 1 second
+
+  // Starvation chips health (through the normal path — handle_deaths reaps it at 0).
+  REQUIRE(reg.get<eng::sim::Stats>(e).health.current < before);
+}
+
+TEST_CASE("eating a loot orb refills hunger", "[sim]") {
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  auto& stats = reg.emplace<eng::sim::Stats>(player);
+  stats.hunger.current = 20.0f;  // peckish
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{0.0f, 0.0f});  // right on the player
+  reg.emplace<eng::sim::Pickup>(orb);
+
+  eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+
+  REQUIRE(reg.get<eng::sim::Stats>(player).hunger.current > 20.0f);  // the orb fed you
+  REQUIRE(!reg.valid(orb));                                          // and was consumed
+}
+
 TEST_CASE("staying active trains conditioning, which raises endurance and max health", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
@@ -339,6 +399,28 @@ TEST_CASE("a lethal hit respawns the player at full health and the spawn point",
   REQUIRE(stats.health.current == Approx(stats.health.max));       // back to full
   REQUIRE(tf.position.x == Approx(eng::sim::kFieldWidth * 0.5f));  // back to spawn
   REQUIRE(tf.position.y == Approx(eng::sim::kFieldHeight * 0.5f));
+}
+
+TEST_CASE("a respawn restores the player's needs, not just health", "[sim]") {
+  // Respawn must be a clean slate: if it healed HP but left hunger at 0, a starved player
+  // would drop straight back into starving and re-die in a loop. So handle_deaths refills
+  // the needs too.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{10.0f, 10.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Velocity>(player);
+  auto& stats = reg.emplace<eng::sim::Stats>(player);
+  stats.health.current = 0.0f;   // dead...
+  stats.hunger.current = 0.0f;   // ...of starvation (hunger emptied)
+  stats.stamina.current = 0.0f;  // and exhausted
+
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f});
+
+  const eng::sim::Stats& after = reg.get<eng::sim::Stats>(player);
+  REQUIRE(after.health.current == Approx(after.health.max));    // back to full health...
+  REQUIRE(after.hunger.current == Approx(after.hunger.max));    // ...fed (not re-starving)...
+  REQUIRE(after.stamina.current == Approx(after.stamina.max));  // ...and rested
 }
 
 TEST_CASE("touching a hazard damages the player and consumes the hazard", "[sim]") {
