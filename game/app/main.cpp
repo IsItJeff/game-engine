@@ -120,6 +120,12 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::Text("strength: %d",
                 attr->strength.level - 1);  // from attacking; longer reach + harder hits
   }
+  // Wielding: a dropped weapon folds into Equipped, adding effective Strength at the cost of
+  // move speed. Called out so the tradeoff is legible.
+  if (const eng::sim::Equipped* eq = world.registry().try_get<eng::sim::Equipped>(player)) {
+    ImGui::TextColored(ImVec4{0.8f, 0.85f, 1.0f, 1.0f}, "wielding: +%d STR, -%.0f%% speed",
+                       eq->strength_bonus, static_cast<double>(eq->move_penalty * 100.0f));
+  }
   if (const eng::sim::CharacterLevel* cl =
           world.registry().try_get<eng::sim::CharacterLevel>(player)) {
     ImGui::Text("character level: %d", cl->level);  // the slow "veteran" multiplier on earned stats
@@ -164,7 +170,7 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "them skirmish (and sometimes an NPC fall). Fresh creatures keep arriving — and "
       "fresh colonists wander in over time to replace the fallen, so the war sustains "
       "itself. "
-      "Space: spawn a mote. H: take 15 damage. "
+      "Space: spawn a mote. H: take 15 damage. E: wield the nearest dropped weapon. "
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "brute takes several, fewer as your Strength climbs (it hits harder), while "
       "your VIT softens its blows — and standing to trade blows slowly trains Dexterity, "
@@ -172,10 +178,12 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "slippery and dodge some of YOUR strikes too. Hitting back trains Striking → Strength "
       "(even a whiff a swarmer dodges). A "
       "slain "
-      "creature drops a cyan health orb — walk over it to heal, feed (it refills hunger), "
-      "raise your max HP a little, AND train Scavenging → Luck, which earns you critical "
-      "hits (a doubled blow) on future strikes. So grabbing loot heals, feeds, and builds "
-      "you all at once. Your "
+      "creature drops loot: a SWARMER leaves a cyan health orb — walk over it to heal, feed "
+      "(it refills hunger), raise your max HP a little, AND train Scavenging → Luck, which "
+      "earns you critical hits (a doubled blow) on future strikes. A BRUTE instead drops a "
+      "steel-grey WEAPON: press E near it to wield it for +Strength (longer reach, harder "
+      "hits) — but it's heavy, so you move slower while armed. A real choice: killing power "
+      "vs the speed you kite with. Your "
       "keypresses become Commands; the "
       "fleeing, chasing, motes, loot, and deaths are all systems on the server.");
   ImGui::End();
@@ -215,6 +223,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool space_was_down = false;
   bool hurt_was_down = false;
   bool attack_was_down = false;
+  bool equip_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -262,6 +271,14 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::attack(eng::sim::kLocalPlayer)});
     }
     attack_was_down = attack_raw;
+
+    // E, edge-triggered, wields the nearest dropped weapon in reach (the steel-grey dots a
+    // slain brute leaves). The server folds its mods into an Equipped cache — same funnel.
+    const bool equip_raw = keys[SDL_SCANCODE_E];
+    if (equip_raw && !equip_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::equip(eng::sim::kLocalPlayer)});
+    }
+    equip_was_down = equip_raw;
 
     // --- advance the simulation in fixed steps ---
     const int steps = paused ? 0 : timestep.advance(frame_seconds);

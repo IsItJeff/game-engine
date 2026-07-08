@@ -531,9 +531,16 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   Skills* skills = reg.try_get<Skills>(attacker);
   if (tf == nullptr || attrs == nullptr || skills == nullptr) return entt::null;
 
+  // Effective Strength = your trained level PLUS whatever weapon you're wielding (the
+  // design's "gear grants raw +Attribute"). One number feeds BOTH reach and damage below,
+  // so a heavier blade reaches further AND hits harder. Bare-handed (no Equipped) it is just
+  // your level — so this is bit-identical for anyone not wielding anything.
+  const Equipped* gear = reg.try_get<Equipped>(attacker);
+  const int effective_strength =
+      attrs->strength.level + (gear != nullptr ? gear->strength_bonus : 0);
+
   const Vec2 origin = tf->position;
-  const float reach =
-      kBaseReach + static_cast<float>(attrs->strength.level - 1) * kReachPerStrength;
+  const float reach = kBaseReach + static_cast<float>(effective_strength - 1) * kReachPerStrength;
 
   // Find the nearest attackable target in reach — a fragile mote (Hazard) or a hostile
   // creature (Enemy). Strict < breaks ties by iteration order (deterministic).
@@ -582,7 +589,7 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // enemy's VIT. It is NOT destroyed here; handle_deaths reaps it at 0 HP, so a weak
   // hit only chips it and it takes several. (An Enemy always carries Stats.)
   const float raw =
-      kBaseAttackDamage + static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength;
+      kBaseAttackDamage + static_cast<float>(effective_strength - 1) * kDamagePerStrength;
   const float base_damage = mitigate(raw, defence_of(reg, target));
 
   // A LUCKY strike CRITS for extra damage — the offensive-fortune mirror of a dodge,
@@ -632,6 +639,18 @@ void spawn_pickup(entt::registry& reg, Vec2 pos) {
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<RenderDot>(e, Vec3{0.3f, 0.9f, 0.8f}, 4.0f);  // small cyan orb
   reg.emplace<Pickup>(e);
+}
+
+// Drop a Weapon at `pos` — what a slain BRUTE leaves instead of a health orb, so the harder
+// kill pays out gear rather than sustain. A steel-grey diamond-ish dot; press E near it to
+// wield it. ponytail: no lifetime — a dropped weapon persists (brutes are the rarer kill, so
+// they don't pile up); add a fade like Pickup's if the field ever litters.
+void spawn_weapon(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.75f, 0.78f, 0.85f}, 6.0f);  // steel grey, a touch bigger
+  reg.emplace<Weapon>(e);
 }
 
 }  // namespace
@@ -701,7 +720,8 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // then-destroy pattern resolve_contacts uses to consume motes). A slain Enemy
   // dies here too, the same way an NPC does — one death path for everyone non-player.
   std::vector<entt::entity> dead;
-  std::vector<Vec2> loot_drops;  // where slain creatures fell — a pickup lands at each
+  std::vector<Vec2> orb_drops;     // where slain swarmers fell — a health orb lands at each
+  std::vector<Vec2> weapon_drops;  // ...and where brutes fell — a weapon instead
   auto npcs = reg.view<Stats, Npc>();
   for (const entt::entity e : npcs) {
     if (npcs.get<Stats>(e).health.current <= 0.0f) dead.push_back(e);
@@ -710,11 +730,16 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   for (const entt::entity e : creatures) {
     if (creatures.get<Stats>(e).health.current <= 0.0f) {
       dead.push_back(e);
-      loot_drops.push_back(reg.get<Transform>(e).position);
+      // The two archetypes drop different loot: a brute yields a WEAPON (the hard kill pays
+      // out gear), a swarmer the usual health orb. Keyed on the archetype flag, so the drop
+      // is deterministic — no roll on the shared stream.
+      (creatures.get<Enemy>(e).drops_weapon ? weapon_drops : orb_drops)
+          .push_back(reg.get<Transform>(e).position);
     }
   }
   for (const entt::entity e : dead) reg.destroy(e);
-  for (const Vec2& pos : loot_drops) spawn_pickup(reg, pos);  // loot for the win
+  for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);     // sustain from a swarmer
+  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos);  // gear from a brute
 }
 
 void collect_pickups(entt::registry& reg, float dt) {

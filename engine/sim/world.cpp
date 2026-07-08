@@ -62,8 +62,10 @@ entt::entity make_creature(entt::registry& reg, Vec2 pos, float hp, float chase_
 // wear it down and kite it. A SWARMER sprints: fragile (15 HP, ~one strike) and weak,
 // but fast and it comes in numbers, so it's the one that corners you.
 entt::entity make_brute(entt::registry& reg, Vec2 pos) {
-  return make_creature(reg, pos, 40.0f, 70.0f, 15.0f, 3, Vec3{0.85f, 0.2f, 0.2f},
-                       9.0f);  // deep red
+  const entt::entity e = make_creature(reg, pos, 40.0f, 70.0f, 15.0f, 3, Vec3{0.85f, 0.2f, 0.2f},
+                                       9.0f);  // deep red
+  reg.get<Enemy>(e).drops_weapon = true;       // the hard kill pays out a weapon, not a health orb
+  return e;
 }
 entt::entity make_swarmer(entt::registry& reg, Vec2 pos) {
   const entt::entity e =
@@ -264,8 +266,13 @@ void World::apply_command(const Command& cmd) {
         const PlayerControlled& pc = view.get<PlayerControlled>(e);
         if (pc.player != cmd.player) continue;
         if (registry_.all_of<Downed>(e)) continue;  // downed = helpless, input does nothing
-        const float speed =
+        float speed =
             view.get<Stats>(e).stamina.current > 0.0f ? pc.move_speed : pc.move_speed * 0.4f;
+        // A wielded weapon's heft slows you — the equip tradeoff, felt on every step, and it
+        // stacks with the exhaustion crawl (so a tired, heavily-armed player really trudges).
+        if (const Equipped* gear = registry_.try_get<Equipped>(e); gear != nullptr) {
+          speed *= 1.0f - gear->move_penalty;
+        }
         view.get<Velocity>(e).value = dir * speed;
       }
       break;
@@ -307,6 +314,38 @@ void World::apply_command(const Command& cmd) {
       }
       for (const entt::entity t : struck) {
         if (registry_.valid(t)) registry_.destroy(t);
+      }
+      break;
+    }
+    case CommandKind::Equip: {
+      // Wield the nearest dropped Weapon in reach: fold its mods into the player's Equipped
+      // cache (one slot — a new weapon overwrites the old) and consume the item. The target
+      // is computed server-side (nearest weapon), like Attack. A downed player can't reach
+      // for one. Collect-then-destroy so a co-op pair can't invalidate the view mid-loop.
+      constexpr float kEquipReach = 30.0f;  // a bit past contact — step near and grab it
+      std::vector<entt::entity> consumed;
+      auto players = registry_.view<PlayerControlled, Transform>();
+      auto weapons = registry_.view<Weapon, Transform>();
+      for (const entt::entity p : players) {
+        if (players.get<PlayerControlled>(p).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(p)) continue;  // helpless — can't equip
+        const Vec2 ppos = players.get<Transform>(p).position;
+        entt::entity nearest = entt::null;
+        float best = kEquipReach;
+        for (const entt::entity w : weapons) {
+          const float d = glm::distance(ppos, weapons.get<Transform>(w).position);
+          if (d < best) {
+            best = d;
+            nearest = w;
+          }
+        }
+        if (nearest == entt::null) continue;  // nothing in reach
+        const Weapon& wpn = weapons.get<Weapon>(nearest);
+        registry_.emplace_or_replace<Equipped>(p, Equipped{wpn.strength_bonus, wpn.move_penalty});
+        consumed.push_back(nearest);
+      }
+      for (const entt::entity w : consumed) {
+        if (registry_.valid(w)) registry_.destroy(w);
       }
       break;
     }

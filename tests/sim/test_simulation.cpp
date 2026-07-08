@@ -1103,6 +1103,97 @@ TEST_CASE("a slain creature drops a health pickup", "[sim]") {
   REQUIRE(reg.storage<eng::sim::Pickup>().size() == 1);  // ...and it left loot
 }
 
+TEST_CASE("a weapon is no pure-upside: it carries a bane", "[sim]") {
+  // The design's non-negotiable: every item has a positive AND a negative trait, nothing
+  // rolls pure-upside. The one hardcoded weapon def must honour it. (The CI-lint in miniature.)
+  const eng::sim::Weapon w{};
+  REQUIRE(w.strength_bonus > 0);   // the upside — more Strength...
+  REQUIRE(w.move_penalty > 0.0f);  // ...paid for with a downside — it slows you
+}
+
+namespace {
+// Deal one strike from a fresh attacker (optionally wielding a weapon) at a foe `dist` away;
+// return the damage dealt (0 if out of reach). Shared by the wield-combat tests below.
+float weapon_strike(bool armed, float dist) {
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  if (armed) reg.emplace<eng::sim::Equipped>(atk, eng::sim::Equipped{4, 0.25f});
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{dist, 0.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{1.0e6f, 1.0e6f, 0.0f});  // never dies
+  reg.emplace<eng::sim::Attributes>(foe);  // DEX 1 -> never dodges, so every in-reach strike lands
+  reg.emplace<eng::sim::Enemy>(foe);
+  std::mt19937 rng{1234};
+  const float before = reg.get<eng::sim::Stats>(foe).health.current;
+  eng::sim::perform_attack(reg, atk, rng);
+  return before - reg.get<eng::sim::Stats>(foe).health.current;
+}
+}  // namespace
+
+TEST_CASE("wielding a weapon hits harder", "[sim]") {
+  // At a distance both can reach (20), the +Strength weapon deals strictly more damage.
+  REQUIRE(weapon_strike(true, 20.0f) > weapon_strike(false, 20.0f));
+}
+
+TEST_CASE("a wielded weapon extends attack reach", "[sim]") {
+  // Bare reach is ~45 (STR 1); +4 STR from the weapon stretches it to ~69. A foe 55 units
+  // out is beyond a bare swing but within an armed one.
+  REQUIRE(weapon_strike(false, 55.0f) == Approx(0.0f));  // bare: whiffs (out of reach)...
+  REQUIRE(weapon_strike(true, 55.0f) > 0.0f);            // armed: connects
+}
+
+TEST_CASE("a wielded weapon slows the player (the heft bane)", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+
+  world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+  world.step();
+  const float bare = glm::length(world.registry().get<eng::sim::Velocity>(player).value);
+
+  world.registry().emplace<eng::sim::Equipped>(player, eng::sim::Equipped{4, 0.25f});
+  world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+  world.step();
+  const float armed = glm::length(world.registry().get<eng::sim::Velocity>(player).value);
+
+  REQUIRE(armed < bare);  // heft: you trade speed for power
+}
+
+TEST_CASE("a slain brute drops a weapon, a swarmer a health orb", "[sim]") {
+  entt::registry reg;
+  const entt::entity brute = reg.create();
+  reg.emplace<eng::sim::Transform>(brute, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::Stats>(brute, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // dead
+  reg.emplace<eng::sim::Enemy>(brute).drops_weapon = true;
+  const entt::entity swarmer = reg.create();
+  reg.emplace<eng::sim::Transform>(swarmer, eng::Vec2{200.0f, 200.0f});
+  reg.emplace<eng::sim::Stats>(swarmer, eng::sim::Vital{0.0f, 15.0f, 0.0f});  // dead
+  reg.emplace<eng::sim::Enemy>(swarmer);  // drops_weapon defaults false
+
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f);
+
+  REQUIRE(reg.storage<eng::sim::Weapon>().size() == 1);  // the brute yields gear...
+  REQUIRE(reg.storage<eng::sim::Pickup>().size() == 1);  // ...the swarmer, sustain
+}
+
+TEST_CASE("the Equip command wields the nearest weapon in reach", "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  const eng::Vec2 ppos = world.registry().get<eng::sim::Transform>(player).position;
+  const entt::entity w = world.registry().create();
+  world.registry().emplace<eng::sim::Transform>(w, ppos);  // a weapon right on the player
+  world.registry().emplace<eng::sim::Weapon>(w);           // default {+4 STR, -25% speed}
+
+  world.submit(eng::sim::equip(eng::sim::kLocalPlayer));
+  world.step();
+
+  REQUIRE(world.registry().all_of<eng::sim::Equipped>(player));                   // now wielding...
+  REQUIRE(world.registry().get<eng::sim::Equipped>(player).strength_bonus == 4);  // ...its mods...
+  REQUIRE_FALSE(world.registry().valid(w));                                       // ...and consumed
+}
+
 TEST_CASE("a player collects a pickup: heals and grows max HP", "[sim]") {
   entt::registry reg;
   const entt::entity p = reg.create();
