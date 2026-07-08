@@ -598,7 +598,7 @@ TEST_CASE("a player collects a pickup: heals and grows max HP", "[sim]") {
 
   const eng::sim::Vital& health = reg.get<eng::sim::Stats>(p).health;
   REQUIRE(health.current == Approx(65.0f));  // 40 + 25 healed
-  REQUIRE(health.max > 100.0f);              // ...and a permanent max-HP bump
+  REQUIRE(health.max == Approx(102.0f));     // ...and a permanent +2 max-HP bump
   REQUIRE(!reg.valid(item));                 // consumed
 }
 
