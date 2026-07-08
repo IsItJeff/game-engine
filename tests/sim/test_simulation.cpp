@@ -531,3 +531,22 @@ TEST_CASE("a creature's blow is softened by the player's VIT", "[sim]") {
   REQUIRE(dealt > 0.0f);   // the creature landed a blow
   REQUIRE(dealt < 15.0f);  // ...but VIT softened it below the raw 15
 }
+
+TEST_CASE("motes drift through creatures without hurting them", "[sim]") {
+  entt::registry reg;
+  // A creature and a mote sitting on the same spot (well within contact range).
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe);
+  const entt::entity mote = reg.create();
+  reg.emplace<eng::sim::Transform>(mote, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Hazard>(mote);
+
+  eng::sim::resolve_contacts(reg);
+
+  // A creature is fought with strikes (STR-vs-VIT), not chipped by ambient motes: it
+  // takes no damage, and the mote isn't consumed — it drifts on.
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == Approx(40.0f));
+  REQUIRE(reg.valid(mote));
+}

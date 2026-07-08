@@ -416,11 +416,12 @@ void resolve_contacts(entt::registry& reg) {
   // destroy in a separate pass.
   std::vector<entt::entity> consumed;
 
-  // Nested loop: every hazard against every target — anything with Stats, which
-  // is the player AND the NPCs (motes have no Stats, so they can't hurt each
-  // other). Fine for a handful of each; a real game with thousands would use a
-  // spatial grid to avoid the O(n*m).
-  auto targets = reg.view<Stats, Transform>();
+  // Nested loop: every hazard against every target — anything with Stats EXCEPT a
+  // creature. Motes are the player's and NPCs' environmental hazard; a creature is a
+  // real fight you wear down with strikes (STR-vs-VIT), so ambient motes drift right
+  // through it — otherwise a mote's raw damage would sidestep its VIT and could kill
+  // it before you engaged. Fine for a handful; a real crowd wants a spatial grid.
+  auto targets = reg.view<Stats, Transform>(entt::exclude<Enemy>);
   auto hazards = reg.view<Hazard, Transform>();
   for (const entt::entity h : hazards) {
     const Vec2 h_pos = hazards.get<Transform>(h).position;
@@ -447,6 +448,9 @@ void resolve_creature_contacts(entt::registry& reg, float dt) {
   constexpr float kAttackInterval = 0.8f;  // seconds between a creature's swings
 
   // Creatures hunt the PLAYER (chase_player homes on them), so that's who they hit.
+  // This runs before handle_deaths, so a creature you kill this tick can still land a
+  // last "dying blow" while at 0 HP — an accepted quirk, not a bug (reorder ahead of
+  // handle_deaths if that's ever unwanted).
   auto creatures = reg.view<Enemy, Transform>();
   auto players = reg.view<PlayerControlled, Stats, Transform>();
   for (const entt::entity c : creatures) {
