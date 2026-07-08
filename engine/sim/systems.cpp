@@ -109,6 +109,10 @@ void update_stamina(entt::registry& reg, float dt) {
   // Cost of moving, in stamina per second. Higher than stamina's own regen rate
   // so movement is a real drain. Tuning knob: raise it and you tire faster.
   constexpr float kDrainPerSecond = 40.0f;
+  // Each Endurance level past the first speeds stamina recovery by this fraction —
+  // hardiness means a better second wind. A tunable, and a new *effect* for
+  // Endurance beyond the pool size.
+  constexpr float kRecoveryPerEndurance = 0.10f;
 
   // Stats + Velocity = things that both tire and move. Motes have Velocity but no
   // Stats, so the view skips them for free — only the player pays.
@@ -119,7 +123,14 @@ void update_stamina(entt::registry& reg, float dt) {
       stamina.current -= kDrainPerSecond * dt;             // moving: spend it...
       if (stamina.current < 0.0f) stamina.current = 0.0f;  // ...never below empty
     } else {
-      recover(stamina, dt);  // resting: recover at the vital's own regen rate
+      // Resting: recover, faster the tougher you are. A no-Attributes entity just
+      // uses the base rate (boost 1.0).
+      const Attributes* attrs = reg.try_get<Attributes>(e);
+      const float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
+                                                        kRecoveryPerEndurance
+                                           : 1.0f;
+      stamina.current += stamina.regen_per_second * boost * dt;
+      if (stamina.current > stamina.max) stamina.current = stamina.max;  // never past the cap
     }
   }
 }
@@ -159,6 +170,9 @@ void advance_progression(entt::registry& reg) {
   // layer, not a second fast track. A balance knob, not a law (design: tune at
   // playtest).
   const Fixed kCharLevelShare = Fixed::from_ratio(1, 4);
+  // Resting to recover spent stamina trains Recovery a touch slower than moving
+  // trains Conditioning (15 XP/sec vs 20) — resting is easier than exerting.
+  const Fixed kRecoveryPerTick = Fixed::from_ratio(15, 60);
 
   // NB: CharacterLevel is required here, so any new progression-capable entity must
   // be spawned WITH it (see world.cpp: player + NPC) — miss it and that entity
@@ -173,11 +187,18 @@ void advance_progression(entt::registry& reg) {
     // 1. Activity earns XP for the SKILL and its MAIN attribute, plus a fraction to
     //    the global Character Level. Conditioning's main attribute is Endurance, so
     //    it takes the full share for now (skills with contributors will split it
-    //    later). Standing still trains nothing.
+    //    later). Moving trains Conditioning; resting to recover *spent* stamina
+    //    trains Recovery instead — both feed Endurance. Idle at full stamina, or
+    //    with no spending to recover from, trains nothing.
     if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
       conditioning.xp += kConditioningPerTick;
       endurance.xp += kConditioningPerTick;
       character.xp += kConditioningPerTick * kCharLevelShare;
+    } else if (const Vital& stamina = view.get<Stats>(e).stamina; stamina.current < stamina.max) {
+      Skill& recovery = view.get<Skills>(e).train(SkillId::Recovery);
+      recovery.xp += kRecoveryPerTick;
+      endurance.xp += kRecoveryPerTick;
+      character.xp += kRecoveryPerTick * kCharLevelShare;
     }
 
     // 2. Turn full XP bars into levels — EVERY trained skill, both attributes, and

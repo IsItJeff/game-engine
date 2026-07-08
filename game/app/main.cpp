@@ -124,6 +124,7 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     show_skill("conditioning", eng::sim::SkillId::Conditioning);
     show_skill("toughness", eng::sim::SkillId::Toughness);
     show_skill("striking", eng::sim::SkillId::Striking);
+    show_skill("recovery", eng::sim::SkillId::Recovery);
   }
 
   ImGui::Checkbox("pause simulation", &paused);
