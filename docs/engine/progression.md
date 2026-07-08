@@ -3,13 +3,18 @@
 ## What it is
 
 Characters grow by *doing*. A **skill** improves with the activity that trains it,
-skills roll up into broad **attributes**, and attributes shape the **vitals** you
-feel in play. Two strands are wired end to end so far, and they meet at one
-attribute: staying active trains a **Conditioning** skill, and **surviving damage**
-trains a **Toughness** skill — *both* raise the **Endurance** attribute, which grows
-your **max health and stamina**. The player and NPCs run the identical machinery, so
-a long-lived NPC that has moved *and* been hurt gets genuinely tougher — no
-special-casing.
+skills roll up into broad **attributes**, and attributes shape what you feel in play.
+Three strands are wired end to end so far, across two attributes:
+
+- staying active trains **Conditioning**, and **surviving damage** trains
+  **Toughness** — *both* raise **Endurance**, which grows your **max health and stamina**;
+- **attacking** trains **Striking**, which raises **Strength**, which lengthens your
+  **attack reach**.
+
+The player and NPCs run the identical progression machinery, so a long-lived NPC
+that has moved and been hurt gets genuinely tougher — no special-casing. (Attacking
+is player-only for now: NPCs flee and take damage but don't yet swing, so they build
+Endurance but not Strength. Giving them combat AI is a later step.)
 
 ## Why it matters
 
@@ -53,13 +58,13 @@ flowchart LR
    is `POWER(0)` = 1.0 (no head start); a veteran's earned toughness then compounds
    a little. It multiplies what you *earned*, never the base floor.
 
-!!! note "Endurance has two feeders"
-    Step 1 grants only the *movement* XP. **Taking damage** feeds a **Toughness**
-    skill → Endurance from a different place — `train_on_damage`, called wherever
-    damage lands (mote contact now, weapons later). Step 2's loop then levels *every*
-    owned skill, so Toughness climbs there too without `advance_progression` knowing
-    where its XP came from. One attribute, many sources — how the full model layers
-    up: you toughen both by staying active and by surviving hits.
+!!! note "XP comes from many places; leveling happens in one"
+    Step 1 grants only the *movement* XP. Other activities feed skills from their own
+    sites: **taking damage** feeds **Toughness** → Endurance (`train_on_damage`, wherever
+    damage lands), and **attacking** feeds **Striking** → Strength (the `Attack`
+    command). Step 2's loop then levels *every* owned skill — plus both attributes —
+    so those climb here too without `advance_progression` knowing where the XP came
+    from. Many sources, one place they turn into levels: how the full model layers up.
 
 Because the view targets `Skills + Attributes + Stats + Velocity + CharacterLevel`,
 it lands on the player and the NPCs and skips the motes — one system, everyone who
@@ -86,9 +91,10 @@ You flagged NPC growth as something to tune, and this is built so tuning is a
 - The whole curve is one constant (`xp_to_next` is linear in level). Right now NPCs
   train at the **same** rates as the player; a per-entity or per-faction multiplier
   is the knob that keeps their growth in check, and it slots into step 1.
-- It is deliberately **one** skill → **one** attribute → **one** effect. Strength
-  (→ attack damage), Agility (→ move speed), and more skills are more fields plus
-  the activity that trains each — the same three-layer shape, widened.
+- Each strand is one skill → one attribute → one effect, and they compose freely:
+  Endurance already has two feeders (Conditioning, Toughness), and Strength is the
+  second attribute (via Striking → reach). More skills/attributes are more of the
+  same fields plus the activity that trains each — the shape widens, it doesn't change.
 
 ## Where it goes next
 
@@ -99,11 +105,11 @@ attribute → stat — is what stays as it widens into a full character sheet.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes`, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`).
-- `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression`, `train_on_damage` (the damage → Toughness feeder, called from `resolve_contacts` and the `DamagePlayer` command).
-- `engine/sim/world.cpp` — `Skills`/`Attributes`/`CharacterLevel` on the player and NPCs; the `advance_progression` line in `step()`.
-- `game/app/main.cpp` — the endurance/character-level readout and the conditioning + toughness XP bars in the panel.
-- `tests/sim/test_simulation.cpp` — activity trains-and-grows, and idle trains nothing.
+- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance + Strength), `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`).
+- `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression`, `train_on_damage` (the damage → Toughness feeder).
+- `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
+- `game/app/main.cpp` — the endurance/strength/character-level readout and the skill XP bars; the `J` = attack key.
+- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength.
 
 ## Go deeper
 

@@ -33,6 +33,7 @@ enum class CommandKind {
   MovePlayer,    // push a player's entity in a direction
   SpawnMote,     // create a new drifting entity
   DamagePlayer,  // subtract from a player's health
+  Attack,        // strike the nearest hazard within reach
 };
 
 struct Command {
@@ -60,6 +61,11 @@ inline Command spawn_mote(Vec2 pos) {
 }
 inline Command damage_player(PlayerId player, float amount) {
   return Command{CommandKind::DamagePlayer, player, {}, {}, amount};
+}
+// Attack: the target is computed from the attacker's own position (nearest hazard
+// in reach), so the intent carries only who is swinging.
+inline Command attack(PlayerId player) {
+  return Command{CommandKind::Attack, player, {}, {}, 0.0f};
 }
 
 }  // namespace eng::sim

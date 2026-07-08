@@ -104,6 +104,7 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   // stamina bars above lengthen as the bigger pools take effect.
   if (const eng::sim::Attributes* attr = world.registry().try_get<eng::sim::Attributes>(player)) {
     ImGui::Text("endurance: %d", attr->endurance.level - 1);  // level 1 = 0 bonus
+    ImGui::Text("strength: %d", attr->strength.level - 1);    // from attacking; lengthens reach
   }
   if (const eng::sim::CharacterLevel* cl =
           world.registry().try_get<eng::sim::CharacterLevel>(player)) {
@@ -122,6 +123,7 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     };
     show_skill("conditioning", eng::sim::SkillId::Conditioning);
     show_skill("toughness", eng::sim::SkillId::Toughness);
+    show_skill("striking", eng::sim::SkillId::Striking);
   }
 
   ImGui::Checkbox("pause simulation", &paused);
@@ -133,8 +135,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "you rest. The green dots are NPCs: they now flee motes they sense, take the "
       "same contact damage you do, and when they die they're gone for good "
       "(permadeath) — you respawn. Space: spawn a mote (watch nearby NPCs scatter). "
-      "H: take 15 damage. Your keypresses become Commands; the NPCs fleeing, the "
-      "motes, and the deaths are all systems on the server.");
+      "H: take 15 damage. J: strike the nearest mote in reach — hitting back trains "
+      "Striking, which raises Strength and lengthens your reach. Your keypresses "
+      "become Commands; the NPCs fleeing, the motes, and the deaths are all systems "
+      "on the server.");
   ImGui::End();
 }
 
@@ -171,6 +175,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool paused = false;
   bool space_was_down = false;
   bool hurt_was_down = false;
+  bool attack_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -209,6 +214,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::damage_player(eng::sim::kLocalPlayer, 15.0f)});
     }
     hurt_was_down = hurt_raw;
+
+    // J, edge-triggered, swings at the nearest mote in reach — hitting back. The
+    // server picks the target from the player's own position (see the Attack
+    // command), destroys it, and trains Striking -> Strength, which lengthens reach.
+    const bool attack_raw = keys[SDL_SCANCODE_J];
+    if (attack_raw && !attack_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::attack(eng::sim::kLocalPlayer)});
+    }
+    attack_was_down = attack_raw;
 
     // --- advance the simulation in fixed steps ---
     const int steps = paused ? 0 : timestep.advance(frame_seconds);

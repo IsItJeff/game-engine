@@ -166,7 +166,8 @@ void advance_progression(entt::registry& reg) {
   auto view = reg.view<Skills, Attributes, Stats, Velocity, CharacterLevel>();
   for (const entt::entity e : view) {
     Skill& conditioning = view.get<Skills>(e).train(SkillId::Conditioning);
-    Attribute& endurance = view.get<Attributes>(e).endurance;
+    Attributes& attrs = view.get<Attributes>(e);
+    Attribute& endurance = attrs.endurance;
     CharacterLevel& character = view.get<CharacterLevel>(e);
 
     // 1. Activity earns XP for the SKILL and its MAIN attribute, plus a fraction to
@@ -179,12 +180,14 @@ void advance_progression(entt::registry& reg) {
       character.xp += kConditioningPerTick * kCharLevelShare;
     }
 
-    // 2. Turn full XP bars into levels — EVERY trained skill, the attribute, and the
-    //    character level each climb on their own {level, Fixed xp}. Iterating all
-    //    owned skills means a skill trained elsewhere (Toughness, fed by
-    //    train_on_damage) levels here too, without this system knowing the source.
+    // 2. Turn full XP bars into levels — EVERY trained skill, both attributes, and
+    //    the character level each climb on their own {level, Fixed xp}. Iterating all
+    //    owned skills means a skill trained elsewhere (Toughness via train_on_damage,
+    //    Striking via the Attack command) levels here too, without this system
+    //    knowing the source; likewise Strength's XP is granted at the attack site.
     for (auto& entry : view.get<Skills>(e).owned) apply_levels(entry.second.level, entry.second.xp);
     apply_levels(endurance.level, endurance.xp);
+    apply_levels(attrs.strength.level, attrs.strength.xp);
     apply_levels(character.level, character.xp);
 
     // 3. Attributes shape derived stats: each Endurance level past the first adds to

@@ -219,6 +219,33 @@ TEST_CASE("train_on_damage ignores non-finite and non-positive damage", "[sim]")
   REQUIRE(reg.get<eng::sim::Skills>(e).find(eng::sim::SkillId::Toughness) != nullptr);
 }
 
+TEST_CASE("attacking the nearest mote in reach destroys it and trains Striking -> Strength",
+          "[sim]") {
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  const eng::Vec2 pos = world.registry().get<eng::sim::Transform>(player).position;
+
+  // Put a mote in reach — past contact range (15) but inside base reach (45) — and
+  // let it settle for a tick so it isn't consumed by contact first.
+  world.submit(eng::sim::spawn_mote(eng::Vec2{pos.x + 25.0f, pos.y}));
+  world.step();
+  const int motes_before = static_cast<int>(world.registry().storage<eng::sim::Hazard>().size());
+
+  // Swing. Striking is granted ONLY by a connecting Attack, so XP on it proves the
+  // strike found a target; Strength (its main attribute) climbs alongside.
+  world.submit(eng::sim::attack(eng::sim::kLocalPlayer));
+  world.step();
+
+  const int motes_after = static_cast<int>(world.registry().storage<eng::sim::Hazard>().size());
+  REQUIRE(motes_after < motes_before);  // the strike destroyed a mote
+
+  const eng::sim::Skill* striking =
+      world.registry().get<eng::sim::Skills>(player).find(eng::sim::SkillId::Striking);
+  REQUIRE(striking != nullptr);
+  REQUIRE(striking->xp > eng::Fixed{});
+  REQUIRE(world.registry().get<eng::sim::Attributes>(player).strength.xp > eng::Fixed{});
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
