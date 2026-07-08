@@ -229,6 +229,62 @@ void train_on_damage(entt::registry& reg, entt::entity victim, float damage) {
   // sources to balance against. advance_progression levels Toughness next tick.
 }
 
+entt::entity perform_attack(entt::registry& reg, entt::entity attacker) {
+  constexpr float kBaseReach = 45.0f;                 // a little past contact range (15)
+  constexpr float kReachPerStrength = 6.0f;           // each Strength level past 1 adds reach
+  const Fixed kStrikingPerHit = Fixed::from_int(10);  // XP for a strike that connects
+
+  // A swinger needs a position (to reach from) and the progression pair to train.
+  const Transform* tf = reg.try_get<Transform>(attacker);
+  Attributes* attrs = reg.try_get<Attributes>(attacker);
+  Skills* skills = reg.try_get<Skills>(attacker);
+  if (tf == nullptr || attrs == nullptr || skills == nullptr) return entt::null;
+
+  const Vec2 origin = tf->position;
+  const float reach =
+      kBaseReach + static_cast<float>(attrs->strength.level - 1) * kReachPerStrength;
+
+  // Find the nearest hazard within reach (strict <, so iteration order breaks ties
+  // deterministically — same rule steer_npcs and resolve_contacts use).
+  entt::entity target = entt::null;
+  float nearest = reach;
+  auto hazards = reg.view<Hazard, Transform>();
+  for (const entt::entity h : hazards) {
+    const float d = glm::distance(origin, hazards.get<Transform>(h).position);
+    if (d < nearest) {
+      nearest = d;
+      target = h;
+    }
+  }
+
+  // A connecting strike trains Striking -> Strength. The caller destroys the target.
+  if (target != entt::null) {
+    skills->train(SkillId::Striking).xp += kStrikingPerHit;
+    attrs->strength.xp += kStrikingPerHit;
+  }
+  return target;
+}
+
+void npc_attack(entt::registry& reg) {
+  // Every NPC swings at the nearest hazard in reach — the same perform_attack the
+  // player's command uses, so NPCs build Strength too. Collect-then-destroy (the
+  // valid() guard makes a mote two NPCs both target a harmless double-destroy).
+  //
+  // ponytail: NPCs swing at their FULL Strength reach every tick, so they clear
+  // motes that drift near them quickly. If the field empties too fast in play, gate
+  // this on a threat range (only strike a mote about to make contact) or a per-tick
+  // chance — a tuning knob, not a redesign.
+  std::vector<entt::entity> struck;
+  auto npcs = reg.view<Npc, Transform, Attributes, Skills>();
+  for (const entt::entity n : npcs) {
+    const entt::entity t = perform_attack(reg, n);
+    if (t != entt::null) struck.push_back(t);
+  }
+  for (const entt::entity t : struck) {
+    if (reg.valid(t)) reg.destroy(t);
+  }
+}
+
 void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
   // A zero-health entity meets one of two fates, and which one is the game's core
   // rule made concrete: the PLAYER respawns; an NPC dies for good (permadeath).

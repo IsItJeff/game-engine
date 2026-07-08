@@ -246,6 +246,32 @@ TEST_CASE("attacking the nearest mote in reach destroys it and trains Striking -
   REQUIRE(world.registry().get<eng::sim::Attributes>(player).strength.xp > eng::Fixed{});
 }
 
+TEST_CASE("an NPC strikes a hazard in reach and trains Striking -> Strength", "[sim]") {
+  eng::sim::World world;
+
+  // Grab any NPC and its spot.
+  entt::entity npc = entt::null;
+  eng::Vec2 npc_pos{};
+  for (const entt::entity e : world.registry().view<eng::sim::Npc, eng::sim::Transform>()) {
+    npc = e;
+    npc_pos = world.registry().get<eng::sim::Transform>(e).position;
+    break;
+  }
+  REQUIRE(world.registry().valid(npc));  // we actually found an NPC
+
+  // Put a mote in that NPC's reach and step once: npc_attack strikes it. The NPC
+  // may flee a step first, but 20 units is well inside reach (45), so it connects.
+  world.submit(eng::sim::spawn_mote(eng::Vec2{npc_pos.x + 20.0f, npc_pos.y}));
+  world.step();
+
+  // Striking is granted ONLY by a connecting swing, so its XP proves the NPC fought
+  // — closing the player-only gap: NPCs build Strength now, not just Endurance.
+  const eng::sim::Skill* striking =
+      world.registry().get<eng::sim::Skills>(npc).find(eng::sim::SkillId::Striking);
+  REQUIRE(striking != nullptr);
+  REQUIRE(world.registry().get<eng::sim::Attributes>(npc).strength.xp > eng::Fixed{});
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
@@ -386,13 +412,23 @@ TEST_CASE("an NPC ignores a hazard beyond its senses", "[sim]") {
 
 TEST_CASE("SpawnMote adds an entity to the world", "[sim]") {
   eng::sim::World world;
-  const auto before = world.registry().storage<eng::sim::Transform>().size();
 
+  // Spawn at (100, 100): a far corner, >100 units from every NPC (they sit at
+  // 200,140 and beyond), so it's out of NPC attack reach and survives the tick.
+  // (An absolute entity count is no longer stable — NPCs now strike motes that
+  // drift into reach, so the mote population changes on its own; see npc_attack.)
   world.submit(eng::sim::spawn_mote({100.0f, 100.0f}));
   world.step();
 
-  const auto after = world.registry().storage<eng::sim::Transform>().size();
-  REQUIRE(after == before + 1);
+  bool found = false;
+  for (const entt::entity h : world.registry().view<eng::sim::Hazard, eng::sim::Transform>()) {
+    if (glm::distance(world.registry().get<eng::sim::Transform>(h).position,
+                      eng::Vec2{100.0f, 100.0f}) < 5.0f) {
+      found = true;
+      break;
+    }
+  }
+  REQUIRE(found);  // the spawned mote exists where we put it
 }
 
 TEST_CASE("player input reaches the world through the transport seam", "[sim]") {
