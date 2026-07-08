@@ -197,6 +197,7 @@ nav:
           - Deterministic numbers: engine/deterministic-numbers.md
           - Stats: engine/stats-system.md
           - Progression: engine/progression.md
+          - Combat: engine/combat.md
           - NPC behaviour: engine/npc-behaviour.md
       - Architecture:
           - engine/architecture/index.md
