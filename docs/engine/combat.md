@@ -96,9 +96,10 @@ arrives from outside, never on top of you). Deterministic, from the seeded RNG.
 ### Winning pays — loot
 
 A slain creature drops a **`Pickup`** (a cyan health orb) where it fell. Walk over it
-(`collect_pickups`) to restore health, capped — so kills sustain you and *skill* keeps
-you alive, not just respawning. An uncollected orb **fades after 20 s** so drops from
-far-off kills don't pile up.
+(`collect_pickups`) to restore health *and* permanently raise your max HP a little — so
+winning both sustains you now and hardens you for good, and *skill* keeps you alive,
+not just respawning. An uncollected orb **fades after 20 s** so drops from far-off kills
+don't pile up.
 
 ### Dying — `handle_deaths`
 

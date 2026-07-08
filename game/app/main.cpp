@@ -145,9 +145,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "creature takes several, fewer as your Strength climbs (it hits harder), while "
       "your VIT softens its blows. Hitting back trains Striking → Strength. A slain "
-      "creature drops a cyan health orb — walk over it to heal, so kills keep you in "
-      "the fight. Your keypresses become Commands; the fleeing, chasing, motes, "
-      "loot, and deaths are all systems on the server.");
+      "creature drops a cyan health orb — walk over it to heal AND raise your max HP a "
+      "little, so kills sustain and grow you. Your keypresses become Commands; the "
+      "fleeing, chasing, motes, loot, and deaths are all systems on the server.");
   ImGui::End();
 }
 

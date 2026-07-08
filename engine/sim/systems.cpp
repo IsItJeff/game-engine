@@ -439,6 +439,11 @@ void collect_pickups(entt::registry& reg, float dt) {
     for (const entt::entity p : players) {
       if (glm::distance(players.get<Transform>(p).position, item_pos) >= kPickupDistance) continue;
       Vital& health = players.get<Stats>(p).health;
+      // A permanent max-HP bump: grow base (which advance_progression keeps max in step
+      // with each tick) and max now too — the direct max bump is also the only growth
+      // for a collector without Attributes, whose max is never recomputed.
+      health.base += pk.bonus_max_hp;
+      health.max += pk.bonus_max_hp;
       health.current += pk.heal;
       if (health.current > health.max) health.current = health.max;  // capped, no overheal
       taken.push_back(item);
