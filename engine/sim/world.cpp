@@ -56,6 +56,20 @@ entt::entity make_creature(entt::registry& reg, Vec2 pos) {
   return e;
 }
 
+// Keep the fight alive: once the spawn timer runs out, add a creature at a random
+// spot (if we're under the cap) and reset it. Deterministic — the timer is a fixed
+// per-tick countdown and the position comes from the seeded rng, so every run spawns
+// the same reinforcements at the same ticks.
+void spawn_creature_if_due(entt::registry& reg, float& timer, std::mt19937& rng, float dt) {
+  timer -= dt;
+  if (timer > 0.0f) return;
+  timer = kCreatureSpawnInterval;
+  if (static_cast<int>(reg.storage<Enemy>().size()) >= kMaxCreatures) return;
+  std::uniform_real_distribution<float> fx(0.0f, kFieldWidth);
+  std::uniform_real_distribution<float> fy(0.0f, kFieldHeight);
+  make_creature(reg, Vec2{fx(rng), fy(rng)});
+}
+
 // Build the opening scene: a controllable player in the centre, a few wandering
 // NPCs, a couple of hunting creatures, and a dozen ambient motes drifting in
 // deterministic directions. Returns the player entity.
@@ -135,6 +149,10 @@ void World::step() {
   resolve_creature_contacts(registry_, dt);  // creatures swing on their cooldown
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f});
   regenerate_vitals(registry_, dt);
+
+  // Reinforcements: after deaths are resolved, top the creature population back up
+  // on a timer so the fight keeps coming.
+  spawn_creature_if_due(registry_, creature_spawn_timer_, rng_, dt);
 
   // 4. One tick done.
   ++tick_;
