@@ -69,6 +69,16 @@ struct PlayerControlled {
 // components (a name, relationships, skills) while this marker stays the floor.
 struct Npc {};
 
+// Marks a player who has dropped to 0 HP but isn't gone yet — crumpled WHERE they fell,
+// helpless (movement input ignored, no self-heal), for `timer` seconds. A living ally who
+// reaches them hauls them up in place; if the timer runs out first they respawn at the
+// field centre instead. This is the design's faithful death beat — "player -> Downed:
+// ally-rescuable / expiry respawns / (hardcore) permadeath" — replacing the old instant
+// teleport-to-safety-plus-full-heal. Only PLAYERS get Downed; an NPC at 0 HP is permadeath.
+struct Downed {
+  float timer = 5.0f;  // seconds of helplessness before an unrescued respawn (a knob)
+};
+
 // Presentation-only: how the debug renderer should draw this entity. The
 // simulation never reads this — it exists so the client has something to show.
 // Colours are 0..1 RGB.

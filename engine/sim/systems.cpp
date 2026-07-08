@@ -161,8 +161,10 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   // view<Stats>() iterates exactly the entities that have stats — the player
   // here, not the drifting motes — so this can't touch anything without them.
   // That automatic filtering is the ECS's whole point: behaviour applies to
-  // whoever has the right data, nobody else.
-  auto view = reg.view<Stats>();
+  // whoever has the right data, nobody else. A DOWNED player is excluded: they
+  // lie at 0 HP for the whole helpless window, so a trickle of self-heal must not
+  // quietly lift them off the floor — only a rescue or respawn brings them back.
+  auto view = reg.view<Stats>(entt::exclude<Downed>);
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
     recover(s.health, dt);
@@ -527,25 +529,64 @@ void spawn_pickup(entt::registry& reg, Vec2 pos) {
 
 }  // namespace
 
-void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
-  // A zero-health entity meets one of two fates, and which one is the game's core
-  // rule made concrete: the PLAYER respawns; an NPC dies for good (permadeath).
+void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
+  // A zero-health entity meets one of two fates, and which one is the game's core rule
+  // made concrete: a PLAYER goes DOWNED (helpless where they fell, then rescued-in-place
+  // by an ally or respawned when the timer runs out); an NPC dies for good (permadeath).
+  constexpr float kReviveDistance = 20.0f;  // a living ally this close hauls a downed player up
 
-  // Players: reset a few components in place. Nothing is created or destroyed, so
-  // writing to the view while iterating it is safe.
+  // Back on your feet WHOLE — every vital, not just health. Hunger especially must reset
+  // (it never self-recovers, so reviving with an empty stomach would drop a starved player
+  // straight back down); stamina too, so you don't get up mid-exhaustion.
+  const auto revive = [](Stats& s, Velocity& v) {
+    s.health.current = s.health.max;
+    s.stamina.current = s.stamina.max;
+    s.hunger.current = s.hunger.max;
+    v.value = Vec2{0.0f, 0.0f};
+  };
+
+  // Adding/removing Downed doesn't invalidate this view (Downed isn't one of its
+  // components), so mutating it while iterating is safe.
   auto players = reg.view<Stats, PlayerControlled, Transform, Velocity>();
   for (const entt::entity e : players) {
     Stats& s = players.get<Stats>(e);
-    if (s.health.current > 0.0f) continue;  // still alive, nothing to do
-    // Respawn WHOLE, not just un-dead: restore every vital, not only health. Hunger in
-    // particular MUST reset — it doesn't self-recover, so respawning a starved player with
-    // hunger still 0 would drop them straight back into starving and a re-death loop. Reset
-    // stamina too, so a fresh life starts rested rather than mid-exhaustion.
-    s.health.current = s.health.max;                     // full health...
-    s.stamina.current = s.stamina.max;                   // ...rested...
-    s.hunger.current = s.hunger.max;                     // ...and fed — a genuine clean slate
-    players.get<Transform>(e).position = respawn_point;  // at the spawn point...
-    players.get<Velocity>(e).value = Vec2{0.0f, 0.0f};   // ...and standing still
+    Downed* down = reg.try_get<Downed>(e);
+
+    if (down == nullptr) {
+      if (s.health.current > 0.0f) continue;  // alive and standing — nothing to do
+      // Just fell: crumple WHERE you are, helpless. NO heal, NO teleport — that free
+      // escape-to-safety was the old anti-climax; now you have to survive the window.
+      reg.emplace<Downed>(e);
+      players.get<Velocity>(e).value = Vec2{0.0f, 0.0f};
+      continue;
+    }
+
+    // Already downed. A living ally (any non-downed person) within reach hauls you up where
+    // you fell — the co-op rescue. NPCs don't SEEK the downed yet, so today this fires when
+    // one happens by; the forage "seek nearest X" pattern is the seed of making it deliberate.
+    bool rescued = false;
+    const Vec2 pos = players.get<Transform>(e).position;
+    auto allies = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
+    for (const entt::entity a : allies) {
+      if (a == e || allies.get<Stats>(a).health.current <= 0.0f)
+        continue;  // self / a corpse can't help
+      if (glm::distance(pos, allies.get<Transform>(a).position) < kReviveDistance) {
+        rescued = true;
+        break;
+      }
+    }
+
+    down->timer -= dt;
+    if (rescued) {
+      revive(s, players.get<Velocity>(e));  // up in place — you keep the ground you fell on
+      reg.remove<Downed>(e);
+    } else if (down->timer <= 0.0f) {
+      // Unrescued: the humane fallback so a solo player isn't stuck down forever — respawn
+      // whole at the field centre. A DELAYED, earned-back respawn, not the old instant one.
+      revive(s, players.get<Velocity>(e));
+      players.get<Transform>(e).position = respawn_point;
+      reg.remove<Downed>(e);
+    }
   }
 
   // NPCs and creatures: permadeath. Collect the dead, then destroy them AFTER the
@@ -578,8 +619,11 @@ void collect_pickups(entt::registry& reg, float dt) {
   // exclude<Enemy> is load-bearing: creatures also carry Stats, and letting them heal and
   // gain permanent max-HP off the very orbs they drop would break the fight. The eat body
   // below already try_get-guards Skills/Attributes, so an NPC grows from loot exactly as the
-  // player does — the parity the design's "NPCs run the identical system" demands.
-  auto eaters = reg.view<Stats, Transform>(entt::exclude<Enemy>);
+  // player does — the parity the design's "NPCs run the identical system" demands. Downed is
+  // excluded too: an unconscious body doesn't forage, and (mirroring regenerate_vitals) a
+  // downed player must not heal off an orb they happen to have fallen on — they stay at 0 HP
+  // for the whole helpless window until a rescue or respawn brings them back.
+  auto eaters = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
   auto pickups = reg.view<Pickup, Transform>();
   for (const entt::entity item : pickups) {
     Pickup& pk = pickups.get<Pickup>(item);

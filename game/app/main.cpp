@@ -93,6 +93,12 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
 
   // Read the player's Stats. try_get returns null if the entity has no Stats, so
   // this stays safe for entities (like the motes) that were never given any.
+  // Downed: crumpled at 0 HP, counting down to an unrescued respawn (an ally who reaches
+  // you revives sooner). Called out above the bars so the helpless state is unmistakable.
+  if (const eng::sim::Downed* down = world.registry().try_get<eng::sim::Downed>(player)) {
+    ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "DOWNED — %.1fs (an ally can revive you)",
+                       static_cast<double>(down->timer));
+  }
   if (const eng::sim::Stats* stats = world.registry().try_get<eng::sim::Stats>(player)) {
     const eng::sim::Vital& h = stats->health;
     ImGui::Text("health: %.0f / %.0f", static_cast<double>(h.current), static_cast<double>(h.max));
@@ -148,7 +154,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "to keep it up. The green dots are NPCs: they flee motes they sense, forage for food "
       "orbs when they get hungry (they get hungry and starve just like you — so they may "
       "grab a health orb before you do), take the same contact damage you do, and when they "
-      "die they're gone for good (permadeath) — you respawn. Creatures hunt the nearest "
+      "die they're gone for good (permadeath). YOU don't die outright: at 0 health you go "
+      "DOWNED — crumpled where you fell, helpless (you can't move), for a few seconds. A "
+      "living ally who reaches you hauls you up on the spot; otherwise you respawn back at "
+      "the centre when the timer runs out. Creatures hunt the nearest "
       "person — you OR an NPC — "
       "and hit back: RED brutes are slow, tanky, and hit hard, while ORANGE swarmers are "
       "fast and fragile but come in numbers. So NPCs and creatures actually war; watch "

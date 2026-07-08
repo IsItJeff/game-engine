@@ -119,12 +119,13 @@ void npc_attack(entt::registry& reg, std::mt19937& rng);
 // `xp_to_next` and the effect curve `power` live in progression/curve.hpp.)
 void advance_progression(entt::registry& reg);
 
-// React to death: a player at 0 health respawns at `respawn_point` with full health;
-// an NPC or creature at 0 health is destroyed — permadeath, the game's core rule. A
-// slain CREATURE also drops a health Pickup where it fell (loot for the win). MUST
-// run before regenerate_vitals, or a just-killed entity gets healed back above 0 the
-// same tick and never dies.
-void handle_deaths(entt::registry& reg, Vec2 respawn_point);
+// React to death. A player at 0 health goes DOWNED — helpless where they fell for a
+// timer (`dt` counts it down); a living ally within reach revives them in place, else on
+// expiry they respawn at `respawn_point`. An NPC or creature at 0 health is destroyed —
+// permadeath, the game's core rule; a slain CREATURE drops a health Pickup where it fell.
+// MUST run before regenerate_vitals, or a just-killed entity gets healed back above 0 the
+// same tick and never dies (a downed player is also excluded from regen for the same reason).
+void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt);
 
 // Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
 // player overlaps restores its `heal` health (capped) AND permanently raises max HP by
