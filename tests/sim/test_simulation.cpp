@@ -354,6 +354,28 @@ TEST_CASE("an idle character does not train conditioning", "[sim]") {
   REQUIRE(reg.get<eng::sim::Attributes>(e).endurance.level == 1);  // bonus 0
 }
 
+TEST_CASE("enduring damage feeds the character level, not just movement", "[sim]") {
+  // The Character Level is the "veteran" layer fed by a fraction of ALL activity, not
+  // just walking. Enduring a blow is activity: it trains Toughness (via train_on_damage),
+  // which now also feeds the character level through the one shared grant funnel — so a
+  // fighter who only ever stands and takes hits still becomes a veteran. Before the funnel
+  // routed it, combat was a dead path to the character level and this XP stayed flat at 0.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Skills>(e);
+  reg.emplace<eng::sim::Attributes>(e);
+  reg.emplace<eng::sim::Stats>(e);
+  reg.emplace<eng::sim::CharacterLevel>(e);
+
+  REQUIRE(reg.get<eng::sim::CharacterLevel>(e).xp == eng::Fixed{});  // no activity yet
+
+  // Endure several blows — no movement and no advance_progression, so the damage is the
+  // ONLY possible XP source. The char XP moving off 0 proves combat now feeds it.
+  for (int i = 0; i < 5; ++i) eng::sim::train_on_damage(reg, e, 20.0f);
+
+  REQUIRE(reg.get<eng::sim::CharacterLevel>(e).xp > eng::Fixed{});  // combat made it a veteran
+}
+
 TEST_CASE("resting to recover spent stamina trains Recovery", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
