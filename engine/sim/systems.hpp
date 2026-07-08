@@ -105,10 +105,17 @@ void npc_attack(entt::registry& reg);
 // `xp_to_next` and the effect curve `power` live in progression/curve.hpp.)
 void advance_progression(entt::registry& reg);
 
-// React to death, two ways: a player at 0 health respawns at `respawn_point` with
-// full health; an NPC at 0 health is destroyed instead — permadeath, the game's
-// core rule. MUST run before regenerate_vitals, or a just-killed entity gets
-// healed back above 0 the same tick and never dies.
+// React to death: a player at 0 health respawns at `respawn_point` with full health;
+// an NPC or creature at 0 health is destroyed — permadeath, the game's core rule. A
+// slain CREATURE also drops a health Pickup where it fell (loot for the win). MUST
+// run before regenerate_vitals, or a just-killed entity gets healed back above 0 the
+// same tick and never dies.
 void handle_deaths(entt::registry& reg, Vec2 respawn_point);
+
+// Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
+// player overlaps restores its `heal` health (capped) and is consumed; an orb whose
+// lifetime runs out fades away uncollected (so drops from far-off kills don't pile up
+// forever). Collect-then-destroy, like resolve_contacts.
+void collect_pickups(entt::registry& reg, float dt);
 
 }  // namespace eng::sim

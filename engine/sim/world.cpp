@@ -166,6 +166,7 @@ void World::step() {
   resolve_contacts(registry_);               // motes shatter on contact
   resolve_creature_contacts(registry_, dt);  // creatures swing on their cooldown
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f});
+  collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
   regenerate_vitals(registry_, dt);
 
   // Reinforcements: after deaths are resolved, top the creature population back up

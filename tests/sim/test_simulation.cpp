@@ -570,3 +570,47 @@ TEST_CASE("the world respawns creatures after they're cleared, up to a cap", "[s
 
   REQUIRE(static_cast<int>(reg.storage<eng::sim::Enemy>().size()) == eng::sim::kMaxCreatures);
 }
+
+TEST_CASE("a slain creature drops a health pickup", "[sim]") {
+  entt::registry reg;
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // already dead (0 HP)
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f});
+
+  REQUIRE(!reg.valid(foe));                              // reaped for good (permadeath)
+  REQUIRE(reg.storage<eng::sim::Pickup>().size() == 1);  // ...and it left loot
+}
+
+TEST_CASE("a player collects a pickup and heals", "[sim]") {
+  entt::registry reg;
+  const entt::entity p = reg.create();
+  reg.emplace<eng::sim::Transform>(p, eng::Vec2{50.0f, 50.0f});
+  reg.emplace<eng::sim::PlayerControlled>(p);
+  reg.emplace<eng::sim::Stats>(p, eng::sim::Vital{40.0f, 100.0f, 0.0f});  // hurt: 40/100
+  const entt::entity item = reg.create();
+  reg.emplace<eng::sim::Transform>(item, eng::Vec2{50.0f, 50.0f});  // right on the player
+  reg.emplace<eng::sim::Pickup>(item);                              // heals 25
+
+  eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+
+  REQUIRE(reg.get<eng::sim::Stats>(p).health.current == Approx(65.0f));  // 40 + 25
+  REQUIRE(!reg.valid(item));                                             // consumed
+}
+
+TEST_CASE("an uncollected pickup fades after its lifetime", "[sim]") {
+  entt::registry reg;
+  // A pickup with no player anywhere near — it should time out and vanish rather
+  // than pile up forever.
+  const entt::entity item = reg.create();
+  reg.emplace<eng::sim::Transform>(item, eng::Vec2{500.0f, 500.0f});
+  reg.emplace<eng::sim::Pickup>(item);  // lifetime 20s
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 25 * eng::sim::kTicksPerSecond; ++i) eng::sim::collect_pickups(reg, dt);
+
+  REQUIRE(!reg.valid(item));  // it faded
+  REQUIRE(reg.storage<eng::sim::Pickup>().size() == 0);
+}
