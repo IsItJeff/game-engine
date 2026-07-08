@@ -61,8 +61,16 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
 
     const eng::sim::RenderDot& dot = view.get<const eng::sim::RenderDot>(e);
     const eng::Vec2 p = world_to_screen(blended, vp);
-    const ImU32 color =
-        ImGui::ColorConvertFloat4ToU32(ImVec4{dot.color.r, dot.color.g, dot.color.b, 1.0f});
+
+    // Hit-flash: a freshly-struck entity blinks white and fades. remaining runs from
+    // kHitFlashSeconds down to 0, so t is 1 on the blow and eases to 0 — mixing the dot
+    // toward white by that much. Optional component (most entities have none), so try_get.
+    eng::Vec3 rgb = dot.color;
+    if (const auto* flash = world.registry().try_get<eng::sim::HitFlash>(e)) {
+      const float t = flash->remaining / eng::sim::kHitFlashSeconds;
+      rgb = glm::mix(rgb, eng::Vec3{1.0f, 1.0f, 1.0f}, t);
+    }
+    const ImU32 color = ImGui::ColorConvertFloat4ToU32(ImVec4{rgb.r, rgb.g, rgb.b, 1.0f});
     dl->AddCircleFilled(ImVec2{p.x, p.y}, dot.radius, color);
   }
 }

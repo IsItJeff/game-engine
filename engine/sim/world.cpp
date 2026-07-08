@@ -234,6 +234,7 @@ void World::step() {
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
   npc_equip(registry_);            // unarmed NPCs wield a dropped weapon they've reached
   regenerate_vitals(registry_, dt);
+  decay_flashes(registry_, dt);  // age the hit-flashes left by this tick's blows (presentation)
 
   // Reinforcements: after deaths are resolved, top the creature population back up
   // on a timer so the fight keeps coming.

@@ -553,6 +553,16 @@ float crit_chance(int luck_level) {
   return chance < kCap ? chance : kCap;
 }
 
+// Stamp a fresh hit-flash on an entity that just took a blow — presentation only, so
+// the renderer can blink it white (see components.hpp HitFlash). emplace_or_replace so
+// a rapid second blow refreshes the flash to full rather than stacking. Called AT the
+// damage sites, unconditionally on a landed hit — no roll, so it draws no RNG and the
+// seeded streams stay identical. Safe mid-view: HitFlash is in no view being walked at
+// any call site (the same reason Downed is safely emplaced during handle_deaths).
+void stamp_flash(entt::registry& reg, entt::entity e) {
+  reg.emplace_or_replace<HitFlash>(e, HitFlash{kHitFlashSeconds});
+}
+
 }  // namespace
 
 entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt19937& rng) {
@@ -642,6 +652,7 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   if (Stats* st = reg.try_get<Stats>(target); st != nullptr) {
     st->health.current -= applied;
     if (st->health.current < 0.0f) st->health.current = 0.0f;
+    stamp_flash(reg, target);  // the struck target blinks white
   }
   return entt::null;
 }
@@ -913,6 +924,7 @@ void resolve_contacts(entt::registry& reg) {
       health.current -= dmg;
       if (health.current < 0.0f) health.current = 0.0f;  // clamp at 0
       train_on_damage(reg, t, dmg);                      // enduring the hit toughens the survivor
+      stamp_flash(reg, t);                               // the struck target blinks white
       hit = true;
     }
     if (hit) consumed.push_back(h);  // consume it once, no matter how many it hit
@@ -962,8 +974,22 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       health.current -= applied;
       if (health.current < 0.0f) health.current = 0.0f;
       train_on_damage(reg, p, applied);  // enduring a creature's blow toughens the victim
+      stamp_flash(reg, p);               // the struck victim blinks white
     }
   }
+}
+
+void decay_flashes(entt::registry& reg, float dt) {
+  // Age every hit-flash and drop the ones that have burned out. Pure presentation
+  // upkeep — no rule reads HitFlash, so this only affects how the renderer draws.
+  // Collect-then-remove: removing during a view walk invalidates the iterator (the
+  // same ECS trap the destroy loops above avoid).
+  std::vector<entt::entity> spent;
+  for (auto [e, flash] : reg.view<HitFlash>().each()) {
+    flash.remaining -= dt;
+    if (flash.remaining <= 0.0f) spent.push_back(e);
+  }
+  for (const entt::entity e : spent) reg.remove<HitFlash>(e);
 }
 
 }  // namespace eng::sim
