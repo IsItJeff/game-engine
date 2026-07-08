@@ -21,7 +21,8 @@ engine skeleton's ECS. It is the worked example of
   motes are consumed on contact).
 
 Honest scope: `health`, `stamina`, and `hunger` exist. Health regenerates, drops from a
-debug key and from touching a hazard, and reaching zero respawns the player. Stamina is
+debug key and from touching a hazard, and reaching zero puts the player *Downed* (rescued
+by an ally or respawned on a timer). Stamina is
 spent by moving and recovers by resting; running it dry slows the player to a
 crawl. Hunger only ever falls (you refill it by *eating*, not resting) and starves you at
 empty. Death is respawn for the player and permadeath — destruction — for NPCs.
@@ -68,15 +69,17 @@ key) is handled in `apply_command`, which subtracts from the matching player's
 health and clamps it at zero. Because that runs on the server through the funnel,
 a client can't fake damage — it can only ask for it.
 
-When health reaches zero, `handle_deaths` respawns the player at the spawn point and
-restores them *whole* — full health, and **refilled needs** (hunger and stamina reset to
-max). That last part matters: hunger doesn't self-recover, so respawning a *starved*
-player with hunger still empty would drop them straight back into starving and a re-death
-loop — respawn clears all lethal state, not just the zero HP. It runs **before**
-`regenerate_vitals` in `step()` on purpose:
-the other order would let the same tick's regen nudge a 0-health entity back
-above zero, and it would never die. The order of the system calls in `step()` is
-the definition of the tick — here it is load-bearing.
+When health reaches zero, the player doesn't die outright — `handle_deaths` puts them
+**Downed** (a `Downed{timer}` marker): crumpled where they fell, helpless. A living ally
+who reaches them revives them in place; otherwise the timer expires and they respawn at
+the spawn point. Either way they come back *whole* — full health, and **refilled needs**
+(hunger and stamina reset to max). That last part matters: hunger doesn't self-recover, so
+reviving a *starved* player with hunger still empty would drop them straight back down in a
+re-death loop — the revive clears all lethal state, not just the zero HP. `handle_deaths`
+runs **before** `regenerate_vitals` in `step()` on purpose (and a Downed player is
+*excluded* from regen): the other order would let the same tick's regen nudge a 0-health
+entity back above zero, and it would never die or stay down. The order of the system calls
+in `step()` is the definition of the tick — here it is load-bearing.
 
 Health also drops from *gameplay*, and that shows the other half of the rule.
 Touching a `Hazard` (a drifting mote) hurts whoever overlaps it — the player or an
@@ -159,7 +162,8 @@ hazard). Further sources are the same two shapes: a projectile or trap is anothe
 system nudging `current` up.
 
 Death now means two things, split by which entity died — the game's core rule made
-concrete. The **player** respawns. An **NPC** is *destroyed*: **permadeath**,
+concrete. The **player** goes *Downed* (rescued in place by an ally, or respawned on a
+timer). An **NPC** is *destroyed*: **permadeath**,
 using the same collect-then-destroy pattern `resolve_contacts` uses on the motes.
 That is the `handle_deaths` branch this page kept pointing at; the first wandering
 NPCs (the green dots) exercise it live — watch "NPCs alive" in the panel only ever

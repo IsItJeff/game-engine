@@ -228,7 +228,7 @@ void World::step() {
   // definition of the tick — collision before death before heal.
   resolve_contacts(registry_);                     // motes shatter on contact
   resolve_creature_contacts(registry_, dt, rng_);  // creatures swing; player may dodge (DEX)
-  handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f});
+  handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt);
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
   regenerate_vitals(registry_, dt);
 
@@ -263,6 +263,7 @@ void World::apply_command(const Command& cmd) {
       for (const entt::entity e : view) {
         const PlayerControlled& pc = view.get<PlayerControlled>(e);
         if (pc.player != cmd.player) continue;
+        if (registry_.all_of<Downed>(e)) continue;  // downed = helpless, input does nothing
         const float speed =
             view.get<Stats>(e).stamina.current > 0.0f ? pc.move_speed : pc.move_speed * 0.4f;
         view.get<Velocity>(e).value = dir * speed;

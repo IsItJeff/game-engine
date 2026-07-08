@@ -457,46 +457,116 @@ TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   REQUIRE(after == Approx(before - 25.0f).margin(0.5f));
 }
 
-TEST_CASE("a lethal hit respawns the player at full health and the spawn point", "[sim]") {
+TEST_CASE("a lethal hit downs the player in place, not an instant respawn", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
 
-  // Move the player off-centre first, so the respawn visibly moves it back.
+  // Move the player well off-centre first.
   world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
   for (int i = 0; i < 30; ++i) world.step();
-  REQUIRE(world.registry().get<eng::sim::Transform>(player).position.x >
-          eng::sim::kFieldWidth * 0.5f);  // drifted right of centre
+  const float fell_x = world.registry().get<eng::sim::Transform>(player).position.x;
+  REQUIRE(fell_x > eng::sim::kFieldWidth * 0.5f);  // drifted right of centre
 
   world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 9999.0f));  // lethal
-  world.step();  // damage -> health hits 0 -> handle_deaths respawns before regen
+  world.step();  // damage -> 0 HP -> handle_deaths DOWNS the player (no teleport, no heal)
 
+  // Downed, not respawned: still at 0 HP, still out where they fell (right of centre) —
+  // the old free teleport-to-safety is gone. (Rescue isn't checked the tick you go down,
+  // so this is stable.) Position isn't exactly fell_x because residual velocity nudges the
+  // player a little further before handle_deaths zeroes it — the point is it's NOT centre.
+  REQUIRE(world.registry().all_of<eng::sim::Downed>(player));
   const eng::sim::Stats& stats = world.registry().get<eng::sim::Stats>(player);
-  const eng::sim::Transform& tf = world.registry().get<eng::sim::Transform>(player);
-  REQUIRE(stats.health.current == Approx(stats.health.max));       // back to full
-  REQUIRE(tf.position.x == Approx(eng::sim::kFieldWidth * 0.5f));  // back to spawn
-  REQUIRE(tf.position.y == Approx(eng::sim::kFieldHeight * 0.5f));
+  REQUIRE(stats.health.current == Approx(0.0f));  // helpless, not healed
+  REQUIRE(world.registry().get<eng::sim::Transform>(player).position.x >
+          eng::sim::kFieldWidth * 0.5f);  // still where they fell, not teleported to centre
 }
 
-TEST_CASE("a respawn restores the player's needs, not just health", "[sim]") {
-  // Respawn must be a clean slate: if it healed HP but left hunger at 0, a starved player
-  // would drop straight back into starving and re-die in a loop. So handle_deaths refills
-  // the needs too.
+TEST_CASE("an unrescued downed player respawns whole at the centre on expiry", "[sim]") {
+  // With no ally in reach, the Downed timer runs out and the player respawns at the spawn
+  // point — restored WHOLE (a starved/exhausted player mustn't come back still empty).
   entt::registry reg;
   const entt::entity player = reg.create();
-  reg.emplace<eng::sim::Transform>(player, eng::Vec2{10.0f, 10.0f});
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{10.0f, 10.0f});  // far from the centre
   reg.emplace<eng::sim::PlayerControlled>(player);
   reg.emplace<eng::sim::Velocity>(player);
   auto& stats = reg.emplace<eng::sim::Stats>(player);
   stats.health.current = 0.0f;   // dead...
-  stats.hunger.current = 0.0f;   // ...of starvation (hunger emptied)
-  stats.stamina.current = 0.0f;  // and exhausted
+  stats.hunger.current = 0.0f;   // ...of starvation...
+  stats.stamina.current = 0.0f;  // ...and exhausted
 
-  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f});
+  const eng::Vec2 centre{640.0f, 360.0f};
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // 1st call: goes Downed (no ally near)
+  REQUIRE(reg.all_of<eng::sim::Downed>(player));
+  eng::sim::handle_deaths(reg, centre, 6.0f);  // a fat dt expires the 5s timer -> respawn
 
   const eng::sim::Stats& after = reg.get<eng::sim::Stats>(player);
-  REQUIRE(after.health.current == Approx(after.health.max));    // back to full health...
+  REQUIRE_FALSE(reg.all_of<eng::sim::Downed>(player));          // back up...
+  REQUIRE(after.health.current == Approx(after.health.max));    // ...at full health...
   REQUIRE(after.hunger.current == Approx(after.hunger.max));    // ...fed (not re-starving)...
-  REQUIRE(after.stamina.current == Approx(after.stamina.max));  // ...and rested
+  REQUIRE(after.stamina.current == Approx(after.stamina.max));  // ...and rested...
+  REQUIRE(reg.get<eng::sim::Transform>(player).position.x == Approx(centre.x));  // ...at the centre
+}
+
+TEST_CASE("a living ally revives a downed player in place", "[sim]") {
+  // A rescuer within reach hauls the player up WHERE they fell (not teleported to centre) —
+  // the co-op payoff that beats waiting out the respawn timer.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Velocity>(player);
+  reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // down
+  // A living NPC ally standing right next to them (within the revive distance).
+  const entt::entity ally = reg.create();
+  reg.emplace<eng::sim::Transform>(ally, eng::Vec2{110.0f, 100.0f});
+  reg.emplace<eng::sim::Npc>(ally);
+  reg.emplace<eng::sim::Stats>(ally);  // full health — alive
+
+  const eng::Vec2 centre{640.0f, 360.0f};
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // 1st call: goes Downed
+  REQUIRE(reg.all_of<eng::sim::Downed>(player));
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // 2nd: ally in reach -> revived early
+
+  REQUIRE_FALSE(reg.all_of<eng::sim::Downed>(player));  // back up...
+  const eng::sim::Stats& after = reg.get<eng::sim::Stats>(player);
+  REQUIRE(after.health.current == Approx(after.health.max));  // ...healed...
+  REQUIRE(reg.get<eng::sim::Transform>(player).position.x ==
+          Approx(100.0f));  // ...IN PLACE, not centre
+  REQUIRE(reg.get<eng::sim::Transform>(player).position.y == Approx(100.0f));
+}
+
+TEST_CASE("a downed player does not eat an orb it fell on", "[sim]") {
+  // Helpless means helpless: a downed player must not heal off a loot orb they happen to be
+  // lying on (mirrors regenerate_vitals excluding Downed) — only a rescue or respawn revives.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // down
+  reg.emplace<eng::sim::Downed>(player);
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{0.0f, 0.0f});  // right on the downed body
+  reg.emplace<eng::sim::Pickup>(orb);
+
+  eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current ==
+          Approx(0.0f));    // no heal off the floor
+  REQUIRE(reg.valid(orb));  // orb untouched
+}
+
+TEST_CASE("a downed player ignores movement input", "[sim]") {
+  // The command funnel drops MovePlayer for a downed player, so pressing a direction while
+  // helpless does nothing — you lie where you fell.
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  world.registry().emplace<eng::sim::Downed>(player);  // force the live player down...
+  world.registry().get<eng::sim::Stats>(player).health.current = 0.0f;
+
+  world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+  world.step();
+
+  REQUIRE(glm::length(world.registry().get<eng::sim::Velocity>(player).value) == Approx(0.0f));
 }
 
 TEST_CASE("touching a hazard damages the player and consumes the hazard", "[sim]") {
@@ -911,7 +981,7 @@ TEST_CASE("a slain creature drops a health pickup", "[sim]") {
   reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // already dead (0 HP)
   reg.emplace<eng::sim::Enemy>(foe);
 
-  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f});
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f);
 
   REQUIRE(!reg.valid(foe));                              // reaped for good (permadeath)
   REQUIRE(reg.storage<eng::sim::Pickup>().size() == 1);  // ...and it left loot

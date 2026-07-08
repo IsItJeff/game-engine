@@ -180,12 +180,28 @@ hardens you for good, *and* makes you deadlier, and *skill* keeps you alive, not
 respawning. An uncollected orb **fades after 20 s** so drops from far-off kills don't pile
 up.
 
-### Dying — `handle_deaths`
+### Dying — `handle_deaths` (Downed, then rescue or respawn)
 
-The game's core rule, made concrete: at 0 HP the **player respawns at the field
-centre** with full health; an **NPC or creature is destroyed for good** (permadeath).
-It runs *before* `regenerate_vitals`, so a just-killed thing can't heal back above 0
-the same tick.
+The game's core rule, made concrete — and split by who died. An **NPC or creature at 0 HP
+is destroyed for good** (permadeath). The **player does not die outright**: they go
+**Downed** — crumpled *where they fell*, helpless (movement input ignored, self-heal
+suspended), a `Downed{timer}` marker counting down. Two ways back up:
+
+- **Rescue** — a living, non-downed person (an ally NPC, or another player in co-op) who
+  comes within reach hauls you up *in place*, so you keep the ground you were fighting on.
+- **Expiry** — no rescuer in time, and the timer runs out: you respawn whole at the field
+  **centre** (the humane fallback so a solo player isn't stuck down).
+
+This is the design's faithful death beat — *"player → Downed: ally-rescuable / expiry
+respawns / (hardcore) permadeath"* — replacing the old instant teleport-to-safety-plus-heal,
+which rewarded getting swarmed with a free escape. Either way back you return **whole** (all
+vitals refilled, so a starved player doesn't revive still starving). Today an ally rescues
+only if they *happen* to be near; making NPCs deliberately **seek** a downed ally is the next
+step, and reuses the same "seek the nearest X" steering the [foraging](stats-system.md) NPCs
+already run.
+
+`handle_deaths` runs *before* `regenerate_vitals` (and a Downed player is excluded from
+regen), so a just-killed thing can't heal back above 0 the same tick.
 
 ### Where it sits in the tick
 
