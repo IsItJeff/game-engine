@@ -102,9 +102,10 @@ far-off kills don't pile up.
 
 ### Dying — `handle_deaths`
 
-The game's core rule, made concrete: at 0 HP the **player respawns** in place at full
-health; an **NPC or creature is destroyed for good** (permadeath). It runs *before*
-`regenerate_vitals`, so a just-killed thing can't heal back above 0 the same tick.
+The game's core rule, made concrete: at 0 HP the **player respawns at the field
+centre** with full health; an **NPC or creature is destroyed for good** (permadeath).
+It runs *before* `regenerate_vitals`, so a just-killed thing can't heal back above 0
+the same tick.
 
 ### Where it sits in the tick
 
@@ -128,8 +129,8 @@ moving — you outrun a creature (320 vs 70), so a swarm is survivable by kiting
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy`, `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_player`, `resolve_creature_contacts`, `collect_pickups`, `handle_deaths`; the `mitigate`/`defence_of` helpers.
-- `engine/sim/world.cpp` — `make_creature`, `spawn_creature_if_due`, the pickup drop in `handle_deaths`, and the system order in `step()`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_player`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate`/`defence_of` helpers.
+- `engine/sim/world.cpp` — `make_creature`, `spawn_creature_if_due`, and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` command (`J`).
 - `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, creature spawn/cap, loot drop + collect + fade.
 
