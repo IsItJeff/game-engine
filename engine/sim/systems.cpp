@@ -247,6 +247,7 @@ void advance_progression(entt::registry& reg) {
     apply_levels(endurance.level, endurance.xp);
     apply_levels(attrs.strength.level, attrs.strength.xp);
     apply_levels(attrs.dexterity.level, attrs.dexterity.xp);  // fed by Evasion at the dodge site
+    apply_levels(attrs.luck.level, attrs.luck.xp);            // fed by Scavenging at the loot site
     apply_levels(character.level, character.xp);
 
     // 3. Attributes shape derived stats: each Endurance level past the first adds to
@@ -322,6 +323,20 @@ float dodge_chance(int dexterity_level) {
   return chance < kCap ? chance : kCap;
 }
 
+// Chance in [0, kCap] that a strike CRITS (deals extra damage), from the attacker's LCK —
+// the offensive-fortune mirror of dodge_chance. Level 1 = 0 (no head start, and the
+// chance > 0 guard at the call site means an untrained attacker never even draws), each
+// level tilts fortune a little further, hard-capped so Luck sways the fight without ever
+// guaranteeing the big hit.
+// ponytail: the ramp/cap here (and the crit multiplier at the call site) are tuning knobs,
+// cloned from dodge for now — give crit its own curve if playtest wants it to feel different.
+float crit_chance(int luck_level) {
+  constexpr float kPerLevel = 0.03f;  // +3% crit per Luck level past the first
+  constexpr float kCap = 0.50f;       // never crit more than half your swings
+  const float chance = static_cast<float>(luck_level - 1) * kPerLevel;
+  return chance < kCap ? chance : kCap;
+}
+
 }  // namespace
 
 entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt19937& rng) {
@@ -389,7 +404,18 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // hit only chips it and it takes several. (An Enemy always carries Stats.)
   const float raw =
       kBaseAttackDamage + static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength;
-  const float applied = mitigate(raw, defence_of(reg, target));
+  const float base_damage = mitigate(raw, defence_of(reg, target));
+
+  // A LUCKY strike CRITS for extra damage — the offensive-fortune mirror of a dodge,
+  // rolled off the ATTACKER's LCK. It sits after the dodge return (only a connecting hit
+  // can crit) and reuses the `unit` distribution above; the chance > 0 guard means an
+  // untrained attacker (LCK 1) never draws, so the seeded stream is unchanged until Luck
+  // is earned (by scavenging loot — see collect_pickups). Creatures have LCK 1, so they
+  // never crit, exactly as they never dodge or train — a fixed floor, not a trained stat.
+  constexpr float kCritMultiplier = 2.0f;  // a crit doubles the blow (ponytail: a knob)
+  const float crit = crit_chance(attrs->luck.level);
+  const float applied =
+      (crit > 0.0f && unit(rng) < crit) ? base_damage * kCritMultiplier : base_damage;
   if (Stats* st = reg.try_get<Stats>(target); st != nullptr) {
     st->health.current -= applied;
     if (st->health.current < 0.0f) st->health.current = 0.0f;
@@ -491,6 +517,18 @@ void collect_pickups(entt::registry& reg, float dt) {
       health.max += pk.bonus_max_hp;
       health.current += pk.heal;
       if (health.current > health.max) health.current = health.max;  // capped, no overheal
+
+      // Grabbing loot trains Scavenging -> Luck (deterministic XP, no RNG), so foraging
+      // the field is itself a build: more Luck -> more crits (perform_attack). Guard on the
+      // pair — a collector without Skills/Attributes (see the max-HP note above) still gets
+      // the heal, it just doesn't grow Luck.
+      Skills* sk = reg.try_get<Skills>(p);
+      Attributes* a = reg.try_get<Attributes>(p);
+      if (sk != nullptr && a != nullptr) {
+        const Fixed kScavengingPerGrab = Fixed::from_int(10);  // XP per orb (ponytail: a knob)
+        sk->train(SkillId::Scavenging).xp += kScavengingPerGrab;
+        a->luck.xp += kScavengingPerGrab;
+      }
       taken.push_back(item);
       break;  // consumed by the first collector
     }
