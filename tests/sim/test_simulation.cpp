@@ -1149,6 +1149,21 @@ TEST_CASE("a landed blow stamps a hit-flash that then decays away", "[sim]") {
   REQUIRE_FALSE(reg.all_of<eng::sim::HitFlash>(player));  // faded and gone
 }
 
+TEST_CASE("wounded_brightness dims a dot toward the floor as health falls", "[sim]") {
+  // The steady twin of the hit-flash: a pure function the renderer uses to DIM a wounded
+  // dot. Full health draws at full brightness; a dying dot fades toward (never past) the floor.
+  REQUIRE(eng::sim::wounded_brightness(100.0f, 100.0f) == Approx(1.0f));  // full = unchanged
+  REQUIRE(eng::sim::wounded_brightness(0.0f, 100.0f) ==
+          Approx(eng::sim::kWoundedFloor));  // dead = floor
+  const float half = eng::sim::wounded_brightness(50.0f, 100.0f);
+  REQUIRE(half > eng::sim::kWoundedFloor);  // half health sits strictly...
+  REQUIRE(half < 1.0f);                     // ...between floor and full (monotonic)
+  REQUIRE(eng::sim::wounded_brightness(150.0f, 100.0f) ==
+          Approx(1.0f));  // overshoot clamps, never brighter
+  REQUIRE(eng::sim::wounded_brightness(50.0f, 0.0f) ==
+          Approx(1.0f));  // no bar -> full, no divide-by-zero
+}
+
 TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it lands", "[sim]") {
   // The bootstrap: at Dexterity 1 you can't dodge yet, so the blow lands — but facing
   // it still trains Evasion and its Dexterity, which is what eventually lets you dodge.
