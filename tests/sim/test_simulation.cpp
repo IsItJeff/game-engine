@@ -183,6 +183,82 @@ TEST_CASE("eating a loot orb refills hunger", "[sim]") {
   REQUIRE(!reg.valid(orb));                                          // and was consumed
 }
 
+TEST_CASE("a hungry NPC eats a food orb too, like the player", "[sim]") {
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Npc>(npc);
+  auto& stats = reg.emplace<eng::sim::Stats>(npc);
+  stats.hunger.current = 20.0f;  // hungry
+  stats.health.current = 50.0f;  // and hurt, so the orb's heal is visible
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{0.0f, 0.0f});  // right on the NPC
+  reg.emplace<eng::sim::Pickup>(orb);
+
+  eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+
+  REQUIRE(reg.get<eng::sim::Stats>(npc).hunger.current > 20.0f);  // fed (parity with the player)...
+  REQUIRE(reg.get<eng::sim::Stats>(npc).health.current > 50.0f);  // ...and healed
+  REQUIRE(!reg.valid(orb));                                       // consumed
+}
+
+TEST_CASE("a hungry NPC steers toward a nearby food orb", "[sim]") {
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc).hunger.current = 10.0f;  // below the seek threshold
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{100.0f, 0.0f});  // to the right, in forage range
+  reg.emplace<eng::sim::Pickup>(orb);
+
+  eng::sim::steer_npcs(reg);
+
+  const eng::Vec2 v = reg.get<eng::sim::Velocity>(npc).value;
+  REQUIRE(v.x > 0.0f);           // heading toward the orb (its first want-driven motion)...
+  REQUIRE(v.y == Approx(0.0f));  // ...straight at it
+}
+
+TEST_CASE("fear beats hunger: a threatened NPC flees rather than forage", "[sim]") {
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc).hunger.current = 10.0f;  // hungry...
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Transform>(hazard,
+                                   eng::Vec2{50.0f, 0.0f});  // ...but a threat is close, right...
+  reg.emplace<eng::sim::Hazard>(hazard);
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{100.0f, 0.0f});  // ...and food is that way too
+  reg.emplace<eng::sim::Pickup>(orb);
+
+  eng::sim::steer_npcs(reg);
+
+  // It flees LEFT (away from the hazard), not right toward the food — fear wins.
+  REQUIRE(reg.get<eng::sim::Velocity>(npc).value.x < 0.0f);
+}
+
+TEST_CASE("a creature does not eat a health orb", "[sim]") {
+  // Guards the load-bearing exclude<Enemy> on the eater view: creatures carry Stats, but
+  // must NOT heal or grow off the very orbs they drop, or the fight breaks.
+  entt::registry reg;
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe);
+  reg.emplace<eng::sim::Stats>(foe).health.current = 40.0f;  // hurt, so a wrongful heal would show
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{0.0f, 0.0f});  // right on the creature
+  reg.emplace<eng::sim::Pickup>(orb);
+
+  eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == Approx(40.0f));  // no heal
+  REQUIRE(reg.valid(orb));                                                 // orb untouched
+}
+
 TEST_CASE("staying active trains conditioning, which raises endurance and max health", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
