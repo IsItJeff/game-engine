@@ -889,6 +889,91 @@ TEST_CASE("attacking a creature whittles its HP by Strength vs its VIT", "[sim]"
   REQUIRE(strong_hit > weak_hit);  // Strength matters: the stronger swing deals more
 }
 
+TEST_CASE("a veteran attacker hits harder than a fresh one at equal Strength", "[sim]") {
+  // The Character Level is a global "veteran" multiplier. It already scaled the earned HP
+  // pool; now it scales the earned Strength delta on a swing's damage too (POWER(level - 1)),
+  // so the combat XP that all activity now feeds into it finally PAYS OFF in combat. Two
+  // attackers with IDENTICAL Strength differ only in character level — the veteran hits harder.
+  entt::registry reg;
+
+  // A fresh attacker (character level 1 -> POWER(0) = 1.0) and its foe, near the origin.
+  const entt::entity fresh = reg.create();
+  reg.emplace<eng::sim::Transform>(fresh, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(fresh).strength.level = 5;
+  reg.emplace<eng::sim::Skills>(fresh);
+  reg.emplace<eng::sim::CharacterLevel>(fresh);  // default level 1
+  const entt::entity fresh_foe = reg.create();
+  reg.emplace<eng::sim::Transform>(fresh_foe, eng::Vec2{20.0f, 0.0f});  // inside reach
+  reg.emplace<eng::sim::Stats>(fresh_foe,
+                               eng::sim::Vital{200.0f, 200.0f, 0.0f});  // won't die in one
+  reg.emplace<eng::sim::Attributes>(fresh_foe).endurance.level = 3;     // identical VIT defence
+  reg.emplace<eng::sim::Enemy>(fresh_foe);
+
+  // A veteran attacker (character level 20), identical Strength, placed far away so its reach
+  // can't touch the fresh foe — with its own identical foe. Only the character level differs.
+  const entt::entity vet = reg.create();
+  reg.emplace<eng::sim::Transform>(vet, eng::Vec2{1000.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(vet).strength.level = 5;
+  reg.emplace<eng::sim::Skills>(vet);
+  reg.emplace<eng::sim::CharacterLevel>(vet).level = 20;
+  const entt::entity vet_foe = reg.create();
+  reg.emplace<eng::sim::Transform>(vet_foe, eng::Vec2{1020.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(vet_foe, eng::sim::Vital{200.0f, 200.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(vet_foe).endurance.level = 3;
+  reg.emplace<eng::sim::Enemy>(vet_foe);
+
+  std::mt19937 rng{1234};  // foes DEX 1 -> never dodge; attackers LCK 1 -> never crit (no draw)
+  eng::sim::perform_attack(reg, fresh, rng);
+  eng::sim::perform_attack(reg, vet, rng);
+
+  const float fresh_dmg = 200.0f - reg.get<eng::sim::Stats>(fresh_foe).health.current;
+  const float vet_dmg = 200.0f - reg.get<eng::sim::Stats>(vet_foe).health.current;
+  REQUIRE(fresh_dmg > 0.0f);     // the fresh attacker connected
+  REQUIRE(vet_dmg > fresh_dmg);  // the veteran's earned Strength compounds into a harder hit
+}
+
+TEST_CASE("a weapon's granted Strength does not compound with character level", "[sim]") {
+  // The veteran multiplier compounds only what you EARNED by grinding, never gear. Two wielders
+  // of the SAME weapon at the SAME (base) trained Strength deal the same blow whatever their
+  // character level — otherwise a fixed weapon bonus would silently scale with unrelated
+  // progression, breaking "you are what you do". (Both have trained Strength 1, so the earned
+  // delta is 0 and the ONLY Strength contribution is the +4 gear, which must stay flat.)
+  entt::registry reg;
+
+  const entt::entity fresh = reg.create();
+  reg.emplace<eng::sim::Transform>(fresh, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(fresh);  // trained Strength level 1
+  reg.emplace<eng::sim::Skills>(fresh);
+  reg.emplace<eng::sim::CharacterLevel>(fresh);                          // level 1
+  reg.emplace<eng::sim::Equipped>(fresh, eng::sim::Equipped{4, 0.25f});  // +4 STR weapon
+  const entt::entity fresh_foe = reg.create();
+  reg.emplace<eng::sim::Transform>(fresh_foe, eng::Vec2{20.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(fresh_foe, eng::sim::Vital{200.0f, 200.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(fresh_foe).endurance.level = 3;
+  reg.emplace<eng::sim::Enemy>(fresh_foe);
+
+  const entt::entity vet = reg.create();
+  reg.emplace<eng::sim::Transform>(vet, eng::Vec2{1000.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(vet);  // identical trained Strength
+  reg.emplace<eng::sim::Skills>(vet);
+  reg.emplace<eng::sim::CharacterLevel>(vet).level = 20;               // seasoned...
+  reg.emplace<eng::sim::Equipped>(vet, eng::sim::Equipped{4, 0.25f});  // ...same weapon
+  const entt::entity vet_foe = reg.create();
+  reg.emplace<eng::sim::Transform>(vet_foe, eng::Vec2{1020.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(vet_foe, eng::sim::Vital{200.0f, 200.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(vet_foe).endurance.level = 3;
+  reg.emplace<eng::sim::Enemy>(vet_foe);
+
+  std::mt19937 rng{1234};  // foes DEX 1 (never dodge); attackers LCK 1 (never crit, no draw)
+  eng::sim::perform_attack(reg, fresh, rng);
+  eng::sim::perform_attack(reg, vet, rng);
+
+  const float fresh_dmg = 200.0f - reg.get<eng::sim::Stats>(fresh_foe).health.current;
+  const float vet_dmg = 200.0f - reg.get<eng::sim::Stats>(vet_foe).health.current;
+  REQUIRE(fresh_dmg > 0.0f);              // both connected
+  REQUIRE(vet_dmg == Approx(fresh_dmg));  // gear STR is flat: the veteran gains nothing from it
+}
+
 TEST_CASE("a slippery high-Dexterity creature dodges some of your strikes", "[sim]") {
   // The offensive mirror of the player's dodge: a creature's DEX lets it slip some of
   // your strikes (capped at 50%), but a stream of hits still lands. Deterministic seed.
