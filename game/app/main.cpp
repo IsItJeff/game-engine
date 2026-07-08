@@ -83,6 +83,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   // ever goes down.
   const auto* npcs = world.registry().storage<eng::sim::Npc>();
   ImGui::Text("NPCs alive: %d", npcs ? static_cast<int>(npcs->size()) : 0);
+  // The red creatures hunting you — wear them down with J; a higher Strength kills faster.
+  const auto* enemies = world.registry().storage<eng::sim::Enemy>();
+  ImGui::Text("creatures: %d", enemies ? static_cast<int>(enemies->size()) : 0);
 
   const entt::entity player = world.player();
   const eng::Vec2 pos = world.registry().get<eng::sim::Transform>(player).position;
@@ -104,7 +107,8 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   // stamina bars above lengthen as the bigger pools take effect.
   if (const eng::sim::Attributes* attr = world.registry().try_get<eng::sim::Attributes>(player)) {
     ImGui::Text("endurance: %d", attr->endurance.level - 1);  // level 1 = 0 bonus
-    ImGui::Text("strength: %d", attr->strength.level - 1);    // from attacking; lengthens reach
+    ImGui::Text("strength: %d",
+                attr->strength.level - 1);  // from attacking; longer reach + harder hits
   }
   if (const eng::sim::CharacterLevel* cl =
           world.registry().try_get<eng::sim::CharacterLevel>(player)) {
@@ -135,11 +139,13 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "contact. Moving drains stamina; run it dry and you slow to a crawl until "
       "you rest. The green dots are NPCs: they now flee motes they sense, take the "
       "same contact damage you do, and when they die they're gone for good "
-      "(permadeath) — you respawn. Space: spawn a mote (watch nearby NPCs scatter). "
-      "H: take 15 damage. J: strike the nearest mote in reach — hitting back trains "
-      "Striking, which raises Strength and lengthens your reach. Your keypresses "
-      "become Commands; the NPCs fleeing, the motes, and the deaths are all systems "
-      "on the server.");
+      "(permadeath) — you respawn. The RED dots are creatures: they hunt you and hit "
+      "back, but have HP you can wear down. Space: spawn a mote. H: take 15 damage. "
+      "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
+      "creature takes several, fewer as your Strength climbs (it hits harder), while "
+      "your VIT softens its blows. Hitting back trains Striking → Strength. Your "
+      "keypresses become Commands; the fleeing, chasing, motes, and deaths are all "
+      "systems on the server.");
   ImGui::End();
 }
 

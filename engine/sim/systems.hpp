@@ -31,6 +31,11 @@ void snapshot_previous(entt::registry& reg);
 // turns the velocity it sets into actual movement this tick.
 void steer_npcs(entt::registry& reg);
 
+// Steer creatures: each Enemy sets its Velocity to home straight in on the player —
+// the hostile mirror of steer_npcs (which flees). Like steer_npcs, MUST run before
+// integrate_motion so the chosen velocity turns into movement this tick.
+void chase_player(entt::registry& reg);
+
 // Move every entity with a Transform and Velocity: position += velocity * dt.
 // This is Euler integration — the simplest way to turn a velocity into motion.
 void integrate_motion(entt::registry& reg, float dt);
@@ -57,6 +62,13 @@ void update_stamina(entt::registry& reg, float dt);
 // invalidates the view (a classic bug).
 void resolve_contacts(entt::registry& reg);
 
+// Resolve creature contact: an Enemy overlapping a player, once its attack cooldown
+// is up, deals a `attack_damage` blow softened by the player's VIT (ratio mitigation)
+// and trains the player's Toughness (via train_on_damage). Unlike a mote it is NOT
+// consumed — it keeps chasing and swinging on its cooldown. `dt` advances the
+// cooldown. A SYSTEM, not a command (collision is the sim's own rule).
+void resolve_creature_contacts(entt::registry& reg, float dt);
+
 // Train Toughness on a hit: surviving `damage` grows the victim's Toughness skill
 // and its main attribute Endurance (a VIT skill — you toughen by enduring hardship),
 // which advance_progression turns into a bigger HP pool. The single place damage
@@ -64,12 +76,16 @@ void resolve_contacts(entt::registry& reg);
 // it the same way just by calling this. A no-op for entities without Skills.
 void train_on_damage(entt::registry& reg, entt::entity victim, float damage);
 
-// Resolve one melee swing for `attacker`: find the nearest Hazard within reach
-// (reach grows with the attacker's Strength), train Striking -> Strength for a
-// connecting strike, and RETURN the struck hazard (or entt::null) for the caller to
-// destroy. It does NOT destroy — callers collect-then-destroy so no view is
-// invalidated mid-iteration. Shared by the player's Attack command and npc_attack,
-// so everyone fights identically. A no-op (returns null) without Transform+Attributes+Skills.
+// Resolve one melee swing for `attacker`: find the nearest attackable target (a
+// Hazard mote OR a hostile Enemy) within reach (reach grows with Strength), train
+// Striking -> Strength for a connecting strike, and act by target kind:
+//   - a MOTE is fragile: it's returned for the caller to destroy (instant kill).
+//   - an ENEMY takes STR-vs-VIT damage to its HP (base + Strength, softened by the
+//     enemy's VIT via ratio mitigation); it is NOT returned — it dies later through
+//     handle_deaths when HP hits 0, so it survives weak hits and takes several.
+// Returns the mote to destroy, or entt::null (missed, or hit an enemy that lived).
+// Callers collect-then-destroy so no view is invalidated mid-iteration. Shared by the
+// player's Attack command and npc_attack. A no-op without Transform+Attributes+Skills.
 entt::entity perform_attack(entt::registry& reg, entt::entity attacker);
 
 // NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),

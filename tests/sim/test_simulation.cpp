@@ -71,16 +71,20 @@ TEST_CASE("a diagonal input does not exceed the player's move speed", "[sim]") {
 }
 
 TEST_CASE("regenerate_vitals heals the health vital over time, capped at max", "[sim]") {
-  eng::sim::World world;  // the player spawns at 70/100 and heals 8/sec
-  const entt::entity player = world.player();
-  const float start = world.registry().get<eng::sim::Stats>(player).health.current;
+  // Tested on regenerate_vitals directly, not the full World: the live scene now has
+  // creatures that hunt and hurt the player, so "idle player heals to full" only
+  // holds for the regen system in isolation.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Stats>(e, eng::sim::Vital{70.0f, 100.0f, 8.0f});  // worn; heals 8/sec
 
-  // Ten seconds of ticks: +8/sec for 10s = +80, so 70 -> 150, clamped to 100.
-  for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) world.step();
+  // Ten seconds: +8/sec for 10s = +80, so 70 -> 150, clamped to 100.
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) eng::sim::regenerate_vitals(reg, dt);
 
-  const eng::sim::Vital& health = world.registry().get<eng::sim::Stats>(player).health;
-  REQUIRE(health.current > start);                // it healed
-  REQUIRE(health.current == Approx(health.max));  // and never overshot the cap
+  const eng::sim::Vital& health = reg.get<eng::sim::Stats>(e).health;
+  REQUIRE(health.current > 70.0f);                // it healed
+  REQUIRE(health.current == Approx(health.max));  // capped at 100, never overshot
 }
 
 TEST_CASE("moving drains the player's stamina", "[sim]") {
@@ -139,17 +143,24 @@ TEST_CASE("staying active trains conditioning, which raises endurance and max he
 }
 
 TEST_CASE("an idle character does not train conditioning", "[sim]") {
-  eng::sim::World world;
-  const entt::entity player = world.player();
+  // advance_progression on a lone idle entity (not the full World, where a creature
+  // would eventually reach the idle player and train Toughness on it via its blows).
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Skills>(e);
+  reg.emplace<eng::sim::Attributes>(e);
+  reg.emplace<eng::sim::Stats>(e);     // spawns full stamina — nothing to recover
+  reg.emplace<eng::sim::Velocity>(e);  // zero velocity — genuinely idle
+  reg.emplace<eng::sim::CharacterLevel>(e);
 
-  // Stand still (submit no movement) for several seconds.
-  for (int i = 0; i < 6 * eng::sim::kTicksPerSecond; ++i) world.step();
+  // Stand still for several seconds' worth of ticks.
+  for (int i = 0; i < 6 * eng::sim::kTicksPerSecond; ++i) eng::sim::advance_progression(reg);
 
-  const eng::sim::Skills& skills = world.registry().get<eng::sim::Skills>(player);
+  const eng::sim::Skills& skills = reg.get<eng::sim::Skills>(e);
   const eng::sim::Skill* cond = skills.find(eng::sim::SkillId::Conditioning);
-  REQUIRE(cond->level == 1);          // no activity, no training...
-  REQUIRE(cond->xp == eng::Fixed{});  // ...not even a sliver of XP
-  REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance.level == 1);  // bonus 0
+  REQUIRE(cond->level == 1);                                       // no activity, no training...
+  REQUIRE(cond->xp == eng::Fixed{});                               // ...not even a sliver of XP
+  REQUIRE(reg.get<eng::sim::Attributes>(e).endurance.level == 1);  // bonus 0
 }
 
 TEST_CASE("resting to recover spent stamina trains Recovery", "[sim]") {
@@ -467,4 +478,75 @@ TEST_CASE("player input reaches the world through the transport seam", "[sim]") 
 
   const float now_x = server.world().registry().get<eng::sim::Transform>(player).position.x;
   REQUIRE(now_x > start_x);
+}
+
+TEST_CASE("attacking a creature whittles its HP by Strength vs its VIT", "[sim]") {
+  entt::registry reg;
+  // A player-like attacker at the origin (Strength level 1 to start).
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  // A creature 20 units away (inside reach), 40 HP, some VIT for defence.
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe).endurance.level = 3;
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  // One swing at base Strength: chips HP but does NOT one-shot it (a real fight).
+  eng::sim::perform_attack(reg, atk);
+  const float hp_after_one = reg.get<eng::sim::Stats>(foe).health.current;
+  REQUIRE(hp_after_one < 40.0f);  // it took damage...
+  REQUIRE(hp_after_one > 0.0f);   // ...but survived — multi-hit, not instant like a mote
+  REQUIRE(reg.get<eng::sim::Skills>(atk).find(eng::sim::SkillId::Striking) != nullptr);
+  REQUIRE(reg.get<eng::sim::Attributes>(atk).strength.xp >
+          eng::Fixed{});  // the swing trained Strength
+
+  // A much stronger attacker hits far harder against the same VIT.
+  const float weak_hit = 40.0f - hp_after_one;
+  reg.get<eng::sim::Attributes>(atk).strength.level = 10;
+  const float before_strong = reg.get<eng::sim::Stats>(foe).health.current;
+  eng::sim::perform_attack(reg, atk);
+  const float strong_hit = before_strong - reg.get<eng::sim::Stats>(foe).health.current;
+  REQUIRE(strong_hit > weak_hit);  // Strength matters: the stronger swing deals more
+}
+
+TEST_CASE("a creature's blow is softened by the player's VIT", "[sim]") {
+  entt::registry reg;
+  // A player in contact with a creature, with some VIT (Endurance) for defence.
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Stats>(player);
+  reg.emplace<eng::sim::Skills>(player);
+  reg.emplace<eng::sim::Attributes>(player).endurance.level = 3;
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe);  // attack_damage 15, ready to swing
+
+  const float before = reg.get<eng::sim::Stats>(player).health.current;
+  eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f);
+  const float dealt = before - reg.get<eng::sim::Stats>(player).health.current;
+  REQUIRE(dealt > 0.0f);   // the creature landed a blow
+  REQUIRE(dealt < 15.0f);  // ...but VIT softened it below the raw 15
+}
+
+TEST_CASE("motes drift through creatures without hurting them", "[sim]") {
+  entt::registry reg;
+  // A creature and a mote sitting on the same spot (well within contact range).
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe);
+  const entt::entity mote = reg.create();
+  reg.emplace<eng::sim::Transform>(mote, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Hazard>(mote);
+
+  eng::sim::resolve_contacts(reg);
+
+  // A creature is fought with strikes (STR-vs-VIT), not chipped by ambient motes: it
+  // takes no damage, and the mote isn't consumed — it drifts on.
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == Approx(40.0f));
+  REQUIRE(reg.valid(mote));
 }
