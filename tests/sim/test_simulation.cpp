@@ -894,6 +894,51 @@ TEST_CASE("collecting loot trains Scavenging and Luck", "[sim]") {
   REQUIRE(!reg.valid(orb));                                                  // the orb was consumed
 }
 
+TEST_CASE("a strike trains Strength fully and Dexterity a little (skill contributions)", "[sim]") {
+  // P2 main+contributions: Striking's main is Strength (full share) with Dexterity as a
+  // contributor (a quarter). So a pure striker slowly picks up a little footwork.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});             // inside reach
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{1.0e6f, 1.0e6f, 0.0f});  // never dies
+  reg.emplace<eng::sim::Attributes>(foe);  // DEX 1 -> never dodges, so every strike lands
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  std::mt19937 rng{1234};
+  for (int i = 0; i < 8; ++i) eng::sim::perform_attack(reg, atk, rng);  // 10 XP each
+
+  const eng::sim::Attributes& a = reg.get<eng::sim::Attributes>(atk);
+  REQUIRE(a.strength.xp.to_double() == Approx(80.0));   // main: the full 8 * 10...
+  REQUIRE(a.dexterity.xp.to_double() == Approx(20.0));  // contributor: a quarter of it
+}
+
+TEST_CASE("a main-only skill feeds only its own attribute", "[sim]") {
+  // Guards the routing table: a skill with no contributors (Scavenging -> Luck) must leak
+  // XP to NOTHING else — a mis-mapped row would show up as a stray attribute gaining XP.
+  entt::registry reg;
+  const entt::entity p = reg.create();
+  reg.emplace<eng::sim::Transform>(p, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(p);
+  reg.emplace<eng::sim::Stats>(p);
+  reg.emplace<eng::sim::Skills>(p);
+  reg.emplace<eng::sim::Attributes>(p);
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Pickup>(orb);
+
+  eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+
+  const eng::sim::Attributes& a = reg.get<eng::sim::Attributes>(p);
+  REQUIRE(a.luck.xp.to_double() > 0.0);    // Scavenging fed its main, Luck...
+  REQUIRE(a.strength.xp == eng::Fixed{});  // ...and leaked to nothing else
+  REQUIRE(a.dexterity.xp == eng::Fixed{});
+  REQUIRE(a.endurance.xp == eng::Fixed{});
+}
+
 TEST_CASE("a creature's blow is softened by the player's VIT", "[sim]") {
   entt::registry reg;
   // A player in contact with a creature, with some VIT (Endurance) for defence.

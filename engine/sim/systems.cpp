@@ -305,6 +305,78 @@ void apply_levels(int& level, Fixed& xp) {
   }
 }
 
+// --- Skill -> attribute XP routing (the P2 "main + contributions" model) ---
+//
+// A skill grants XP to its MAIN attribute in full, and to each CONTRIBUTOR attribute a
+// small fraction — so "you are what you do" cross-pollinates: a striker slowly sharpens
+// (Strength a lot, a little Dexterity), not just strengthens. The mapping is DATA (a table
+// of plain structs), so the eventual JSON-modded skills and gear's "+skill/+aspect" bonuses
+// hang off this same seam without touching the grant sites.
+
+// Resolve an AttrId to the live attribute field. No `default:` on purpose: add an AttrId and
+// -Wswitch flags every switch that forgot a case, at compile time.
+Attribute& attr_ref(Attributes& a, AttrId id) {
+  switch (id) {
+    case AttrId::Endurance:
+      return a.endurance;
+    case AttrId::Strength:
+      return a.strength;
+    case AttrId::Dexterity:
+      return a.dexterity;
+    case AttrId::Luck:
+      return a.luck;
+  }
+  return a.endurance;  // unreachable (switch is exhaustive) — silences control-reaches-end
+}
+
+struct Contribution {
+  AttrId attr;
+  Fixed weight;  // fraction of the skill's XP this attribute earns (main earns the full 1.0)
+};
+struct SkillDef {
+  AttrId main;
+  std::vector<Contribution> contribs;  // usually empty; the seam trees/aspects grow from
+};
+
+// The table: which attribute(s) each skill feeds. Hardcoded first (design: "JSON at the
+// modding milestone"). Five skills are main-only — bit-identical to before this refactor.
+// Striking seeds the first contributor: landing blows mostly builds Strength, and a little
+// Dexterity ("a fighter learns footwork"). The 1/4 weight is a playtest knob.
+const SkillDef& skill_def(SkillId id) {
+  static const SkillDef kConditioning{AttrId::Endurance, {}};
+  static const SkillDef kToughness{AttrId::Endurance, {}};
+  static const SkillDef kStriking{AttrId::Strength, {{AttrId::Dexterity, Fixed::from_ratio(1, 4)}}};
+  static const SkillDef kRecovery{AttrId::Endurance, {}};
+  static const SkillDef kEvasion{AttrId::Dexterity, {}};
+  static const SkillDef kScavenging{AttrId::Luck, {}};
+  switch (id) {
+    case SkillId::Conditioning:
+      return kConditioning;
+    case SkillId::Toughness:
+      return kToughness;
+    case SkillId::Striking:
+      return kStriking;
+    case SkillId::Recovery:
+      return kRecovery;
+    case SkillId::Evasion:
+      return kEvasion;
+    case SkillId::Scavenging:
+      return kScavenging;
+  }
+  return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
+}
+
+// THE one funnel every skill-XP grant now flows through: train the skill, feed its main
+// attribute the full amount, and each contributor its fraction. Replaces six copy-pasted
+// "skill.xp += X; attr.xp += X" pairs. `base` for main is a plain add (never `* 1.0`), so the
+// main-only skills stay bit-for-bit as they were.
+void grant_skill_xp(Skills& skills, Attributes& attrs, SkillId id, Fixed base) {
+  const SkillDef& def = skill_def(id);
+  skills.train(id).xp += base;
+  attr_ref(attrs, def.main).xp += base;
+  for (const Contribution& c : def.contribs) attr_ref(attrs, c.attr).xp += base * c.weight;
+}
+
 }  // namespace
 
 void advance_progression(entt::registry& reg) {
@@ -328,25 +400,21 @@ void advance_progression(entt::registry& reg) {
   // silently never grows, no error. Keep the progression components together.
   auto view = reg.view<Skills, Attributes, Stats, Velocity, CharacterLevel>();
   for (const entt::entity e : view) {
-    Skill& conditioning = view.get<Skills>(e).train(SkillId::Conditioning);
     Attributes& attrs = view.get<Attributes>(e);
     Attribute& endurance = attrs.endurance;
     CharacterLevel& character = view.get<CharacterLevel>(e);
 
-    // 1. Activity earns XP for the SKILL and its MAIN attribute, plus a fraction to
-    //    the global Character Level. Conditioning's main attribute is Endurance, so
-    //    it takes the full share for now (skills with contributors will split it
-    //    later). Moving trains Conditioning; resting to recover *spent* stamina
-    //    trains Recovery instead — both feed Endurance. Idle at full stamina, or
-    //    with no spending to recover from, trains nothing.
+    // 1. Activity earns XP for the SKILL and its attribute(s) via grant_skill_xp, plus a
+    //    fraction to the global Character Level (kept here — the char-level share is tied to
+    //    activity, not to any one skill's main/contributor split). Moving trains
+    //    Conditioning; resting to recover *spent* stamina trains Recovery instead — both
+    //    feed Endurance. Idle at full stamina, or with no spending to recover from, trains
+    //    nothing.
     if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
-      conditioning.xp += kConditioningPerTick;
-      endurance.xp += kConditioningPerTick;
+      grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Conditioning, kConditioningPerTick);
       character.xp += kConditioningPerTick * kCharLevelShare;
     } else if (const Vital& stamina = view.get<Stats>(e).stamina; stamina.current < stamina.max) {
-      Skill& recovery = view.get<Skills>(e).train(SkillId::Recovery);
-      recovery.xp += kRecoveryPerTick;
-      endurance.xp += kRecoveryPerTick;
+      grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Recovery, kRecoveryPerTick);
       character.xp += kRecoveryPerTick * kCharLevelShare;
     }
 
@@ -394,8 +462,7 @@ void train_on_damage(entt::registry& reg, entt::entity victim, float damage) {
   // main attribute is Endurance, so (like Conditioning) it feeds the whole share.
   const float bounded = damage < 1.0e6f ? damage : 1.0e6f;
   const Fixed gained = Fixed::from_int(static_cast<std::int32_t>(bounded));
-  skills->train(SkillId::Toughness).xp += gained;
-  attrs->endurance.xp += gained;
+  grant_skill_xp(*skills, *attrs, SkillId::Toughness, gained);
   // ponytail: the Character Level is fed by movement only for now; routing every
   // damage source into "fraction of all activity" waits until combat gives more
   // sources to balance against. advance_progression levels Toughness next tick.
@@ -493,9 +560,9 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   }
   if (target == entt::null) return entt::null;  // a whiff — nothing in reach, no XP
 
-  // A connecting strike trains Striking -> Strength, whatever it hits.
-  skills->train(SkillId::Striking).xp += kStrikingPerHit;
-  attrs->strength.xp += kStrikingPerHit;
+  // A connecting strike trains Striking -> Strength (a lot) + Dexterity (a little), whatever
+  // it hits: swinging a weapon mostly builds power, and a touch of the reflex behind it.
+  grant_skill_xp(*skills, *attrs, SkillId::Striking, kStrikingPerHit);
 
   // A mote is fragile: hand it back for the caller to destroy outright.
   if (!target_is_enemy) return target;
@@ -699,8 +766,7 @@ void collect_pickups(entt::registry& reg, float dt) {
       Attributes* a = reg.try_get<Attributes>(p);
       if (sk != nullptr && a != nullptr) {
         const Fixed kScavengingPerGrab = Fixed::from_int(10);  // XP per orb (ponytail: a knob)
-        sk->train(SkillId::Scavenging).xp += kScavengingPerGrab;
-        a->luck.xp += kScavengingPerGrab;
+        grant_skill_xp(*sk, *a, SkillId::Scavenging, kScavengingPerGrab);
       }
       taken.push_back(item);
       break;  // consumed by the first collector
@@ -776,8 +842,7 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // faced grows the Dexterity that lets you start.
       Attributes* attrs = reg.try_get<Attributes>(p);
       if (Skills* sk = reg.try_get<Skills>(p); sk != nullptr && attrs != nullptr) {
-        sk->train(SkillId::Evasion).xp += kEvasionPerSwing;
-        attrs->dexterity.xp += kEvasionPerSwing;
+        grant_skill_xp(*sk, *attrs, SkillId::Evasion, kEvasionPerSwing);
       }
 
       // Dodge? A DEX-driven roll. Only draw when there's a real chance (DEX 1 = 0), so

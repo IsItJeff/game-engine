@@ -10,7 +10,8 @@ Six strands are wired end to end so far, across four attributes:
   and **resting to recover** spent stamina trains **Recovery** — all three raise
   **Endurance**, which grows your **max health and stamina** *and* speeds how fast
   stamina comes back;
-- **attacking** trains **Striking**, which raises **Strength**, which lengthens your
+- **attacking** trains **Striking**, which mainly raises **Strength** (plus a little
+  **Dexterity** — footwork), and Strength lengthens your
   **attack reach** *and* your **attack damage** — against the hostile **creatures** (red
   dots with HP that hunt you), a higher Strength kills faster, while your Endurance
   (VIT) softens the blows they land. Damage is `Strength`-vs-`VIT` ratio mitigation;
@@ -51,12 +52,15 @@ flowchart LR
   keep --> stat
 ```
 
-1. **Activity earns XP for the skill *and* its main attribute** — moving trains
-   the `conditioning` **skill** and, because Endurance is its main attribute, feeds
-   **`endurance`** its own XP too. (A skill with several contributing attributes
-   would split the share — the main a lot, the rest a little; conditioning has just
-   the one, so it takes the whole share.) A **quarter-share** of the same activity
-   also feeds the global **`CharacterLevel`**. Standing still trains nothing.
+1. **Activity earns XP for the skill *and* the attribute(s) it feeds** — every grant now
+   flows through one funnel, `grant_skill_xp`, which reads a data-driven **`SkillDef`**
+   table: it trains the skill, gives its **main** attribute the full share, and gives each
+   **contributor** attribute a fraction. Moving trains `conditioning` → **`endurance`** (its
+   main, no contributors). **Attacking** trains `striking` → **`strength`** (main) **and a
+   quarter to `dexterity`** (contributor) — so a pure striker slowly picks up a little
+   footwork, the design's "you are what you do" cross-training. A **quarter-share** of
+   movement/rest activity also feeds the global **`CharacterLevel`** (kept separate from the
+   skill→attribute split). Standing still trains nothing.
 2. **A full bar levels it up** — the same `while`-loop carry works on the skill,
    the attribute, and the character level; each has its own `{level, Fixed xp}` and
    climbs independently. (XP is a `Fixed` so 20/sec accrues cleanly as ~0.33 per
@@ -118,7 +122,8 @@ attribute → stat — is what stays as it widens into a full character sheet.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck), `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`).
+- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`).
+- `engine/sim/systems.cpp` (anon namespace) — the `SkillDef` table, `attr_ref`, and `grant_skill_xp` (the one funnel every skill→attribute XP grant flows through: main + contributors).
 - `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression` (movement→Conditioning / resting→Recovery), `update_stamina` (Endurance speeds recovery), `train_on_damage` (the damage → Toughness feeder), `perform_attack` (the shared swing resolver) and `npc_attack` (NPCs fight too).
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
 - `game/app/main.cpp` — the endurance/strength/character-level readout and the skill XP bars; the `J` = attack key.
