@@ -58,9 +58,10 @@ flowchart LR
    **contributor** attribute a fraction. Moving trains `conditioning` → **`endurance`** (its
    main, no contributors). **Attacking** trains `striking` → **`strength`** (main) **and a
    quarter to `dexterity`** (contributor) — so a pure striker slowly picks up a little
-   footwork, the design's "you are what you do" cross-training. A **quarter-share** of
-   movement/rest activity also feeds the global **`CharacterLevel`** (kept separate from the
-   skill→attribute split). Standing still trains nothing.
+   footwork, the design's "you are what you do" cross-training. Through that same funnel a
+   **quarter-share** of *every* grant also feeds the global **`CharacterLevel`** — so **all**
+   activity grows the veteran layer (moving, resting, striking, enduring blows, looting), not
+   just walking. Standing still trains nothing.
 2. **A full bar levels it up** — the same `while`-loop carry works on the skill,
    the attribute, and the character level; each has its own `{level, Fixed xp}` and
    climbs independently. (XP is a `Fixed` so 20/sec accrues cleanly as ~0.33 per
@@ -79,9 +80,11 @@ flowchart LR
     activities feed skills from their own sites: **taking damage** feeds **Toughness**
     → Endurance (`train_on_damage`, wherever damage lands), and **attacking** feeds
     **Striking** → Strength (`perform_attack`, via the player's `Attack` command or the
-    `npc_attack` system). Step 2's loop then levels *every* owned skill — plus both
-    attributes — so those climb here too without `advance_progression` knowing where the
-    XP came from. Many sources, one place they turn into levels: how the full model layers up.
+    `npc_attack` system). Every one of those grants also drips a quarter into the
+    **character level** (the funnel does it), so combat and looting build the veteran layer
+    too — not just movement. Step 2's loop then levels *every* owned skill — plus both
+    attributes and the character level — so those climb here too without `advance_progression`
+    knowing where the XP came from. Many sources, one place they turn into levels.
 
 Because the view targets `Skills + Attributes + Stats + Velocity + CharacterLevel`,
 it lands on the player and the NPCs and skips the motes — one system, everyone who

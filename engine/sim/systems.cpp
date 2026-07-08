@@ -403,15 +403,29 @@ const SkillDef& skill_def(SkillId id) {
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
 
-// THE one funnel every skill-XP grant now flows through: train the skill, feed its main
-// attribute the full amount, and each contributor its fraction. Replaces six copy-pasted
-// "skill.xp += X; attr.xp += X" pairs. `base` for main is a plain add (never `* 1.0`), so the
-// main-only skills stay bit-for-bit as they were.
-void grant_skill_xp(Skills& skills, Attributes& attrs, SkillId id, Fixed base) {
+// The Character Level earns a fixed FRACTION of every activity's base XP — a quarter — so
+// it climbs slower than the skill it comes from and stays the gentle "veteran" layer, not a
+// second fast track. A balance knob, not a law (design: tune at playtest). It rides the
+// funnel below, so EVERY activity that grants skill XP now feeds it — movement and resting
+// as before, and now every combat/loot source too (Toughness, Striking, Evasion,
+// Scavenging) — which is what the design's "a fraction of ALL activity" always meant.
+// (Fixed::from_ratio isn't constexpr, hence a file-scope const, not constexpr.)
+const Fixed kCharLevelShare = Fixed::from_ratio(1, 4);
+
+// THE one funnel every skill-XP grant flows through: train the skill, feed its main
+// attribute the full amount, each contributor its fraction, and — when the entity carries a
+// CharacterLevel — a fraction of the base to that global veteran layer. Replaces six
+// copy-pasted "skill.xp += X; attr.xp += X" pairs, and centralises the char-level feed so it
+// can never drift per-site again. `character` is nullable: a grant on an entity without one
+// simply skips the char feed (harmless). `base` for main is a plain add (never `* 1.0`), so
+// the main-only skills stay bit-for-bit as they were.
+void grant_skill_xp(Skills& skills, Attributes& attrs, SkillId id, Fixed base,
+                    CharacterLevel* character = nullptr) {
   const SkillDef& def = skill_def(id);
   skills.train(id).xp += base;
   attr_ref(attrs, def.main).xp += base;
   for (const Contribution& c : def.contribs) attr_ref(attrs, c.attr).xp += base * c.weight;
+  if (character != nullptr) character->xp += base * kCharLevelShare;
 }
 
 }  // namespace
@@ -423,11 +437,6 @@ void advance_progression(entt::registry& reg) {
   // per-second rate is a constant per-tick Fixed amount — deterministic, no float
   // in the loop (20 XP/sec ÷ 60 ticks).
   const Fixed kConditioningPerTick = Fixed::from_ratio(20, 60);
-  // The Character Level earns a FRACTION of the same activity — a quarter here — so
-  // it climbs slower than the skill it comes from and stays the gentle "veteran"
-  // layer, not a second fast track. A balance knob, not a law (design: tune at
-  // playtest).
-  const Fixed kCharLevelShare = Fixed::from_ratio(1, 4);
   // Resting to recover spent stamina trains Recovery a touch slower than moving
   // trains Conditioning (15 XP/sec vs 20) — resting is easier than exerting.
   const Fixed kRecoveryPerTick = Fixed::from_ratio(15, 60);
@@ -441,18 +450,17 @@ void advance_progression(entt::registry& reg) {
     Attribute& endurance = attrs.endurance;
     CharacterLevel& character = view.get<CharacterLevel>(e);
 
-    // 1. Activity earns XP for the SKILL and its attribute(s) via grant_skill_xp, plus a
-    //    fraction to the global Character Level (kept here — the char-level share is tied to
-    //    activity, not to any one skill's main/contributor split). Moving trains
-    //    Conditioning; resting to recover *spent* stamina trains Recovery instead — both
-    //    feed Endurance. Idle at full stamina, or with no spending to recover from, trains
-    //    nothing.
+    // 1. Activity earns XP for the SKILL and its attribute(s), plus a fraction to the
+    //    global Character Level — all through grant_skill_xp (pass &character and it feeds
+    //    the veteran layer in lockstep). Moving trains Conditioning; resting to recover
+    //    *spent* stamina trains Recovery instead — both feed Endurance. Idle at full stamina,
+    //    or with no spending to recover from, trains nothing. (Combat/loot sources feed the
+    //    character level the same way, from their own grant sites.)
     if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
-      grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Conditioning, kConditioningPerTick);
-      character.xp += kConditioningPerTick * kCharLevelShare;
+      grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Conditioning, kConditioningPerTick,
+                     &character);
     } else if (const Vital& stamina = view.get<Stats>(e).stamina; stamina.current < stamina.max) {
-      grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Recovery, kRecoveryPerTick);
-      character.xp += kRecoveryPerTick * kCharLevelShare;
+      grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Recovery, kRecoveryPerTick, &character);
     }
 
     // 2. Turn full XP bars into levels — EVERY trained skill, both attributes, and
@@ -499,10 +507,10 @@ void train_on_damage(entt::registry& reg, entt::entity victim, float damage) {
   // main attribute is Endurance, so (like Conditioning) it feeds the whole share.
   const float bounded = damage < 1.0e6f ? damage : 1.0e6f;
   const Fixed gained = Fixed::from_int(static_cast<std::int32_t>(bounded));
-  grant_skill_xp(*skills, *attrs, SkillId::Toughness, gained);
-  // ponytail: the Character Level is fed by movement only for now; routing every
-  // damage source into "fraction of all activity" waits until combat gives more
-  // sources to balance against. advance_progression levels Toughness next tick.
+  // Enduring a blow is activity too, so it feeds the Character Level like any other grant
+  // (pass the victim's CharacterLevel through the funnel). advance_progression levels the
+  // trained Toughness — and the character XP fed here — next tick.
+  grant_skill_xp(*skills, *attrs, SkillId::Toughness, gained, reg.try_get<CharacterLevel>(victim));
 }
 
 namespace {
@@ -616,7 +624,8 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
 
   // A connecting strike trains Striking -> Strength (a lot) + Dexterity (a little), whatever
   // it hits: swinging a weapon mostly builds power, and a touch of the reflex behind it.
-  grant_skill_xp(*skills, *attrs, SkillId::Striking, kStrikingPerHit);
+  grant_skill_xp(*skills, *attrs, SkillId::Striking, kStrikingPerHit,
+                 reg.try_get<CharacterLevel>(attacker));
 
   // A mote is fragile: hand it back for the caller to destroy outright.
   if (!target_is_enemy) return target;
@@ -884,7 +893,8 @@ void collect_pickups(entt::registry& reg, float dt) {
       Attributes* a = reg.try_get<Attributes>(p);
       if (sk != nullptr && a != nullptr) {
         const Fixed kScavengingPerGrab = Fixed::from_int(10);  // XP per orb (ponytail: a knob)
-        grant_skill_xp(*sk, *a, SkillId::Scavenging, kScavengingPerGrab);
+        grant_skill_xp(*sk, *a, SkillId::Scavenging, kScavengingPerGrab,
+                       reg.try_get<CharacterLevel>(p));
       }
       taken.push_back(item);
       break;  // consumed by the first collector
@@ -961,7 +971,8 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // faced grows the Dexterity that lets you start.
       Attributes* attrs = reg.try_get<Attributes>(p);
       if (Skills* sk = reg.try_get<Skills>(p); sk != nullptr && attrs != nullptr) {
-        grant_skill_xp(*sk, *attrs, SkillId::Evasion, kEvasionPerSwing);
+        grant_skill_xp(*sk, *attrs, SkillId::Evasion, kEvasionPerSwing,
+                       reg.try_get<CharacterLevel>(p));
       }
 
       // Dodge? A DEX-driven roll. Only draw when there's a real chance (DEX 1 = 0), so
