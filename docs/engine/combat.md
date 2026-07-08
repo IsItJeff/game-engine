@@ -71,6 +71,21 @@ dealt = max( raw² / (raw + def),  0.1 × raw )
     gives `raw²/raw = raw` (full damage). This is the master plan's mitigation formula
     in miniature; the same shape will carry magical (INT-vs-WIS) damage later.
 
+### Lucky strikes — crits (Luck)
+
+On top of the STR-vs-VIT damage, a strike may **crit** for a burst of extra damage — the
+offensive-fortune counterpart to a dodge. After the hit lands, `perform_attack` rolls
+`crit_chance(attacker LCK)` — the *same* shape as `dodge_chance`, `min((LCK − 1)·0.03,
+0.50)` — and on a crit **doubles** the blow. Level 1 is 0% (no head start, and the
+`chance > 0` guard means an untrained attacker never even draws), capped at 50%.
+
+**Luck grows by looting.** The fourth attribute, **LCK**, is fed by a **Scavenging** skill
+that trains every time you `collect_pickups` an orb. So the health orbs you already grab
+stop being pure sustain and become an *offensive build*: **grab orbs → Scavenging → Luck →
+more crits → faster kills → more orbs.** It's the first stat you grow with your feet rather
+than your fists. (Creatures never collect loot, so their LCK stays 1 — they never crit,
+just as they never train.)
+
 ### The enemy — a creature that fights back
 
 An `Enemy` is a real fight, not a throwaway mote. Two archetypes (from `make_creature`)
@@ -143,10 +158,11 @@ brute, rolled from the seeded RNG. Deterministic.
 ### Winning pays — loot
 
 A slain creature drops a **`Pickup`** (a cyan health orb) where it fell. Walk over it
-(`collect_pickups`) to restore health *and* permanently raise your max HP a little — so
-winning both sustains you now and hardens you for good, and *skill* keeps you alive,
-not just respawning. An uncollected orb **fades after 20 s** so drops from far-off kills
-don't pile up.
+(`collect_pickups`) to restore health, permanently raise your max HP a little, **and train
+Scavenging → Luck** (see [crits](#lucky-strikes-crits-luck)) — so winning sustains you now,
+hardens you for good, *and* makes you deadlier, and *skill* keeps you alive, not just
+respawning. An uncollected orb **fades after 20 s** so drops from far-off kills don't pile
+up.
 
 ### Dying — `handle_deaths`
 
@@ -181,10 +197,10 @@ hits simply whiff, dodged outright.
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy`, `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` helpers.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due`, and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` command (`J`).
-- `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, creature spawn/cap, loot drop + collect + fade.
+- `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, LCK crits + Scavenging training, creature spawn/cap, loot drop + collect + fade.
 
 ## Go deeper
 

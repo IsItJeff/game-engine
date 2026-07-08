@@ -175,6 +175,7 @@ enum class SkillId : std::uint16_t {
   Striking,      // trained by attacking; main attribute Strength
   Recovery,      // trained by resting to recover spent stamina; main attribute Endurance
   Evasion,       // trained by facing a creature's swing; main attribute Dexterity (dodging)
+  Scavenging,    // trained by collecting loot; main attribute Luck (fortune -> crit)
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
@@ -216,6 +217,7 @@ struct Attributes {
   Attribute endurance;  // fed by Conditioning + Toughness; each level past 1 grows the pools
   Attribute strength;   // fed by Striking; each level past 1 lengthens attack reach + damage
   Attribute dexterity;  // fed by Evasion; each level past 1 raises the chance to dodge a blow
+  Attribute luck;       // fed by Scavenging; each level past 1 raises the chance to crit a strike
 };
 
 // A single global "how experienced overall" level, fed by a fraction of ALL

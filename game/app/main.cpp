@@ -130,6 +130,7 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     show_skill("striking", eng::sim::SkillId::Striking);
     show_skill("recovery", eng::sim::SkillId::Recovery);
     show_skill("evasion", eng::sim::SkillId::Evasion);  // appears once a creature has swung at you
+    show_skill("scavenging", eng::sim::SkillId::Scavenging);  // appears once you've grabbed an orb
   }
 
   ImGui::Checkbox("pause simulation", &paused);
@@ -152,8 +153,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "slippery and dodge some of YOUR strikes too. Hitting back trains Striking → Strength "
       "(even a whiff a swarmer dodges). A "
       "slain "
-      "creature drops a cyan health orb — walk over it to heal AND raise your max HP a "
-      "little, so kills sustain and grow you. Your keypresses become Commands; the "
+      "creature drops a cyan health orb — walk over it to heal, raise your max HP a "
+      "little, AND train Scavenging → Luck, which earns you critical hits (a doubled blow) "
+      "on future strikes. So grabbing loot is an offensive build, not just a heal. Your "
+      "keypresses become Commands; the "
       "fleeing, chasing, motes, loot, and deaths are all systems on the server.");
   ImGui::End();
 }

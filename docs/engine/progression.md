@@ -4,7 +4,7 @@
 
 Characters grow by *doing*. A **skill** improves with the activity that trains it,
 skills roll up into broad **attributes**, and attributes shape what you feel in play.
-Four strands are wired end to end so far, across two attributes:
+Six strands are wired end to end so far, across four attributes:
 
 - staying active trains **Conditioning**, **surviving damage** trains **Toughness**,
   and **resting to recover** spent stamina trains **Recovery** — all three raise
@@ -13,7 +13,12 @@ Four strands are wired end to end so far, across two attributes:
 - **attacking** trains **Striking**, which raises **Strength**, which lengthens your
   **attack reach** *and* your **attack damage** — against the hostile **creatures** (red
   dots with HP that hunt you), a higher Strength kills faster, while your Endurance
-  (VIT) softens the blows they land. Damage is `Strength`-vs-`VIT` ratio mitigation.
+  (VIT) softens the blows they land. Damage is `Strength`-vs-`VIT` ratio mitigation;
+- **facing a creature's swing** trains **Evasion**, which raises **Dexterity**, your
+  chance to **dodge** a blow entirely (and creatures dodge yours — see
+  [combat](combat.md#slipping-the-blow-evasion-dexterity));
+- **collecting loot** trains **Scavenging**, which raises **Luck**, your chance to land a
+  **critical hit** for doubled damage (see [combat](combat.md#lucky-strikes-crits-luck)).
 
 The player and NPCs run the identical machinery — progression *and* combat — so a
 long-lived NPC that has moved, been hurt, and fought grows genuinely tougher and
@@ -113,7 +118,7 @@ attribute → stat — is what stays as it widens into a full character sheet.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance + Strength), `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`).
+- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck), `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`).
 - `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression` (movement→Conditioning / resting→Recovery), `update_stamina` (Endurance speeds recovery), `train_on_damage` (the damage → Toughness feeder), `perform_attack` (the shared swing resolver) and `npc_attack` (NPCs fight too).
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
 - `game/app/main.cpp` — the endurance/strength/character-level readout and the skill XP bars; the `J` = attack key.

@@ -545,6 +545,56 @@ TEST_CASE("a slippery high-Dexterity creature dodges some of your strikes", "[si
   REQUIRE(hits > 0);    // ...but couldn't dodge them all
 }
 
+TEST_CASE("a lucky attacker crits for extra damage", "[sim]") {
+  // Two identical attackers vs identical unkillable dummies over the same seeded stream:
+  // one has high Luck (crits), one has none. Neither levels Strength here (no
+  // advance_progression), so the base hit is the same 12 every swing — the lucky one only
+  // differs by landing some 2x crits, so it deals strictly more damage overall.
+  const auto total_damage = [](int luck_level) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).luck.level = luck_level;
+    reg.emplace<eng::sim::Skills>(atk);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});             // inside reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{1.0e6f, 1.0e6f, 0.0f});  // never dies
+    reg.emplace<eng::sim::Attributes>(foe);  // DEX 1 -> never dodges, so every strike lands
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};
+    const float before = reg.get<eng::sim::Stats>(foe).health.current;
+    for (int i = 0; i < 40; ++i) eng::sim::perform_attack(reg, atk, rng);
+    return before - reg.get<eng::sim::Stats>(foe).health.current;
+  };
+  REQUIRE(total_damage(18) > total_damage(1));  // Luck crits -> strictly more damage dealt
+  // ...and an untrained attacker (LCK 1) never crits — its total is the flat base (40 * 12).
+  REQUIRE(total_damage(1) == Approx(40.0f * 12.0f));
+}
+
+TEST_CASE("collecting loot trains Scavenging and Luck", "[sim]") {
+  // The build loop: grabbing an orb trains Scavenging -> Luck, which (via perform_attack)
+  // is what earns crits. Foraging the field is itself an offensive investment.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Stats>(player);
+  reg.emplace<eng::sim::Skills>(player);
+  reg.emplace<eng::sim::Attributes>(player);
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{0.0f, 0.0f});  // right on the player
+  reg.emplace<eng::sim::Pickup>(orb);
+
+  eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+
+  const eng::sim::Skill* scav =
+      reg.get<eng::sim::Skills>(player).find(eng::sim::SkillId::Scavenging);
+  REQUIRE(scav != nullptr);
+  REQUIRE(scav->xp.to_double() > 0.0);                                       // Scavenging trained
+  REQUIRE(reg.get<eng::sim::Attributes>(player).luck.xp.to_double() > 0.0);  // ...and its Luck
+  REQUIRE(!reg.valid(orb));                                                  // the orb was consumed
+}
+
 TEST_CASE("a creature's blow is softened by the player's VIT", "[sim]") {
   entt::registry reg;
   // A player in contact with a creature, with some VIT (Endurance) for defence.
