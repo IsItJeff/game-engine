@@ -183,8 +183,8 @@ void World::step() {
   // Collision runs after movement (positions are current), then death is checked
   // from any damage it dealt, then survivors regenerate. This order is the
   // definition of the tick — collision before death before heal.
-  resolve_contacts(registry_);               // motes shatter on contact
-  resolve_creature_contacts(registry_, dt);  // creatures swing on their cooldown
+  resolve_contacts(registry_);                     // motes shatter on contact
+  resolve_creature_contacts(registry_, dt, rng_);  // creatures swing; player may dodge (DEX)
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f});
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
   regenerate_vitals(registry_, dt);

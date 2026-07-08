@@ -15,7 +15,8 @@ The moving parts, in one place:
 | **`perform_attack`** | resolves one swing — find nearest target in reach, deal damage, train Striking |
 | **`Enemy` creature** | HP + VIT + a swing cooldown; chases and hits the player |
 | **`chase_player`** | steers creatures toward the player (the hostile mirror of `steer_npcs`) |
-| **`resolve_creature_contacts`** | a creature's contact blow, softened by your VIT |
+| **`resolve_creature_contacts`** | a creature's contact blow, softened by your VIT — or dodged by your DEX |
+| **`dodge_chance`** | a DEX-driven roll to slip a blow entirely (trains Evasion) |
 | **the spawner** | keeps creatures coming, so the fight never runs dry |
 | **`Pickup`** | a health orb a slain creature drops — loot that keeps you fighting |
 | **`handle_deaths`** | permadeath for creatures/NPCs, respawn for the player |
@@ -93,6 +94,30 @@ give waves texture:
     reach gets struck — free *allied* behaviour (opportunistic, not active hunting).
     NPCs fight creatures; creatures only hunt the player.
 
+### Slipping the blow — Evasion (Dexterity)
+
+VIT softens a hit; **DEX skips it entirely.** Before a creature's blow lands,
+`resolve_creature_contacts` rolls a dodge from the player's third attribute,
+**Dexterity**: `dodge = min((DEX − 1) · 0.03, 0.50)`. Two deliberate ends:
+
+- **Level 1 = 0%** — no head start, exactly like every other stat. Usefully, a world
+  where nobody has trained DEX never *draws* from the RNG, so the seeded stream stays
+  identical to before evasion existed until someone actually earns Dexterity.
+- **Capped at 50%** — the defensive mirror of `mitigate`'s 10 % chip floor: evasion
+  softens the *incoming* stream forever but never guarantees a miss. A stream of hits
+  always gets through.
+
+**How DEX grows — the bootstrap.** Dodging is chicken-and-egg (you can't dodge until
+you have DEX, and DEX comes from dodging), so *facing* a swing trains **Evasion →
+Dexterity** whether or not it lands — the mirror of Toughness training on the hit you
+take. Read enough attacks and you start slipping them. The roll is a seeded draw, so a
+replay dodges the same blows every time.
+
+!!!note "Defensive only, for now"
+    Only the player dodges creature blows today; creatures don't yet evade your strikes
+    (that needs the same roll in `perform_attack`). A sensible next slice — the machinery
+    (`dodge_chance`, DEX) is already here.
+
 ### Keeping the fight alive — the spawner
 
 Killing everything used to leave the world quiet. `spawn_creature_if_due` (end of
@@ -134,15 +159,16 @@ Run the demo: red creatures close in from the edges, you press `J` to fight (wat
 weak Strength take several hits, a grown one fewer), your health bar dips under their
 blows but you steady it by grabbing the orbs they drop, and the NPCs chip in. Keep
 moving — you outrun every creature (your 320 vs a brute's 70, a swarmer's 130), so a
-swarm is survivable by kiting.
+swarm is survivable by kiting. Stand and trade blows and you'll slowly train
+**Dexterity** — after a while some hits simply whiff, dodged outright.
 
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy`, `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_player`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate`/`defence_of` helpers.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_player`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` helpers.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due`, and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` command (`J`).
-- `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, creature spawn/cap, loot drop + collect + fade.
+- `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge + Evasion training, creature spawn/cap, loot drop + collect + fade.
 
 ## Go deeper
 

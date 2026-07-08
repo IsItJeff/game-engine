@@ -1,5 +1,7 @@
 #pragma once
 
+#include <random>
+
 #include <entt/entity/registry.hpp>
 
 #include "engine/core/math.hpp"
@@ -66,8 +68,10 @@ void resolve_contacts(entt::registry& reg);
 // is up, deals a `attack_damage` blow softened by the player's VIT (ratio mitigation)
 // and trains the player's Toughness (via train_on_damage). Unlike a mote it is NOT
 // consumed — it keeps chasing and swinging on its cooldown. `dt` advances the
-// cooldown. A SYSTEM, not a command (collision is the sim's own rule).
-void resolve_creature_contacts(entt::registry& reg, float dt);
+// cooldown. The player may DODGE a swing (a DEX-driven roll off `rng`), taking no
+// damage; facing a swing at all trains Evasion -> Dexterity, hit or miss. A SYSTEM,
+// not a command (collision is the sim's own rule).
+void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng);
 
 // Train Toughness on a hit: surviving `damage` grows the victim's Toughness skill
 // and its main attribute Endurance (a VIT skill — you toughen by enduring hardship),

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <random>
 #include <vector>
 
 #include "engine/sim/components.hpp"
@@ -227,6 +228,7 @@ void advance_progression(entt::registry& reg) {
     for (auto& entry : view.get<Skills>(e).owned) apply_levels(entry.second.level, entry.second.xp);
     apply_levels(endurance.level, endurance.xp);
     apply_levels(attrs.strength.level, attrs.strength.xp);
+    apply_levels(attrs.dexterity.level, attrs.dexterity.xp);  // fed by Evasion at the dodge site
     apply_levels(character.level, character.xp);
 
     // 3. Attributes shape derived stats: each Endurance level past the first adds to
@@ -285,6 +287,21 @@ float defence_of(const entt::registry& reg, entt::entity e) {
   constexpr float kDefencePerVit = 3.0f;  // each Endurance level past 1 adds this much
   const Attributes* a = reg.try_get<Attributes>(e);
   return a != nullptr ? static_cast<float>(a->endurance.level - 1) * kDefencePerVit : 0.0f;
+}
+
+// Chance in [0, kCap] that a blow is dodged entirely, from the victim's DEX. Level 1
+// is 0 — no head start, exactly like every other stat, and (usefully) it means an
+// untrained world never rolls, so the RNG stream stays identical to before evasion
+// existed until someone actually earns Dexterity. Hard-capped so evasion — the
+// defensive mirror of mitigate's 10% chip floor — softens the incoming stream forever
+// but never guarantees a miss.
+// ponytail: linear ramp + flat cap are tuning knobs; swap in a POWER-curve shape if
+// dodge should diminish like the rest, but linear-to-a-cap plays fine and reads clearly.
+float dodge_chance(int dexterity_level) {
+  constexpr float kPerLevel = 0.03f;  // +3% dodge per Dexterity level past the first
+  constexpr float kCap = 0.50f;       // never dodge more than half — a stream of hits still lands
+  const float chance = static_cast<float>(dexterity_level - 1) * kPerLevel;
+  return chance < kCap ? chance : kCap;
 }
 
 }  // namespace
@@ -491,9 +508,11 @@ void resolve_contacts(entt::registry& reg) {
   for (const entt::entity e : consumed) reg.destroy(e);  // safe: iteration is done
 }
 
-void resolve_creature_contacts(entt::registry& reg, float dt) {
+void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng) {
   constexpr float kContactDistance = 15.0f;
-  constexpr float kAttackInterval = 0.8f;  // seconds between a creature's swings
+  constexpr float kAttackInterval = 0.8f;              // seconds between a creature's swings
+  const Fixed kEvasionPerSwing = Fixed::from_int(10);  // XP for facing a swing, dodged or not
+  std::uniform_real_distribution<float> unit(0.0f, 1.0f);
 
   // Creatures hunt the PLAYER (chase_player homes on them), so that's who they hit.
   // This runs before handle_deaths, so a creature you kill this tick can still land a
@@ -508,12 +527,28 @@ void resolve_creature_contacts(entt::registry& reg, float dt) {
     for (const entt::entity p : players) {
       if (glm::distance(players.get<Transform>(p).position, c_pos) >= kContactDistance) continue;
       if (enemy.attack_timer > 0.0f) continue;  // in reach but mid-cooldown — no blow yet
+      enemy.attack_timer = kAttackInterval;     // a committed swing — cooldown resets either way
+
+      // Facing a swing trains Evasion -> Dexterity whether or not it lands: reading
+      // attacks is how you learn to slip them (the mirror of Toughness training on the
+      // hit). This is also the bootstrap — at DEX 1 you can't dodge yet, but every blow
+      // faced grows the Dexterity that lets you start.
+      Attributes* attrs = reg.try_get<Attributes>(p);
+      if (Skills* sk = reg.try_get<Skills>(p); sk != nullptr && attrs != nullptr) {
+        sk->train(SkillId::Evasion).xp += kEvasionPerSwing;
+        attrs->dexterity.xp += kEvasionPerSwing;
+      }
+
+      // Dodge? A DEX-driven roll. Only draw when there's a real chance (DEX 1 = 0), so
+      // an untrained world never perturbs the shared RNG stream — same sequence as before.
+      const float chance = dodge_chance(attrs != nullptr ? attrs->dexterity.level : 1);
+      if (chance > 0.0f && unit(rng) < chance) continue;  // slipped it — no damage taken
+
       const float applied = mitigate(enemy.attack_damage, defence_of(reg, p));
       Vital& health = players.get<Stats>(p).health;
       health.current -= applied;
       if (health.current < 0.0f) health.current = 0.0f;
-      train_on_damage(reg, p, applied);      // enduring a creature's blow toughens the player
-      enemy.attack_timer = kAttackInterval;  // swung — reset the cooldown
+      train_on_damage(reg, p, applied);  // enduring a creature's blow toughens the player
     }
   }
 }
