@@ -198,15 +198,18 @@ computed on equip, not per tick), and the item is consumed. `perform_attack` rea
 But **every item carries a bane** — the design's *"nothing rolls pure-upside"* pillar: the
 weapon's `move_penalty` cuts your move speed (`MovePlayer` applies it, stacking with the
 exhaustion crawl). Since kiting is how you survive a swarm, wielding the heavy sword is a
-real choice — killing power vs. the speed you escape with. The buff is read in the *shared*
-`perform_attack`, so an NPC that ever equips gets the same deal (parity-ready).
+real choice — killing power vs. the speed you escape with. And it's not player-only: the
+buff is read in the *shared* `perform_attack`, and **NPCs arm themselves too** — an unarmed
+colonist steers to a dropped weapon ([`steer_npcs`](npc-behaviour.md)) and wields it
+(`npc_equip`), hitting harder but moving slower, exactly as you do (the bane bites both).
+So the player and NPCs now *race* for a fallen brute's blade.
 
 !!! note "The minimal first slice of P5"
     One implicit slot (a new weapon overwrites the old; the swapped-out one just vanishes),
     one hardcoded weapon def, `+Attribute` + one bane. The rest of the design's Equipment —
     multi-slot `Equipment`, `Item{def, quality, durability, traits[]}`, the `+skill/+aspect`
-    bonuses (which ride the [SkillDef](progression.md) seam), wear/repair, NPCs seeking gear
-    — layers on top without reworking this plumbing.
+    bonuses (which ride the [SkillDef](progression.md) seam), and wear/repair — layer on top
+    without reworking this plumbing. (NPC gear-seeking, once listed here, now ships.)
 
 ### Dying — `handle_deaths` (Downed, then rescue or respawn)
 
