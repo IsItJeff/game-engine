@@ -64,6 +64,21 @@ void resolve_contacts(entt::registry& reg);
 // it the same way just by calling this. A no-op for entities without Skills.
 void train_on_damage(entt::registry& reg, entt::entity victim, float damage);
 
+// Resolve one melee swing for `attacker`: find the nearest Hazard within reach
+// (reach grows with the attacker's Strength), train Striking -> Strength for a
+// connecting strike, and RETURN the struck hazard (or entt::null) for the caller to
+// destroy. It does NOT destroy — callers collect-then-destroy so no view is
+// invalidated mid-iteration. Shared by the player's Attack command and npc_attack,
+// so everyone fights identically. A no-op (returns null) without Transform+Attributes+Skills.
+entt::entity perform_attack(entt::registry& reg, entt::entity attacker);
+
+// NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),
+// training Striking -> Strength just as the player does — so NPCs build Strength too,
+// not only Endurance. Complements steer_npcs (flee): a threat that closes to reach
+// gets struck rather than merely dodged. MUST run after integrate_motion (positions
+// current) and before resolve_contacts (so a struck mote can't also land its hit).
+void npc_attack(entt::registry& reg);
+
 // Advance progression, the whole "learn by doing" chain in one pass over every
 // entity with Skills + Attributes + Stats + Velocity + CharacterLevel: activity
 // earns XP for the skill it trains, that skill's main attribute, AND a fraction to

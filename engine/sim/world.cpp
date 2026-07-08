@@ -101,6 +101,7 @@ void World::step() {
   const float dt = static_cast<float>(kSecondsPerTick);
   steer_npcs(registry_);  // NPCs decide where to go (may set their velocity)
   integrate_motion(registry_, dt);
+  npc_attack(registry_);           // NPCs strike any hazard now in reach (positions are current)
   update_stamina(registry_, dt);   // moving costs stamina; resting restores it
   advance_progression(registry_);  // activity -> skill+attribute XP -> level -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
@@ -165,50 +166,19 @@ void World::apply_command(const Command& cmd) {
       break;
     }
     case CommandKind::Attack: {
-      // Server-side melee: the attacker swings at the single nearest hazard within
-      // reach and destroys it — "hitting back" without taking the contact hit.
-      // Reach grows with Strength, and a connecting strike trains Striking (whose
-      // main attribute is Strength), so the attribute and the reach it buys climb
-      // together. Reads the attacker's OWN position, so a command can't strike from
-      // somewhere else — the same anti-cheat the whole funnel exists for.
-      constexpr float kBaseReach = 45.0f;                 // a little past contact range (15)
-      constexpr float kReachPerStrength = 6.0f;           // each Strength level past 1 adds reach
-      const Fixed kStrikingPerHit = Fixed::from_int(10);  // XP for a strike that connects
-
-      std::vector<entt::entity>
-          struck;  // collect, then destroy (never mid-view — see resolve_contacts)
+      // The player's swing runs the shared perform_attack resolver (systems.cpp) —
+      // the exact one NPCs use — so a player and an NPC hit identically. The view
+      // requires the attacker to be player-controlled AND carry the progression pair,
+      // and we match by player id so a command can't swing for someone else (the same
+      // anti-cheat the funnel exists for). Collect-then-destroy with a valid() guard,
+      // in case a future co-op setup gives one PlayerId several attacking units.
+      std::vector<entt::entity> struck;
       auto attackers = registry_.view<PlayerControlled, Transform, Attributes, Skills>();
       for (const entt::entity a : attackers) {
         if (attackers.get<PlayerControlled>(a).player != cmd.player) continue;
-        const Vec2 origin = attackers.get<Transform>(a).position;
-        Attributes& attrs = attackers.get<Attributes>(a);
-        const float reach =
-            kBaseReach + static_cast<float>(attrs.strength.level - 1) * kReachPerStrength;
-
-        // Find the nearest hazard within reach.
-        entt::entity target = entt::null;
-        float nearest = reach;
-        auto hazards = registry_.view<Hazard, Transform>();
-        for (const entt::entity h : hazards) {
-          const float d = glm::distance(origin, hazards.get<Transform>(h).position);
-          if (d < nearest) {
-            nearest = d;
-            target = h;
-          }
-        }
-
-        // A connecting strike destroys the target and trains Striking -> Strength.
-        if (target != entt::null) {
-          struck.push_back(target);
-          attackers.get<Skills>(a).train(SkillId::Striking).xp += kStrikingPerHit;
-          attrs.strength.xp += kStrikingPerHit;
-        }
+        const entt::entity t = perform_attack(registry_, a);
+        if (t != entt::null) struck.push_back(t);
       }
-      // Guard the destroy with valid(): today one entity owns each PlayerId so a
-      // target appears at most once, but this is written as a multi-attacker loop
-      // (the co-op "several units share a PlayerId" case the MovePlayer comment
-      // anticipates), where two attackers could pick the same nearest mote — a
-      // double destroy() is UB. Skipping an already-dead handle keeps that safe.
       for (const entt::entity t : struck) {
         if (registry_.valid(t)) registry_.destroy(t);
       }

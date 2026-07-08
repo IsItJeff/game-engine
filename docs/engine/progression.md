@@ -11,10 +11,12 @@ Three strands are wired end to end so far, across two attributes:
 - **attacking** trains **Striking**, which raises **Strength**, which lengthens your
   **attack reach**.
 
-The player and NPCs run the identical progression machinery, so a long-lived NPC
-that has moved and been hurt gets genuinely tougher — no special-casing. (Attacking
-is player-only for now: NPCs flee and take damage but don't yet swing, so they build
-Endurance but not Strength. Giving them combat AI is a later step.)
+The player and NPCs run the identical machinery — progression *and* combat — so a
+long-lived NPC that has moved, been hurt, and fought grows genuinely tougher and
+stronger, no special-casing. The only difference is *how the swing is triggered*: the
+player attacks on command (`J`), while NPCs attack through the `npc_attack` system
+(strike the nearest threat in reach). Both run the same `perform_attack` resolver, so
+both build Strength the same way.
 
 ## Why it matters
 
@@ -61,9 +63,10 @@ flowchart LR
 !!! note "XP comes from many places; leveling happens in one"
     Step 1 grants only the *movement* XP. Other activities feed skills from their own
     sites: **taking damage** feeds **Toughness** → Endurance (`train_on_damage`, wherever
-    damage lands), and **attacking** feeds **Striking** → Strength (the `Attack`
-    command). Step 2's loop then levels *every* owned skill — plus both attributes —
-    so those climb here too without `advance_progression` knowing where the XP came
+    damage lands), and **attacking** feeds **Striking** → Strength (`perform_attack`, via
+    the player's `Attack` command or the `npc_attack` system). Step 2's loop then levels
+    *every* owned skill — plus both attributes — so those climb here too without
+    `advance_progression` knowing where the XP came
     from. Many sources, one place they turn into levels: how the full model layers up.
 
 Because the view targets `Skills + Attributes + Stats + Velocity + CharacterLevel`,
@@ -106,7 +109,7 @@ attribute → stat — is what stays as it widens into a full character sheet.
 ## Key files
 
 - `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance + Strength), `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`).
-- `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression`, `train_on_damage` (the damage → Toughness feeder).
+- `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression`, `train_on_damage` (the damage → Toughness feeder), `perform_attack` (the shared swing resolver) and `npc_attack` (NPCs fight too).
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
 - `game/app/main.cpp` — the endurance/strength/character-level readout and the skill XP bars; the `J` = attack key.
 - `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength.
