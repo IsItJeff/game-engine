@@ -763,10 +763,16 @@ void spawn_pickup(entt::registry& reg, Vec2 pos) {
   reg.emplace<Pickup>(e);
 }
 
-// Drop a Weapon at `pos` — what a slain BRUTE leaves instead of a health orb, so the harder
-// kill pays out gear rather than sustain. A steel-grey diamond-ish dot; press E near it to
-// wield it. ponytail: no lifetime — a dropped weapon persists (brutes are the rarer kill, so
-// they don't pile up); add a fade like Pickup's if the field ever litters.
+}  // namespace
+
+// Spawn a Weapon on the ground at `pos` — the ONE canonical dropped-weapon entity (a
+// steel-grey dot + Weapon), so a slain BRUTE's drop (handle_deaths) and a player's Drop
+// command produce an identical, re-wieldable pickup. Public so both callers share this one
+// definition of what a grounded weapon looks like (no drift). It spawns the DEFAULT Weapon;
+// that is lossless today because the only Equipped mods come from this same default — when
+// more than one Weapon def exists, Drop must pass the wielder's cached mods instead.
+// ponytail: no lifetime — a dropped weapon persists (brutes are the rarer kill, so they don't
+// pile up); add a fade like Pickup's if the field ever litters.
 void spawn_weapon(entt::registry& reg, Vec2 pos) {
   const entt::entity e = reg.create();
   reg.emplace<Transform>(e, pos);
@@ -774,8 +780,6 @@ void spawn_weapon(entt::registry& reg, Vec2 pos) {
   reg.emplace<RenderDot>(e, Vec3{0.75f, 0.78f, 0.85f}, 6.0f);  // steel grey, a touch bigger
   reg.emplace<Weapon>(e);
 }
-
-}  // namespace
 
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // A zero-health entity meets one of two fates, and which one is the game's core rule

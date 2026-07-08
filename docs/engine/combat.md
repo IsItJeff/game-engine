@@ -19,7 +19,7 @@ The moving parts, in one place:
 | **`dodge_chance`** | a DEX-driven roll to slip a blow entirely (trains Evasion) |
 | **the spawners** | `spawn_creature_if_due` keeps creatures coming; `spawn_npc_if_due` refills the colony |
 | **`Pickup`** | a health orb a slain swarmer drops — loot that keeps you fighting |
-| **`Weapon` / `Equipped`** | a brute's dropped weapon; wield it (E) for +Strength at a speed cost |
+| **`Weapon` / `Equipped`** | a brute's dropped weapon; wield (E) / drop (Q) for +Strength at a speed cost |
 | **`handle_deaths`** | permadeath for creatures/NPCs, respawn for the player |
 
 ## Why it matters
@@ -204,6 +204,14 @@ colonist steers to a dropped weapon ([`steer_npcs`](npc-behaviour.md)) and wield
 (`npc_equip`), hitting harder but moving slower, exactly as you do (the bane bites both).
 So the player and NPCs now *race* for a fallen brute's blade.
 
+And the choice is **reversible**: press **`Q`** to **drop** what you're wielding (the `Drop`
+command, the inverse of `Equip`). It reconstructs the weapon on the ground where you stand —
+via the same `spawn_weapon` a brute uses, so a dropped blade is indistinguishable from a
+looted one — and removes your `Equipped`, so you reclaim full speed instantly. Wield to trade
+blows, ditch to sprint clear of a swarm, then circle back and re-grab it (or let a colonist
+beat you to it). Equip↔Drop is a closed loop: the heft bane is a decision you can un-make, not
+a trap you're stuck in. A downed or bare-handed player can't drop (nothing to shed).
+
 !!! note "The minimal first slice of P5"
     One implicit slot (a new weapon overwrites the old; the swapped-out one just vanishes),
     one hardcoded weapon def, `+Attribute` + one bane. The rest of the design's Equipment —
@@ -298,7 +306,7 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 - `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash).
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
-- `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`) and `Equip` (`E`) commands.
+- `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).
 - `engine/sim/components.hpp` — `Weapon` (dropped gear) and `Equipped` (the wielded mods cache).
 - `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, LCK crits + Scavenging training, creature spawn/cap, loot drop + collect + fade, weapon drop/wield/reach/damage/heft.
 

@@ -1398,6 +1398,72 @@ TEST_CASE("the Equip command wields the nearest weapon in reach", "[sim]") {
   REQUIRE_FALSE(world.registry().valid(w));                                       // ...and consumed
 }
 
+TEST_CASE("the Drop command sheds your wielded weapon at your feet", "[sim]") {
+  // The inverse of Equip: ditch the blade to reclaim your full move speed. Wield first, then
+  // drop — the Equipped bane is gone, a weapon lies where you stood, and you move free again.
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  const eng::Vec2 ppos = world.registry().get<eng::sim::Transform>(player).position;
+  const entt::entity w = world.registry().create();
+  world.registry().emplace<eng::sim::Transform>(w, ppos);  // a weapon right on the player
+  world.registry().emplace<eng::sim::Weapon>(w);           // default {+4 STR, -25% speed}
+  world.submit(eng::sim::equip(eng::sim::kLocalPlayer));
+  world.step();
+  REQUIRE(world.registry().all_of<eng::sim::Equipped>(player));  // armed and slowed
+
+  world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
+  world.step();
+
+  REQUIRE_FALSE(world.registry().all_of<eng::sim::Equipped>(player));  // heft shed
+  // Exactly one Weapon now lies on the ground, where the player stood, with its mods intact.
+  int weapons = 0;
+  entt::entity dropped = entt::null;
+  for (const entt::entity e : world.registry().view<eng::sim::Weapon>()) {
+    ++weapons;
+    dropped = e;
+  }
+  REQUIRE(weapons == 1);
+  REQUIRE(world.registry().get<eng::sim::Weapon>(dropped).strength_bonus == 4);  // faithful mods
+  REQUIRE(world.registry().get<eng::sim::Transform>(dropped).position.x ==
+          Approx(ppos.x));  // at feet
+  REQUIRE(world.registry().get<eng::sim::Transform>(dropped).position.y == Approx(ppos.y));
+
+  // Unburdened, a move now reaches the full base speed (320), not the wielded 240 (320 x 0.75).
+  world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}));
+  world.step();
+  REQUIRE(world.registry().get<eng::sim::Velocity>(player).value.x == Approx(320.0f));
+
+  // ...and the dropped blade is re-wieldable — put it under the player and Equip returns the heft.
+  world.registry().get<eng::sim::Transform>(dropped).position =
+      world.registry().get<eng::sim::Transform>(player).position;
+  world.submit(eng::sim::equip(eng::sim::kLocalPlayer));
+  world.step();
+  REQUIRE(world.registry().all_of<eng::sim::Equipped>(player));  // wielded again — a closed loop
+}
+
+TEST_CASE("a bare-handed Drop does nothing", "[sim]") {
+  // Drop with no weapon wielded is a harmless no-op — no phantom weapon appears.
+  eng::sim::World world;
+  world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
+  world.step();
+  REQUIRE(world.registry().view<eng::sim::Weapon>().size() == 0);  // nothing spawned
+  REQUIRE_FALSE(world.registry().all_of<eng::sim::Equipped>(world.player()));
+}
+
+TEST_CASE("a downed player cannot drop its weapon", "[sim]") {
+  // A helpless (Downed) player can't act — Drop is skipped, exactly like Equip and MovePlayer.
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  world.registry().emplace<eng::sim::Equipped>(player, eng::sim::Equipped{4, 0.25f});
+  world.registry().emplace<eng::sim::Downed>(player);
+
+  world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
+  world.step();
+
+  REQUIRE(world.registry().all_of<eng::sim::Equipped>(player));  // still wielding — couldn't drop
+  REQUIRE(world.registry().view<eng::sim::Weapon>().size() == 0);  // nothing hit the ground
+}
+
 TEST_CASE("a player collects a pickup: heals and grows max HP", "[sim]") {
   entt::registry reg;
   const entt::entity p = reg.create();
