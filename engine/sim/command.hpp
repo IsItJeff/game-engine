@@ -34,6 +34,7 @@ enum class CommandKind {
   SpawnMote,     // create a new drifting entity
   DamagePlayer,  // subtract from a player's health
   Attack,        // strike the nearest hazard within reach
+  Equip,         // wield the nearest dropped Weapon within reach
 };
 
 struct Command {
@@ -66,6 +67,11 @@ inline Command damage_player(PlayerId player, float amount) {
 // in reach), so the intent carries only who is swinging.
 inline Command attack(PlayerId player) {
   return Command{CommandKind::Attack, player, {}, {}, 0.0f};
+}
+// Equip: like Attack, the target (the nearest dropped weapon in reach) is computed
+// server-side, so the intent carries only who is reaching for one.
+inline Command equip(PlayerId player) {
+  return Command{CommandKind::Equip, player, {}, {}, 0.0f};
 }
 
 }  // namespace eng::sim

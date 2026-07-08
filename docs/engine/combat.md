@@ -18,7 +18,8 @@ The moving parts, in one place:
 | **`resolve_creature_contacts`** | a creature's contact blow, softened by your VIT — or dodged by your DEX |
 | **`dodge_chance`** | a DEX-driven roll to slip a blow entirely (trains Evasion) |
 | **the spawners** | `spawn_creature_if_due` keeps creatures coming; `spawn_npc_if_due` refills the colony |
-| **`Pickup`** | a health orb a slain creature drops — loot that keeps you fighting |
+| **`Pickup`** | a health orb a slain swarmer drops — loot that keeps you fighting |
+| **`Weapon` / `Equipped`** | a brute's dropped weapon; wield it (E) for +Strength at a speed cost |
 | **`handle_deaths`** | permadeath for creatures/NPCs, respawn for the player |
 
 ## Why it matters
@@ -171,14 +172,41 @@ creature timer, so the world stays net-hostile — reinforcements, not safety.
     cap *does* change the creature sequence; the point is the spawner's placement/timing rolls
     don't.) Determinism holds regardless: a given seed always replays bit-identically.
 
-### Winning pays — loot
+### Winning pays — loot (and the two archetypes drop differently)
 
-A slain creature drops a **`Pickup`** (a cyan health orb) where it fell. Walk over it
+A slain **swarmer** drops a **`Pickup`** (a cyan health orb) where it fell. Walk over it
 (`collect_pickups`) to restore health, permanently raise your max HP a little, **and train
 Scavenging → Luck** (see [crits](#lucky-strikes-crits-luck)) — so winning sustains you now,
 hardens you for good, *and* makes you deadlier, and *skill* keeps you alive, not just
 respawning. An uncollected orb **fades after 20 s** so drops from far-off kills don't pile
 up.
+
+A slain **brute** drops a **`Weapon`** instead (a steel-grey dot) — the harder kill pays out
+*gear*, not sustain. Which enemy you choose to kill is now a loot decision. The split is
+keyed on the archetype (`Enemy::drops_weapon`, set in `make_brute`), so it's deterministic —
+no roll on the seeded stream.
+
+### Gear — the first weapon (equip, with a bane)
+
+Press **`E`** near a dropped weapon to **wield** it (the `Equip` command → `apply_command`).
+Its bonuses fold once into a cached **`Equipped`** component on you (the design's *EquipMods*,
+computed on equip, not per tick), and the item is consumed. `perform_attack` reads an
+**effective Strength** = your trained level **+** the weapon's `strength_bonus`, feeding
+*both* reach and damage — so a blade reaches further and hits harder. Bare-handed (no
+`Equipped`) that's just your level, so nothing changes for anyone unarmed.
+
+But **every item carries a bane** — the design's *"nothing rolls pure-upside"* pillar: the
+weapon's `move_penalty` cuts your move speed (`MovePlayer` applies it, stacking with the
+exhaustion crawl). Since kiting is how you survive a swarm, wielding the heavy sword is a
+real choice — killing power vs. the speed you escape with. The buff is read in the *shared*
+`perform_attack`, so an NPC that ever equips gets the same deal (parity-ready).
+
+!!! note "The minimal first slice of P5"
+    One implicit slot (a new weapon overwrites the old; the swapped-out one just vanishes),
+    one hardcoded weapon def, `+Attribute` + one bane. The rest of the design's Equipment —
+    multi-slot `Equipment`, `Item{def, quality, durability, traits[]}`, the `+skill/+aspect`
+    bonuses (which ride the [SkillDef](progression.md) seam), wear/repair, NPCs seeking gear
+    — layers on top without reworking this plumbing.
 
 ### Dying — `handle_deaths` (Downed, then rescue or respawn)
 
@@ -228,15 +256,18 @@ steady it by grabbing the orbs they drop — though a hungry NPC may beat you to
 colonists now forage for food when they're not fleeing. The NPCs chip in. Keep moving — you outrun
 every creature (your 320 vs a brute's 70, a swarmer's 130), so a swarm is survivable by
 kiting. Stand and trade blows and you'll slowly train **Dexterity** — after a while some
-hits simply whiff, dodged outright.
+hits simply whiff, dodged outright. Kill a **brute** and it drops a steel-grey **weapon**:
+press `E` to wield it for a longer, harder swing — but you'll feel the weight slow you, so
+weigh the extra reach against the speed a swarm makes you want.
 
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy`, `Pickup`; `Hazard`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
-- `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` command (`J`).
-- `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, LCK crits + Scavenging training, creature spawn/cap, loot drop + collect + fade.
+- `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`) and `Equip` (`E`) commands.
+- `engine/sim/components.hpp` — `Weapon` (dropped gear) and `Equipped` (the wielded mods cache).
+- `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, LCK crits + Scavenging training, creature spawn/cap, loot drop + collect + fade, weapon drop/wield/reach/damage/heft.
 
 ## Go deeper
 

@@ -108,6 +108,7 @@ struct Enemy {
   float attack_damage = 15.0f;
   float attack_timer = 0.0f;  // seconds until it can swing again; 0 = ready
   float chase_speed = 70.0f;  // how fast it closes on its prey (chase_prey)
+  bool drops_weapon = false;  // on death: true drops a Weapon (brutes), false a health orb
 };
 
 // A collectible a slain creature leaves behind: walk over it (collect_pickups) to
@@ -120,6 +121,27 @@ struct Pickup {
   float heal = 25.0f;
   float bonus_max_hp = 2.0f;  // permanent max-HP gain on collect (a small loot reward)
   float lifetime = 20.0f;     // seconds before an uncollected orb fades away
+};
+
+// A weapon lying on the ground, waiting to be WIELDED (the Equip command). The equip-
+// counterpart of Pickup: not consumed for a one-off effect but WORN — its bonuses fold
+// into an Equipped cache on the wearer until swapped. The first item that changes HOW you
+// fight, and the first with a BANE: the design's non-negotiable "every item has a positive
+// AND a negative trait, nothing rolls pure-upside" — here a heavier swing hits harder but
+// slows you. The seed of the full P5 Equipment system (Item{def,quality,durability,traits},
+// multi-slot Equipment); one hardcoded def for now (design: "defs hardcoded first").
+struct Weapon {
+  int strength_bonus = 4;      // + effective Strength while wielded (longer reach + harder hits)
+  float move_penalty = 0.25f;  // the BANE: fraction of move speed lost while wielding (heft)
+};
+
+// The cached bonuses of whatever a character is currently wielding — the design's EquipMods,
+// folded ONCE on equip (not recomputed per tick). Absent = bare-handed. One implicit slot
+// for now: equipping a new weapon overwrites this (ponytail: the swapped-out weapon just
+// vanishes; re-drop it when a real inventory/multi-slot Equipment lands).
+struct Equipped {
+  int strength_bonus = 0;
+  float move_penalty = 0.0f;
 };
 
 // --- Stats system ---
