@@ -56,18 +56,36 @@ entt::entity make_creature(entt::registry& reg, Vec2 pos) {
   return e;
 }
 
-// Keep the fight alive: once the spawn timer runs out, add a creature at a random
-// spot (if we're under the cap) and reset it. Deterministic — the timer is a fixed
-// per-tick countdown and the position comes from the seeded rng, so every run spawns
-// the same reinforcements at the same ticks.
+// Keep the fight alive: once the spawn timer runs out, add a creature at a field edge
+// (if we're under the cap) and reset it. Deterministic — the timer is a fixed per-tick
+// countdown and the position comes from the seeded rng, so every run spawns the same
+// reinforcements at the same ticks (single-platform, like the rest of the sim's rng).
 void spawn_creature_if_due(entt::registry& reg, float& timer, std::mt19937& rng, float dt) {
   timer -= dt;
   if (timer > 0.0f) return;
   timer = kCreatureSpawnInterval;
   if (static_cast<int>(reg.storage<Enemy>().size()) >= kMaxCreatures) return;
-  std::uniform_real_distribution<float> fx(0.0f, kFieldWidth);
-  std::uniform_real_distribution<float> fy(0.0f, kFieldHeight);
-  make_creature(reg, Vec2{fx(rng), fy(rng)});
+  // Spawn on a random field edge, so creatures arrive from outside and close in —
+  // never right on top of the player (which would be a free, unavoidable first hit),
+  // and the threat builds gradually as they cross the field rather than all at once.
+  std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+  const float along = unit(rng);
+  Vec2 pos{};
+  switch (static_cast<int>(unit(rng) * 4.0f)) {  // unit is [0,1) so this is 0..3
+    case 0:
+      pos = {along * kFieldWidth, 0.0f};
+      break;  // top
+    case 1:
+      pos = {along * kFieldWidth, kFieldHeight};
+      break;  // bottom
+    case 2:
+      pos = {0.0f, along * kFieldHeight};
+      break;  // left
+    default:
+      pos = {kFieldWidth, along * kFieldHeight};
+      break;  // right
+  }
+  make_creature(reg, pos);
 }
 
 // Build the opening scene: a controllable player in the centre, a few wandering
