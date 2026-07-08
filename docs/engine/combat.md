@@ -69,11 +69,18 @@ dealt = max( raw² / (raw + def),  0.1 × raw )
 
 ### The enemy — a creature that fights back
 
-An `Enemy` is a real fight, not a throwaway mote:
+An `Enemy` is a real fight, not a throwaway mote. Two archetypes (from `make_creature`)
+give waves texture:
+
+| Kind | HP | Chase speed | Hit | Feel |
+|---|---|---|---|---|
+| **Brute** (red) | 40 | 70 | 15 | slow, tanky, hits hard — wear it down, kite it |
+| **Swarmer** (orange) | 15 | 130 | 8 | fast, fragile (~one strike), weak — but corners you in numbers |
 
 - **HP** (a `Stats` component) that strikes whittle down; **no regen**, so you can wear
   it down. **VIT** (an `Attributes` component) softens the blows it takes.
-- **`chase_player`** homes its velocity on the player each tick.
+- **`chase_player`** homes its velocity on the player each tick, at the creature's own
+  `chase_speed` — so a swarmer runs you down while a brute lumbers.
 - **`resolve_creature_contacts`** — on a cooldown (~0.8 s), a creature in contact deals
   its `attack_damage`, *softened by your VIT* (same `mitigate`), and trains your
   Toughness (via `train_on_damage`). Unlike a mote it is **not consumed** — it keeps
@@ -91,7 +98,8 @@ An `Enemy` is a real fight, not a throwaway mote:
 Killing everything used to leave the world quiet. `spawn_creature_if_due` (end of
 `step()`) tops the population up on a timer — every `kCreatureSpawnInterval` (6 s), if
 under `kMaxCreatures` (5), it spawns a creature at a random **field edge** (so it
-arrives from outside, never on top of you). Deterministic, from the seeded RNG.
+arrives from outside, never on top of you) — mostly swarmers with the occasional
+brute, rolled from the seeded RNG. Deterministic.
 
 ### Winning pays — loot
 
@@ -125,13 +133,14 @@ current); death is checked *after* damage; loot is dropped by death, then collec
 Run the demo: red creatures close in from the edges, you press `J` to fight (watch a
 weak Strength take several hits, a grown one fewer), your health bar dips under their
 blows but you steady it by grabbing the orbs they drop, and the NPCs chip in. Keep
-moving — you outrun a creature (320 vs 70), so a swarm is survivable by kiting.
+moving — you outrun every creature (your 320 vs a brute's 70, a swarmer's 130), so a
+swarm is survivable by kiting.
 
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy`, `Pickup`; `Hazard`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_player`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate`/`defence_of` helpers.
-- `engine/sim/world.cpp` — `make_creature`, `spawn_creature_if_due`, and the system order in `step()`.
+- `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due`, and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` command (`J`).
 - `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, creature spawn/cap, loot drop + collect + fade.
 

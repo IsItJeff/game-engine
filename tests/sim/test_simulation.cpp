@@ -616,3 +616,53 @@ TEST_CASE("an uncollected pickup fades after its lifetime", "[sim]") {
   REQUIRE(!reg.valid(item));  // it faded
   REQUIRE(reg.storage<eng::sim::Pickup>().size() == 0);
 }
+
+TEST_CASE("creatures chase at their own speed (brute vs swarmer)", "[sim]") {
+  entt::registry reg;
+  const entt::entity p = reg.create();
+  reg.emplace<eng::sim::Transform>(p, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(p);
+  // Two creatures the same distance out, with different chase speeds.
+  const entt::entity slow = reg.create();
+  reg.emplace<eng::sim::Transform>(slow, eng::Vec2{100.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(slow);
+  reg.emplace<eng::sim::Enemy>(slow).chase_speed = 70.0f;
+  const entt::entity fast = reg.create();
+  reg.emplace<eng::sim::Transform>(fast, eng::Vec2{100.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(fast);
+  reg.emplace<eng::sim::Enemy>(fast).chase_speed = 140.0f;
+
+  eng::sim::chase_player(reg);
+
+  // Each homes in at its own chase_speed — the swarmer closes twice as fast.
+  REQUIRE(glm::length(reg.get<eng::sim::Velocity>(slow).value) == Approx(70.0f));
+  REQUIRE(glm::length(reg.get<eng::sim::Velocity>(fast).value) == Approx(140.0f));
+}
+
+TEST_CASE("the two archetypes spawn with their own numbers (brute vs swarmer)", "[sim]") {
+  // make_brute/make_swarmer are file-local, but a fresh World seeds exactly one of
+  // each. Pin their HP/speed/damage here: make_creature takes three adjacent float
+  // params (hp, chase_speed, attack_damage) that a future archetype could transpose
+  // silently — this is the guard that would catch it.
+  eng::sim::World world;
+  entt::registry& reg = world.registry();
+
+  bool saw_brute = false;
+  bool saw_swarmer = false;
+  for (const entt::entity e : reg.view<eng::sim::Enemy>()) {
+    const float hp = reg.get<eng::sim::Stats>(e).health.max;
+    const eng::sim::Enemy& en = reg.get<eng::sim::Enemy>(e);
+    if (hp == Approx(40.0f)) {  // brute: tanky, slow, hits hard
+      saw_brute = true;
+      REQUIRE(en.chase_speed == Approx(70.0f));
+      REQUIRE(en.attack_damage == Approx(15.0f));
+    } else {  // swarmer: fragile, fast, weak
+      saw_swarmer = true;
+      REQUIRE(hp == Approx(15.0f));
+      REQUIRE(en.chase_speed == Approx(130.0f));
+      REQUIRE(en.attack_damage == Approx(8.0f));
+    }
+  }
+  REQUIRE(saw_brute);
+  REQUIRE(saw_swarmer);
+}

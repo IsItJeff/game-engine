@@ -92,10 +92,12 @@ struct Hazard {
 // consumed. Dies for good through the same handle_deaths permadeath path as an NPC.
 // `attack_damage` is its contact hit, before the victim's VIT defence mitigates it.
 // It swings on a cooldown (`attack_timer` counts down), so touching one is a series
-// of discrete blows, not a per-tick grind.
+// of discrete blows, not a per-tick grind. `chase_speed` is per-creature so archetypes
+// can differ — a slow tanky brute vs a fast fragile swarmer (see make_creature).
 struct Enemy {
   float attack_damage = 15.0f;
   float attack_timer = 0.0f;  // seconds until it can swing again; 0 = ready
+  float chase_speed = 70.0f;  // how fast it closes on the player (chase_player)
 };
 
 // A collectible a slain creature leaves behind: walk over it (collect_pickups) to

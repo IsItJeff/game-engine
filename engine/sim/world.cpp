@@ -39,21 +39,34 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel) {
   return e;
 }
 
-// Create one hostile creature: a real fight, not a throwaway mote. It has HP (Stats)
-// that attacks whittle down over several hits, VIT (Attributes) that softens the blows
-// it takes, and the Enemy marker (so chase_player hunts the player, resolve_creature_
-// contacts hurts them, and handle_deaths reaps it at 0 HP). Deep red so it reads as a
-// threat. No regen — you can wear it down; no Skills/CharacterLevel — it doesn't grow.
-entt::entity make_creature(entt::registry& reg, Vec2 pos) {
+// Create one hostile creature from an archetype's numbers: HP (Stats) that attacks
+// whittle down, VIT (Attributes) that softens blows, and the Enemy marker (so
+// chase_player hunts, resolve_creature_contacts hurts, handle_deaths reaps at 0 HP).
+// No regen — you can wear it down; no Skills/CharacterLevel — it doesn't grow.
+entt::entity make_creature(entt::registry& reg, Vec2 pos, float hp, float chase_speed,
+                           float attack_damage, int defence_level, Vec3 color, float radius) {
   const entt::entity e = reg.create();
   reg.emplace<Transform>(e, pos);
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<Velocity>(e);
-  reg.emplace<RenderDot>(e, Vec3{0.85f, 0.2f, 0.2f}, 9.0f);  // deep red
-  reg.emplace<Stats>(e, Vital{40.0f, 40.0f, 0.0f});          // 40 HP, no regen
-  reg.emplace<Attributes>(e).endurance.level = 3;  // some VIT: softens attacks (STR-vs-VIT)
-  reg.emplace<Enemy>(e);
+  reg.emplace<RenderDot>(e, color, radius);
+  reg.emplace<Stats>(e, Vital{hp, hp, 0.0f});
+  reg.emplace<Attributes>(e).endurance.level = defence_level;
+  Enemy& enemy = reg.emplace<Enemy>(e);
+  enemy.attack_damage = attack_damage;
+  enemy.chase_speed = chase_speed;
   return e;
+}
+
+// The two archetypes. A BRUTE lumbers in: tough (40 HP), well-armoured, hits hard —
+// wear it down and kite it. A SWARMER sprints: fragile (15 HP, ~one strike) and weak,
+// but fast and it comes in numbers, so it's the one that corners you.
+entt::entity make_brute(entt::registry& reg, Vec2 pos) {
+  return make_creature(reg, pos, 40.0f, 70.0f, 15.0f, 3, Vec3{0.85f, 0.2f, 0.2f},
+                       9.0f);  // deep red
+}
+entt::entity make_swarmer(entt::registry& reg, Vec2 pos) {
+  return make_creature(reg, pos, 15.0f, 130.0f, 8.0f, 1, Vec3{0.95f, 0.5f, 0.15f}, 6.0f);  // orange
 }
 
 // Keep the fight alive: once the spawn timer runs out, add a creature at a field edge
@@ -85,7 +98,13 @@ void spawn_creature_if_due(entt::registry& reg, float& timer, std::mt19937& rng,
       pos = {kFieldWidth, along * kFieldHeight};
       break;  // right
   }
-  make_creature(reg, pos);
+  // Roughly one brute for every two swarmers — mostly a fast fragile swarm with the
+  // occasional tanky brute to anchor it. From the seeded rng, so still deterministic.
+  if (unit(rng) < 0.35f) {
+    make_brute(reg, pos);
+  } else {
+    make_swarmer(reg, pos);
+  }
 }
 
 // Build the opening scene: a controllable player in the centre, a few wandering
@@ -122,10 +141,11 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
     make_npc(reg, pos, Vec2{vel(rng), vel(rng)});
   }
 
-  // Two hostile creatures at opposite corners that hunt the player — the first real
-  // fights. Strike them (J) to wear their HP down; a stronger Strength kills faster.
-  make_creature(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
-  make_creature(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
+  // Two hostile creatures at opposite corners that hunt the player — one of each kind
+  // so both archetypes show from the start. Strike them (J) to wear their HP down; a
+  // stronger Strength kills faster. The spawner keeps a mix coming.
+  make_brute(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
+  make_swarmer(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
   return player;
 }
 
