@@ -249,15 +249,11 @@ TEST_CASE("attacking the nearest mote in reach destroys it and trains Striking -
 TEST_CASE("an NPC strikes a hazard in reach and trains Striking -> Strength", "[sim]") {
   eng::sim::World world;
 
-  // Grab any NPC and its spot.
-  entt::entity npc = entt::null;
-  eng::Vec2 npc_pos{};
-  for (const entt::entity e : world.registry().view<eng::sim::Npc, eng::sim::Transform>()) {
-    npc = e;
-    npc_pos = world.registry().get<eng::sim::Transform>(e).position;
-    break;
-  }
+  // Grab any NPC and its spot. front() gives the first entity in the view (or null
+  // if none) — avoids a for/break loop, which MSVC /W4 flags as unreachable code.
+  const entt::entity npc = world.registry().view<eng::sim::Npc, eng::sim::Transform>().front();
   REQUIRE(world.registry().valid(npc));  // we actually found an NPC
+  const eng::Vec2 npc_pos = world.registry().get<eng::sim::Transform>(npc).position;
 
   // Put a mote in that NPC's reach and step once: npc_attack strikes it. The NPC
   // may flee a step first, but 20 units is well inside reach (45), so it connects.
