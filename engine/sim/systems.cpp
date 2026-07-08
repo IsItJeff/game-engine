@@ -58,21 +58,20 @@ void steer_npcs(entt::registry& reg) {
 }
 
 void chase_player(entt::registry& reg) {
-  // How fast a creature closes on the player. Slower than the player's top speed
-  // (320) so you can kite it, but faster than it drifts, so it's a real pursuer.
-  constexpr float kChaseSpeed = 70.0f;
-
   // The player is the prey. In single-player there's one; take the first.
   const entt::entity player = reg.view<PlayerControlled, Transform>().front();
   if (!reg.valid(player)) return;
   const Vec2 prey = reg.get<Transform>(player).position;
 
-  // Every creature homes straight in on the player (the hostile mirror of steer_npcs).
+  // Every creature homes straight in on the player (the hostile mirror of steer_npcs),
+  // at its OWN `chase_speed` — a brute lumbers, a swarmer sprints. All are slower than
+  // the player's 320 top speed, so a fight is always kite-able.
   auto creatures = reg.view<Enemy, Transform, Velocity>();
   for (const entt::entity c : creatures) {
     const Vec2 toward = prey - creatures.get<Transform>(c).position;
     const float len = glm::length(toward);
-    if (len > 0.0f) creatures.get<Velocity>(c).value = (toward / len) * kChaseSpeed;
+    if (len > 0.0f)
+      creatures.get<Velocity>(c).value = (toward / len) * creatures.get<Enemy>(c).chase_speed;
   }
 }
 
