@@ -172,6 +172,45 @@ void update_stamina(entt::registry& reg, float dt) {
   }
 }
 
+void drain_hunger(entt::registry& reg, float dt) {
+  // Baseline hunger lost per second at rest, plus extra while moving (the design's
+  // "exertion drains needs" rule — the same moving/idle split as update_stamina). Gentle
+  // on purpose: hunger empties over MINUTES, not seconds, so it's a background pressure
+  // and long-running tests don't accidentally starve their entities. Tuning knobs.
+  constexpr float kDrainPerSecond = 0.3f;          // at rest
+  constexpr float kExertionDrainPerSecond = 0.3f;  // added while moving
+  // Health lost per second once hunger hits 0. MUST exceed the fastest self-heal in play
+  // (the player regenerates 8/s) or regenerate_vitals would out-pace it and starvation
+  // could never actually kill — so a starving character's health nets downward.
+  constexpr float kStarvationPerSecond = 12.0f;
+
+  // Every PERSON gets hungry — the player and NPCs (Stats without the Enemy marker, the
+  // same "people, not monsters" set chase_prey hunts). Creatures are excluded: they're
+  // pure combat foes, not colonists with bellies to fill.
+  // ponytail: NPCs drain but can't yet EAT (collect_pickups is player-only), so a colonist
+  // with no food supply slowly starves — kept gentle so the 12s colony spawner outpaces the
+  // loss; the real fix is an NPC foraging/feeding behaviour (a later survival slice).
+  auto view = reg.view<Stats>(entt::exclude<Enemy>);
+  for (const entt::entity e : view) {
+    Stats& s = view.get<Stats>(e);
+    float drain = kDrainPerSecond;
+    if (const Velocity* v = reg.try_get<Velocity>(e);
+        v != nullptr && glm::length(v->value) > 0.0f) {
+      drain += kExertionDrainPerSecond;  // moving costs extra
+    }
+    s.hunger.current -= drain * dt;
+    if (s.hunger.current < 0.0f) s.hunger.current = 0.0f;  // never below empty
+
+    // Starving: an empty stomach gnaws at your health, so an unfed character dies through
+    // the SAME handle_deaths path as any other 0-HP death — and NOT via Endurance, since
+    // the design keeps VIT as pure combat defence that doesn't buffer needs.
+    if (s.hunger.current <= 0.0f) {
+      s.health.current -= kStarvationPerSecond * dt;
+      if (s.health.current < 0.0f) s.health.current = 0.0f;
+    }
+  }
+}
+
 namespace {
 
 // Spend full XP bars to raise a {level, xp} pair, carrying the remainder — shared
@@ -466,9 +505,15 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
   auto players = reg.view<Stats, PlayerControlled, Transform, Velocity>();
   for (const entt::entity e : players) {
     Stats& s = players.get<Stats>(e);
-    if (s.health.current > 0.0f) continue;               // still alive, nothing to do
-    s.health.current = s.health.max;                     // respawn at full health...
-    players.get<Transform>(e).position = respawn_point;  // ...at the spawn point...
+    if (s.health.current > 0.0f) continue;  // still alive, nothing to do
+    // Respawn WHOLE, not just un-dead: restore every vital, not only health. Hunger in
+    // particular MUST reset — it doesn't self-recover, so respawning a starved player with
+    // hunger still 0 would drop them straight back into starving and a re-death loop. Reset
+    // stamina too, so a fresh life starts rested rather than mid-exhaustion.
+    s.health.current = s.health.max;                     // full health...
+    s.stamina.current = s.stamina.max;                   // ...rested...
+    s.hunger.current = s.hunger.max;                     // ...and fed — a genuine clean slate
+    players.get<Transform>(e).position = respawn_point;  // at the spawn point...
     players.get<Velocity>(e).value = Vec2{0.0f, 0.0f};   // ...and standing still
   }
 
@@ -509,7 +554,8 @@ void collect_pickups(entt::registry& reg, float dt) {
     const Vec2 item_pos = pickups.get<Transform>(item).position;
     for (const entt::entity p : players) {
       if (glm::distance(players.get<Transform>(p).position, item_pos) >= kPickupDistance) continue;
-      Vital& health = players.get<Stats>(p).health;
+      Stats& stats = players.get<Stats>(p);
+      Vital& health = stats.health;
       // A permanent max-HP bump: grow base (which advance_progression keeps max in step
       // with each tick) and max now too — the direct max bump is also the only growth
       // for a collector without Attributes, whose max is never recomputed.
@@ -517,6 +563,12 @@ void collect_pickups(entt::registry& reg, float dt) {
       health.max += pk.bonus_max_hp;
       health.current += pk.heal;
       if (health.current > health.max) health.current = health.max;  // capped, no overheal
+
+      // The orb is also FOOD: eating it refills hunger, so the same fight -> orb -> grab loop
+      // keeps you fed. (A knob; the orb is the first food source until real crops/meals exist.)
+      constexpr float kFoodPerOrb = 50.0f;
+      stats.hunger.current += kFoodPerOrb;
+      if (stats.hunger.current > stats.hunger.max) stats.hunger.current = stats.hunger.max;
 
       // Grabbing loot trains Scavenging -> Luck (deterministic XP, no RNG), so foraging
       // the field is itself a build: more Luck -> more crits (perform_attack). Guard on the

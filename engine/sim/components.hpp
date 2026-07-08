@@ -145,6 +145,11 @@ struct Vital {
 struct Stats {
   Vital health{100.0f, 100.0f, 5.0f};    // full, and slowly self-heals
   Vital stamina{100.0f, 100.0f, 20.0f};  // spent by moving; recovers when resting
+  // A survival Need: unlike the others it only ever falls (regen 0) — you refill it by
+  // EATING, not by resting (drain_hunger + eating from loot orbs). Empty it and you start
+  // to starve (it chips health, killing you through the normal death path). The first of
+  // Food/Water/Fatigue; the same Vital shape, the "you must feed the colony" pressure.
+  Vital hunger{100.0f, 100.0f, 0.0f};  // falls over time; 0 = starving
 };
 
 // --- Progression: skills feed attributes ---

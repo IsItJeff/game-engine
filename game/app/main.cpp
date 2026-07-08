@@ -100,6 +100,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     const eng::sim::Vital& s = stats->stamina;
     ImGui::Text("stamina: %.0f / %.0f", static_cast<double>(s.current), static_cast<double>(s.max));
     ImGui::ProgressBar(s.current / s.max);
+    const eng::sim::Vital& hu = stats->hunger;
+    ImGui::Text("hunger: %.0f / %.0f", static_cast<double>(hu.current),
+                static_cast<double>(hu.max));
+    ImGui::ProgressBar(hu.current / hu.max);  // falls over time; eat orbs to refill, or starve
   }
 
   // Progression: the attribute the player has grown, and progress toward the next
@@ -139,7 +143,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   ImGui::TextWrapped(
       "WASD / arrows: move — and dodge, the drifting motes hurt and vanish on "
       "contact. Moving drains stamina; run it dry and you slow to a crawl until "
-      "you rest. The green dots are NPCs: they now flee motes they sense, take the "
+      "you rest. You also get HUNGRY over time (faster while moving) — let the hunger "
+      "bar hit empty and you start to starve (it eats your health until you die), so eat "
+      "to keep it up. The green dots are NPCs: they now flee motes they sense, take the "
       "same contact damage you do, and when they die they're gone for good "
       "(permadeath) — you respawn. Creatures hunt the nearest person — you OR an NPC — "
       "and hit back: RED brutes are slow, tanky, and hit hard, while ORANGE swarmers are "
@@ -155,9 +161,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "slippery and dodge some of YOUR strikes too. Hitting back trains Striking → Strength "
       "(even a whiff a swarmer dodges). A "
       "slain "
-      "creature drops a cyan health orb — walk over it to heal, raise your max HP a "
-      "little, AND train Scavenging → Luck, which earns you critical hits (a doubled blow) "
-      "on future strikes. So grabbing loot is an offensive build, not just a heal. Your "
+      "creature drops a cyan health orb — walk over it to heal, feed (it refills hunger), "
+      "raise your max HP a little, AND train Scavenging → Luck, which earns you critical "
+      "hits (a doubled blow) on future strikes. So grabbing loot heals, feeds, and builds "
+      "you all at once. Your "
       "keypresses become Commands; the "
       "fleeing, chasing, motes, loot, and deaths are all systems on the server.");
   ImGui::End();

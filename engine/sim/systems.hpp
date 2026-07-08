@@ -57,6 +57,12 @@ void regenerate_vitals(entt::registry& reg, float dt);
 // MovePlayer funnel reads the result and slows an exhausted player to a crawl.
 void update_stamina(entt::registry& reg, float dt);
 
+// Drain the Hunger need: every PERSON (Stats without the Enemy marker — player and NPCs,
+// not creatures) loses hunger each tick, faster while moving. Hunger never self-recovers;
+// you refill it by eating (collect_pickups). At 0 it starves — chipping health so an unfed
+// character dies through the normal handle_deaths path. The first survival Need (P6).
+void drain_hunger(entt::registry& reg, float dt);
+
 // Resolve contact damage: any entity with Stats (the player or an NPC) that
 // overlaps a Hazard takes its `damage`, and the hazard is then consumed
 // (destroyed). A SYSTEM, not a command — collision is the sim's own rule, so it
