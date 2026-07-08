@@ -496,7 +496,8 @@ TEST_CASE("attacking a creature whittles its HP by Strength vs its VIT", "[sim]"
   reg.emplace<eng::sim::Enemy>(foe);
 
   // One swing at base Strength: chips HP but does NOT one-shot it (a real fight).
-  eng::sim::perform_attack(reg, atk);
+  std::mt19937 rng{1234};  // foe is Dexterity 1 -> never dodges, so every strike lands
+  eng::sim::perform_attack(reg, atk, rng);
   const float hp_after_one = reg.get<eng::sim::Stats>(foe).health.current;
   REQUIRE(hp_after_one < 40.0f);  // it took damage...
   REQUIRE(hp_after_one > 0.0f);   // ...but survived — multi-hit, not instant like a mote
@@ -508,9 +509,40 @@ TEST_CASE("attacking a creature whittles its HP by Strength vs its VIT", "[sim]"
   const float weak_hit = 40.0f - hp_after_one;
   reg.get<eng::sim::Attributes>(atk).strength.level = 10;
   const float before_strong = reg.get<eng::sim::Stats>(foe).health.current;
-  eng::sim::perform_attack(reg, atk);
+  eng::sim::perform_attack(reg, atk, rng);
   const float strong_hit = before_strong - reg.get<eng::sim::Stats>(foe).health.current;
   REQUIRE(strong_hit > weak_hit);  // Strength matters: the stronger swing deals more
+}
+
+TEST_CASE("a slippery high-Dexterity creature dodges some of your strikes", "[sim]") {
+  // The offensive mirror of the player's dodge: a creature's DEX lets it slip some of
+  // your strikes (capped at 50%), but a stream of hits still lands. Deterministic seed.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});  // inside base reach (45)
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe).dexterity.level = 18;  // past the 50% dodge cap
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  std::mt19937 rng{1234};
+  int dodges = 0;
+  int hits = 0;
+  for (int i = 0; i < 40; ++i) {
+    // Reset HP each swing so the 0-floor never masks a hit as a dodge.
+    reg.get<eng::sim::Stats>(foe).health.current = 40.0f;
+    eng::sim::perform_attack(reg, atk, rng);
+    if (reg.get<eng::sim::Stats>(foe).health.current == Approx(40.0f)) {
+      ++dodges;
+    } else {
+      ++hits;
+    }
+  }
+  REQUIRE(dodges > 0);  // it slipped some strikes...
+  REQUIRE(hits > 0);    // ...but couldn't dodge them all
 }
 
 TEST_CASE("a creature's blow is softened by the player's VIT", "[sim]") {
@@ -763,15 +795,18 @@ TEST_CASE("the two archetypes spawn with their own numbers (brute vs swarmer)", 
   for (const entt::entity e : reg.view<eng::sim::Enemy>()) {
     const float hp = reg.get<eng::sim::Stats>(e).health.max;
     const eng::sim::Enemy& en = reg.get<eng::sim::Enemy>(e);
-    if (hp == Approx(40.0f)) {  // brute: tanky, slow, hits hard
+    const int dex = reg.get<eng::sim::Attributes>(e).dexterity.level;
+    if (hp == Approx(40.0f)) {  // brute: tanky, slow, hits hard — but never dodges
       saw_brute = true;
       REQUIRE(en.chase_speed == Approx(70.0f));
       REQUIRE(en.attack_damage == Approx(15.0f));
-    } else {  // swarmer: fragile, fast, weak
+      REQUIRE(dex == 1);  // default Dexterity -> dodge_chance 0
+    } else {              // swarmer: fragile, fast, weak — and slippery
       saw_swarmer = true;
       REQUIRE(hp == Approx(15.0f));
       REQUIRE(en.chase_speed == Approx(130.0f));
       REQUIRE(en.attack_damage == Approx(8.0f));
+      REQUIRE(dex == 8);  // innate Dexterity -> ~21% chance to dodge a strike
     }
   }
   REQUIRE(saw_brute);

@@ -88,17 +88,20 @@ void train_on_damage(entt::registry& reg, entt::entity victim, float damage);
 //   - an ENEMY takes STR-vs-VIT damage to its HP (base + Strength, softened by the
 //     enemy's VIT via ratio mitigation); it is NOT returned — it dies later through
 //     handle_deaths when HP hits 0, so it survives weak hits and takes several.
-// Returns the mote to destroy, or entt::null (missed, or hit an enemy that lived).
+// Returns the mote to destroy, or entt::null (missed, hit an enemy that lived, or the
+// enemy DODGED). An enemy may slip the strike on a DEX roll off `rng` (the offensive
+// mirror of a player dodging a creature's blow) — a swarmer is slippery, a brute is not.
 // Callers collect-then-destroy so no view is invalidated mid-iteration. Shared by the
 // player's Attack command and npc_attack. A no-op without Transform+Attributes+Skills.
-entt::entity perform_attack(entt::registry& reg, entt::entity attacker);
+entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt19937& rng);
 
 // NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),
 // training Striking -> Strength just as the player does — so NPCs build Strength too,
 // not only Endurance. Complements steer_npcs (flee): a threat that closes to reach
-// gets struck rather than merely dodged. MUST run after integrate_motion (positions
-// current) and before resolve_contacts (so a struck mote can't also land its hit).
-void npc_attack(entt::registry& reg);
+// gets struck rather than merely dodged. `rng` drives the target's dodge roll (threaded
+// to perform_attack). MUST run after integrate_motion (positions current) and before
+// resolve_contacts (so a struck mote can't also land its hit).
+void npc_attack(entt::registry& reg, std::mt19937& rng);
 
 // Advance progression, the whole "learn by doing" chain in one pass over every
 // entity with Skills + Attributes + Stats + Velocity + CharacterLevel: activity

@@ -41,7 +41,9 @@ flowchart TD
   a[attacker swings] --> reach{nearest target<br/>within reach?}
   reach -->|nothing| miss[a whiff — no XP]
   reach -->|a mote| pop[destroy it outright<br/>+ train Striking]
-  reach -->|a creature| dmg[deal STR-vs-VIT damage to HP<br/>+ train Striking]
+  reach -->|a creature| train[train Striking] --> dodge{creature<br/>dodges? DEX}
+  dodge -->|yes| whiff[no damage — but Striking still trained]
+  dodge -->|no| dmg[deal STR-vs-VIT damage to HP]
   dmg --> dead{HP ≤ 0?}
   dead -->|yes| reap[handle_deaths reaps it next]
   dead -->|no| live[it survives — a real fight]
@@ -50,7 +52,8 @@ flowchart TD
 - **Reach** grows with Strength: `45 + (Strength − 1)·6` world units.
 - **Target** is the nearest *attackable* thing in reach — a `Hazard` mote **or** a
   hostile `Enemy`. A mote is fragile (one hit); a creature has HP and takes several.
-- Any **connecting** swing trains **Striking → Strength**, whatever it hits.
+- Any **connecting** swing trains **Striking → Strength**, whatever it hits — *even a
+  strike the creature dodges* (you learn from a whiff; only the damage is skipped).
 
 ### The damage contest — Strength vs VIT
 
@@ -73,10 +76,13 @@ dealt = max( raw² / (raw + def),  0.1 × raw )
 An `Enemy` is a real fight, not a throwaway mote. Two archetypes (from `make_creature`)
 give waves texture:
 
-| Kind | HP | Chase speed | Hit | Feel |
-|---|---|---|---|---|
-| **Brute** (red) | 40 | 70 | 15 | slow, tanky, hits hard — wear it down, kite it |
-| **Swarmer** (orange) | 15 | 130 | 8 | fast, fragile (~one strike), weak — but corners you in numbers |
+| Kind | HP | Chase speed | Hit | Dodge | Feel |
+|---|---|---|---|---|---|
+| **Brute** (red) | 40 | 70 | 15 | 0% | slow, tanky, hits hard — wear it down, kite it |
+| **Swarmer** (orange) | 15 | 130 | 8 | ~21% | fast, fragile (~one strike), weak, and *slippery* — but corners you in numbers |
+
+The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips ~1 strike in
+5, its innate Dexterity) — two archetypes that are hard to kill for opposite reasons.
 
 - **HP** (a `Stats` component) that strikes whittle down; **no regen**, so you can wear
   it down. **VIT** (an `Attributes` component) softens the blows it takes.
@@ -118,10 +124,13 @@ Dexterity** whether or not it lands — the mirror of Toughness training on the 
 take. Read enough attacks and you start slipping them. The roll is a seeded draw, so a
 replay dodges the same blows every time.
 
-!!!note "Defensive only, for now"
-    Only the player dodges creature blows today; creatures don't yet evade your strikes
-    (that needs the same roll in `perform_attack`). A sensible next slice — the machinery
-    (`dodge_chance`, DEX) is already here.
+!!!note "Dodge cuts both ways"
+    DEX is a two-sided stat. **You** dodge creature blows (above), and **creatures dodge
+    your strikes**: `perform_attack` rolls the *same* `dodge_chance` against the target's
+    DEX before applying damage, so a slippery swarmer slips ~1 strike in 5 while a brute
+    (DEX 1) never does. The swing still trains your Striking — you learn from a whiff —
+    only the damage is skipped. Creatures don't grow, so their DEX is a fixed archetype
+    trait, not something they train.
 
 ### Keeping the fight alive — the spawner
 
@@ -175,7 +184,7 @@ hits simply whiff, dodged outright.
 - `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` helpers.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due`, and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` command (`J`).
-- `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge + Evasion training, creature spawn/cap, loot drop + collect + fade.
+- `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, creature spawn/cap, loot drop + collect + fade.
 
 ## Go deeper
 
