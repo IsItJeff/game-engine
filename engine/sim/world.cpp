@@ -232,6 +232,7 @@ void World::step() {
   resolve_creature_contacts(registry_, dt, rng_);  // creatures swing; player may dodge (DEX)
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt);
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
+  npc_equip(registry_);            // unarmed NPCs wield a dropped weapon they've reached
   regenerate_vitals(registry_, dt);
 
   // Reinforcements: after deaths are resolved, top the creature population back up
@@ -318,31 +319,17 @@ void World::apply_command(const Command& cmd) {
       break;
     }
     case CommandKind::Equip: {
-      // Wield the nearest dropped Weapon in reach: fold its mods into the player's Equipped
-      // cache (one slot — a new weapon overwrites the old) and consume the item. The target
-      // is computed server-side (nearest weapon), like Attack. A downed player can't reach
-      // for one. Collect-then-destroy so a co-op pair can't invalidate the view mid-loop.
-      constexpr float kEquipReach = 30.0f;  // a bit past contact — step near and grab it
+      // Wield the nearest dropped Weapon in reach — the target is computed server-side via
+      // the shared equip_nearest_weapon (the same fold NPCs use, so gear can't diverge). Match
+      // the commanding player, skip a downed one, and collect-then-destroy so a co-op pair
+      // can't invalidate the view mid-loop.
       std::vector<entt::entity> consumed;
       auto players = registry_.view<PlayerControlled, Transform>();
-      auto weapons = registry_.view<Weapon, Transform>();
       for (const entt::entity p : players) {
         if (players.get<PlayerControlled>(p).player != cmd.player) continue;
         if (registry_.all_of<Downed>(p)) continue;  // helpless — can't equip
-        const Vec2 ppos = players.get<Transform>(p).position;
-        entt::entity nearest = entt::null;
-        float best = kEquipReach;
-        for (const entt::entity w : weapons) {
-          const float d = glm::distance(ppos, weapons.get<Transform>(w).position);
-          if (d < best) {
-            best = d;
-            nearest = w;
-          }
-        }
-        if (nearest == entt::null) continue;  // nothing in reach
-        const Weapon& wpn = weapons.get<Weapon>(nearest);
-        registry_.emplace_or_replace<Equipped>(p, Equipped{wpn.strength_bonus, wpn.move_penalty});
-        consumed.push_back(nearest);
+        const entt::entity w = equip_nearest_weapon(registry_, p);
+        if (w != entt::null) consumed.push_back(w);
       }
       for (const entt::entity w : consumed) {
         if (registry_.valid(w)) registry_.destroy(w);

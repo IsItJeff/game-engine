@@ -241,6 +241,60 @@ TEST_CASE("fear beats hunger: a threatened NPC flees rather than forage", "[sim]
   REQUIRE(reg.get<eng::sim::Velocity>(npc).value.x < 0.0f);
 }
 
+TEST_CASE("an unarmed colonist steers toward a dropped weapon to arm up", "[sim]") {
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc);  // full hunger -> not foraging, so it falls through to arming
+  const entt::entity weapon = reg.create();
+  reg.emplace<eng::sim::Transform>(weapon,
+                                   eng::Vec2{100.0f, 0.0f});  // in seek range, past grab reach
+  reg.emplace<eng::sim::Weapon>(weapon);
+
+  eng::sim::steer_npcs(reg);
+
+  const eng::Vec2 v = reg.get<eng::sim::Velocity>(npc).value;
+  REQUIRE(v.x > 0.0f);           // heading toward the blade...
+  REQUIRE(v.y == Approx(0.0f));  // ...straight at it
+}
+
+TEST_CASE("an unarmed NPC arms itself from a dropped weapon in reach", "[sim]") {
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Npc>(npc);
+  const entt::entity weapon = reg.create();
+  reg.emplace<eng::sim::Transform>(weapon, eng::Vec2{5.0f, 0.0f});  // within the grab reach (30)
+  reg.emplace<eng::sim::Weapon>(weapon);
+
+  eng::sim::npc_equip(reg);
+
+  REQUIRE(reg.all_of<eng::sim::Equipped>(npc));                   // now armed (parity)...
+  REQUIRE(reg.get<eng::sim::Equipped>(npc).strength_bonus == 4);  // ...its mods...
+  REQUIRE_FALSE(reg.valid(weapon));                               // ...and consumed
+}
+
+TEST_CASE("an armed NPC flees slower: the heft bane bites NPCs too", "[sim]") {
+  // The parity crux: a weapon buffs an NPC's swing (shared perform_attack), so its bane MUST
+  // slow the NPC too — else armed NPCs would be pure-upside. steer_npcs scales its speeds.
+  const auto flee_speed = [](bool armed) {
+    entt::registry reg;
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);
+    if (armed) reg.emplace<eng::sim::Equipped>(npc, eng::sim::Equipped{4, 0.25f});
+    const entt::entity hazard = reg.create();
+    reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{50.0f, 0.0f});  // a close threat to flee
+    reg.emplace<eng::sim::Hazard>(hazard);
+    eng::sim::steer_npcs(reg);
+    return glm::length(reg.get<eng::sim::Velocity>(npc).value);
+  };
+  REQUIRE(flee_speed(true) < flee_speed(false));  // armed = slower, exactly like the player
+}
+
 TEST_CASE("a creature does not eat a health orb", "[sim]") {
   // Guards the load-bearing exclude<Enemy> on the eater view: creatures carry Stats, but
   // must NOT heal or grow off the very orbs they drop, or the fight breaks.

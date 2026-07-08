@@ -45,17 +45,29 @@ void steer_npcs(entt::registry& reg) {
   // BEFORE the ~5s Downed timer expires — otherwise the heroism is invisible. Knobs.
   constexpr float kRescueRadius = 300.0f;
   constexpr float kRescueSpeed = 90.0f;
+  // Arming up: an UNARMED colonist heads for the nearest dropped weapon it can see, so gear
+  // gets picked up off the battlefield rather than only by the player. Same wide-scan shape
+  // as foraging; npc_equip does the actual wield on reach. Knobs.
+  constexpr float kWeaponSeekRadius = 260.0f;
+  constexpr float kWeaponSeekSpeed = 85.0f;
 
-  // Nested loops: every NPC against every hazard / orb / fallen ally — O(n*m), fine for a
-  // handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts wants.
-  // ponytail: no orb-reservation — several hungry NPCs can converge on one orb and the
-  // first to reach it eats (collect_pickups); add claims only if the scramble looks bad.
+  // Nested loops: every NPC against every hazard / orb / fallen ally / weapon — O(n*m), fine
+  // for a handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts
+  // wants. ponytail: no reservation — several NPCs can converge on one target and the first to
+  // reach it takes it (collect_pickups / npc_equip); add claims only if the scramble looks bad.
   auto npcs = reg.view<Npc, Transform, Velocity>();
   auto hazards = reg.view<Hazard, Transform>();
   auto food = reg.view<Pickup, Transform>();
   auto downed = reg.view<Downed, Transform>();
+  auto weapons = reg.view<Weapon, Transform>();
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
+
+    // A wielded weapon's heft slows an NPC just as it slows the player (the bane must bite
+    // both — parity). Every steer speed below is scaled by this, so an armed colonist flees,
+    // rescues, and forages a touch slower. Unarmed = 1.0 (no change).
+    const Equipped* gear = reg.try_get<Equipped>(n);
+    const float move_scale = gear != nullptr ? 1.0f - gear->move_penalty : 1.0f;
 
     // Perception, priority 1 — danger: the single nearest hazard within sense range.
     float nearest = kSenseRadius;
@@ -75,7 +87,7 @@ void steer_npcs(entt::registry& reg) {
     if (sees_threat) {
       const Vec2 away = pos - threat;
       const float len = glm::length(away);
-      if (len > 0.0f) npcs.get<Velocity>(n).value = (away / len) * kFleeSpeed;
+      if (len > 0.0f) npcs.get<Velocity>(n).value = (away / len) * kFleeSpeed * move_scale;
       continue;
     }
 
@@ -101,30 +113,55 @@ void steer_npcs(entt::registry& reg) {
       const float len = glm::length(toward);
       // Only steer while still OUTSIDE revive range: an NPC already close enough must HOLD, or
       // it could nudge itself back out of range before handle_deaths (later this tick) revives.
-      if (len > kReviveDistance) npcs.get<Velocity>(n).value = (toward / len) * kRescueSpeed;
+      if (len > kReviveDistance) {
+        npcs.get<Velocity>(n).value = (toward / len) * kRescueSpeed * move_scale;
+      }
       continue;  // committed to the rescue — don't also forage
     }
 
     // Priority 3 — hunger: a safe but hungry colonist seeks the nearest orb (its FIRST
-    // want-driven motion; until now NPCs only ever fled). A fed one just drifts. It eats
-    // when it arrives, in collect_pickups — this only steers it there.
+    // want-driven motion; until now NPCs only ever fled). A fed one, or one with nothing in
+    // range, FALLS THROUGH to arming up. It eats when it arrives, in collect_pickups.
     const Stats* stats = reg.try_get<Stats>(n);
-    if (stats == nullptr || stats->hunger.current >= stats->hunger.max * kHungerSeekFraction) {
-      continue;  // not hungry (or no Stats) — keep drifting
-    }
-    entt::entity meal = entt::null;
-    float nearest_food = kForageRadius;
-    for (const entt::entity f : food) {
-      const float d = glm::distance(pos, food.get<Transform>(f).position);
-      if (d < nearest_food) {
-        nearest_food = d;
-        meal = f;
+    const bool hungry =
+        stats != nullptr && stats->hunger.current < stats->hunger.max * kHungerSeekFraction;
+    if (hungry) {
+      entt::entity meal = entt::null;
+      float nearest_food = kForageRadius;
+      for (const entt::entity f : food) {
+        const float d = glm::distance(pos, food.get<Transform>(f).position);
+        if (d < nearest_food) {
+          nearest_food = d;
+          meal = f;
+        }
+      }
+      if (meal != entt::null) {
+        const Vec2 toward = food.get<Transform>(meal).position - pos;
+        const float len = glm::length(toward);
+        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kForageSpeed * move_scale;
+        continue;  // heading for a meal — don't also go weapon-hunting
       }
     }
-    if (meal == entt::null) continue;  // nothing edible in range — keep drifting
-    const Vec2 toward = food.get<Transform>(meal).position - pos;
-    const float len = glm::length(toward);
-    if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kForageSpeed;
+
+    // Priority 4 — arm up: an UNARMED colonist (no rescue to make, not hungry, or no food in
+    // range) walks to the nearest dropped weapon. npc_equip wields it on reach. An armed NPC
+    // skips this (one slot). Last acting rung — no match just leaves velocity alone (drift).
+    if (gear == nullptr) {
+      entt::entity blade = entt::null;
+      float nearest_blade = kWeaponSeekRadius;
+      for (const entt::entity w : weapons) {
+        const float d = glm::distance(pos, weapons.get<Transform>(w).position);
+        if (d < nearest_blade) {
+          nearest_blade = d;
+          blade = w;
+        }
+      }
+      if (blade != entt::null) {
+        const Vec2 toward = weapons.get<Transform>(blade).position - pos;
+        const float len = glm::length(toward);
+        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kWeaponSeekSpeed;
+      }
+    }
   }
 }
 
@@ -627,6 +664,51 @@ void npc_attack(entt::registry& reg, std::mt19937& rng) {
   }
   for (const entt::entity t : struck) {
     if (reg.valid(t)) reg.destroy(t);
+  }
+}
+
+entt::entity equip_nearest_weapon(entt::registry& reg, entt::entity wearer) {
+  // Wield the nearest dropped Weapon within reach of `wearer`: fold its mods into an Equipped
+  // cache (one slot — a new weapon overwrites the old) and RETURN the item for the caller to
+  // destroy (collect-then-destroy, so no view is invalidated mid-iteration). entt::null if
+  // none in reach. THE one place equipment mods are folded, shared by the player's Equip
+  // command and the npc_equip system — so a player and an NPC can never gear up differently.
+  constexpr float kEquipReach = 30.0f;  // a bit past contact — step near and grab it
+  const Vec2 pos = reg.get<Transform>(wearer).position;
+  entt::entity nearest = entt::null;
+  float best = kEquipReach;
+  auto weapons = reg.view<Weapon, Transform>();
+  for (const entt::entity w : weapons) {
+    const float d = glm::distance(pos, weapons.get<Transform>(w).position);
+    if (d < best) {
+      best = d;
+      nearest = w;
+    }
+  }
+  if (nearest == entt::null) return entt::null;
+  const Weapon& wpn = weapons.get<Weapon>(nearest);
+  reg.emplace_or_replace<Equipped>(wearer, Equipped{wpn.strength_bonus, wpn.move_penalty});
+  return nearest;
+}
+
+void npc_equip(entt::registry& reg) {
+  // Colonists arm themselves from the battlefield: an UNARMED NPC within reach of a dropped
+  // weapon wields it — the auto-equip-on-reach mirror of collect_pickups eating an orb, and
+  // the parity twin of the player's Equip command (both fold through equip_nearest_weapon).
+  // steer_npcs walks the unarmed ones toward the nearest blade; this is where they grab it.
+  // One slot: an already-armed NPC is skipped (no swap). Emplacing Equipped is safe here —
+  // it isn't part of the view<Npc, Transform> being iterated. Collect-then-destroy.
+  // ponytail: two NPCs reaching one weapon the same tick both arm from it (the item is
+  // consumed once) — a rare harmless dupe, the same shape collect_pickups tolerates.
+  std::vector<entt::entity> taken;
+  auto npcs = reg.view<Npc, Transform>();
+  for (const entt::entity n : npcs) {
+    if (reg.all_of<Equipped>(n)) continue;  // already armed — one slot, don't swap
+    const entt::entity w = equip_nearest_weapon(reg, n);
+    if (w != entt::null) taken.push_back(w);
+  }
+  for (const entt::entity w : taken) {
+    if (reg.valid(w)) reg.destroy(w);
   }
 }
 

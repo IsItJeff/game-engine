@@ -11,7 +11,12 @@ wants, still perception-then-action, still hard-coded leaves:
 2. **Rescue** — run to the nearest **Downed** ally to haul them up (the first want about
    another *person*, added with the [Downed death beat](combat.md)).
 3. **Forage** — if hungry, head for the nearest food orb (a `Pickup`).
-4. Otherwise **drift**.
+4. **Arm up** — if unarmed, head for the nearest dropped `Weapon` (`npc_equip` wields it on
+   reach), so colonists loot the battlefield and fight harder — the player==NPC gear parity.
+5. Otherwise **drift**.
+
+Every steer speed is scaled by `(1 - move_penalty)` when the NPC is **armed**, so a wielded
+weapon's heft slows an NPC exactly as it slows the player — the item's bane bites both.
 
 It is the seed of the engine's NPC AI (the master plan's sensors, blackboard, and
 behaviour trees) — each rung is exactly the kind of leaf a behaviour tree will one day
@@ -40,14 +45,18 @@ flowchart TD
   dwn -->|yes| rescue[rescue: velocity toward them]
   dwn -->|no| hun{hungry AND<br/>food orb in range?}
   hun -->|yes| forage[forage: velocity toward the orb]
-  hun -->|no| drift[drift: leave velocity alone]
+  hun -->|no| arm{unarmed AND<br/>weapon in range?}
+  arm -->|yes| seek[arm up: velocity toward the weapon]
+  arm -->|no| drift[drift: leave velocity alone]
 ```
 
 The first matching want wins and the NPC commits to it that tick (a `continue`), so a
 fleeing NPC never also forages, and a rescuer drops its meal to save someone. One
 load-bearing detail in the rescue rung: an NPC *already* within revive range holds
 position rather than steering, so it doesn't nudge itself back out before
-`handle_deaths` (later the same tick) hauls the ally up.
+`handle_deaths` (later the same tick) hauls the ally up. And every steer speed is scaled
+down while the NPC is armed — the weapon's heft slows it, so the buff it wields is paid
+for exactly as the player pays (the item's bane bites both).
 
 Two details carry the whole idea:
 
@@ -72,9 +81,11 @@ the player (no `Npc`) and the motes (no `Npc`) without a single `if`.
 
 Spawn a mote (`Space`) near the green dots in the demo and watch them scatter — fleeing
 still buys time, not immortality (some get cornered and die, permadeath). But there's more
-life to watch now: a hungry colonist peels off to grab a dropped health orb, and — most
-strikingly — if *you* go down, a nearby colonist will break off and **run to revive you**
-before your respawn timer fires. Three wants, one ladder, chosen fresh each tick.
+life to watch now: a hungry colonist peels off to grab a dropped health orb; if *you* go
+down, a nearby colonist breaks off and **runs to revive you** before your respawn timer
+fires; and a slain **brute's dropped weapon** gets snapped up by whichever unarmed colonist
+(or you) reaches it first — after which that NPC hits harder but moves a little slower. Four
+wants, one ladder, chosen fresh each tick.
 
 ## The tradeoffs
 
@@ -95,9 +106,9 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage ladder); `handle_deaths` does the actual revive at `kReviveDistance`.
-- `engine/sim/world.cpp` — the `steer_npcs` line in `step()`, before `integrate_motion`.
-- `tests/sim/test_simulation.cpp` — flee-in-range / ignore-out-of-range, forage-toward-orb, and steer-to-rescue / rescue-beats-forage / revive-in-place tests.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_weapon` do the wield-on-reach.
+- `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
+- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, and steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity).
 
 ## Go deeper
 

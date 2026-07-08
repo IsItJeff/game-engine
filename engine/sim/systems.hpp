@@ -109,6 +109,18 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
 // resolve_contacts (so a struck mote can't also land its hit).
 void npc_attack(entt::registry& reg, std::mt19937& rng);
 
+// Wield the nearest dropped Weapon within reach of `wearer`: fold its mods into an Equipped
+// cache (one slot) and RETURN the item to destroy, or entt::null if none in reach. THE one
+// place equipment mods are folded — shared by the player's Equip command and npc_equip, so
+// a player and an NPC gear up identically (the player==NPC parity guardrail).
+entt::entity equip_nearest_weapon(entt::registry& reg, entt::entity wearer);
+
+// NPCs arm themselves: every UNARMED NPC within reach of a dropped weapon wields it (via
+// equip_nearest_weapon) — the parity twin of the player's Equip command, so the +Strength
+// buff perform_attack already reads for any attacker is actually earned by NPCs too. MUST
+// run after integrate_motion (positions current). steer_npcs walks them to the weapon first.
+void npc_equip(entt::registry& reg);
+
 // Advance progression, the whole "learn by doing" chain in one pass over every
 // entity with Skills + Attributes + Stats + Velocity + CharacterLevel: activity
 // earns XP for the skill it trains, that skill's main attribute, AND a fraction to
