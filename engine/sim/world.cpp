@@ -66,7 +66,14 @@ entt::entity make_brute(entt::registry& reg, Vec2 pos) {
                        9.0f);  // deep red
 }
 entt::entity make_swarmer(entt::registry& reg, Vec2 pos) {
-  return make_creature(reg, pos, 15.0f, 130.0f, 8.0f, 1, Vec3{0.95f, 0.5f, 0.15f}, 6.0f);  // orange
+  const entt::entity e =
+      make_creature(reg, pos, 15.0f, 130.0f, 8.0f, 1, Vec3{0.95f, 0.5f, 0.15f}, 6.0f);  // orange
+  // Fast AND slippery: a swarmer's Dexterity gives it an innate ~21% chance to dodge your
+  // strikes (dodge_chance(8) = 7 * 0.03), so the fragile-but-quick archetype is genuinely
+  // hard to pin down — brutes (default DEX 1) never dodge. A tuning knob; creatures don't
+  // grow, so this DEX stays fixed at the archetype's spawn value.
+  reg.get<Attributes>(e).dexterity.level = 8;
+  return e;
 }
 
 // Keep the fight alive: once the spawn timer runs out, add a creature at a field edge
@@ -176,7 +183,7 @@ void World::step() {
   steer_npcs(registry_);  // NPCs decide where to flee (may set their velocity)
   chase_prey(registry_);  // creatures decide to home in on the nearest person (player or NPC)
   integrate_motion(registry_, dt);
-  npc_attack(registry_);           // NPCs strike any hazard now in reach (positions are current)
+  npc_attack(registry_, rng_);     // NPCs strike any hazard now in reach (positions are current)
   update_stamina(registry_, dt);   // moving costs stamina; resting restores it
   advance_progression(registry_);  // activity -> skill+attribute XP -> level -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
@@ -257,7 +264,7 @@ void World::apply_command(const Command& cmd) {
       auto attackers = registry_.view<PlayerControlled, Transform, Attributes, Skills>();
       for (const entt::entity a : attackers) {
         if (attackers.get<PlayerControlled>(a).player != cmd.player) continue;
-        const entt::entity t = perform_attack(registry_, a);
+        const entt::entity t = perform_attack(registry_, a, rng_);
         if (t != entt::null) struck.push_back(t);
       }
       for (const entt::entity t : struck) {

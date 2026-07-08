@@ -324,7 +324,7 @@ float dodge_chance(int dexterity_level) {
 
 }  // namespace
 
-entt::entity perform_attack(entt::registry& reg, entt::entity attacker) {
+entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt19937& rng) {
   constexpr float kBaseReach = 45.0f;                 // a little past contact range (15)
   constexpr float kReachPerStrength = 6.0f;           // each Strength level past 1 adds reach
   constexpr float kBaseAttackDamage = 12.0f;          // a swing's raw damage before Strength
@@ -373,6 +373,17 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker) {
   // A mote is fragile: hand it back for the caller to destroy outright.
   if (!target_is_enemy) return target;
 
+  // The target may DODGE the strike — the offensive mirror of the player dodging a
+  // creature's blow (resolve_creature_contacts), the same dodge_chance keyed on the
+  // TARGET's DEX. A swarmer is slippery (innate Dexterity), a brute is not (DEX 1 -> 0,
+  // and the chance > 0 guard means it never even draws). The swing still trained Striking
+  // above — you learn from a whiff — only the damage is skipped. Creatures don't grow, so
+  // there's no Evasion training on their side; their DEX is a fixed archetype trait.
+  std::uniform_real_distribution<float> unit(0.0f, 1.0f);
+  const Attributes* target_attrs = reg.try_get<Attributes>(target);
+  const float dodge = dodge_chance(target_attrs != nullptr ? target_attrs->dexterity.level : 1);
+  if (dodge > 0.0f && unit(rng) < dodge) return entt::null;  // slipped it — no damage dealt
+
   // An enemy takes STR-vs-VIT damage to its HP — base plus Strength, softened by the
   // enemy's VIT. It is NOT destroyed here; handle_deaths reaps it at 0 HP, so a weak
   // hit only chips it and it takes several. (An Enemy always carries Stats.)
@@ -386,7 +397,7 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker) {
   return entt::null;
 }
 
-void npc_attack(entt::registry& reg) {
+void npc_attack(entt::registry& reg, std::mt19937& rng) {
   // Every NPC swings at the nearest hazard in reach — the same perform_attack the
   // player's command uses, so NPCs build Strength too. Collect-then-destroy: if two
   // NPCs pick the same mote, the valid() guard below makes the second destroy a
@@ -399,7 +410,7 @@ void npc_attack(entt::registry& reg) {
   std::vector<entt::entity> struck;
   auto npcs = reg.view<Npc, Transform, Attributes, Skills>();
   for (const entt::entity n : npcs) {
-    const entt::entity t = perform_attack(reg, n);
+    const entt::entity t = perform_attack(reg, n, rng);
     if (t != entt::null) struck.push_back(t);
   }
   for (const entt::entity t : struck) {
