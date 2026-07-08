@@ -480,7 +480,8 @@ void advance_progression(entt::registry& reg) {
     //    scales that EARNED bonus (not the base) by POWER(char_level - 1) — level 1
     //    is POWER(0) = 1.0, so a fresh character is unchanged and a veteran's earned
     //    toughness compounds a little. Only the MAX grows — a longer bar, not a free
-    //    heal; regen fills the new room in.
+    //    heal; regen fills the new room in. (The pools aren't its only expression: the
+    //    same veteran multiplier scales earned combat Strength in perform_attack.)
     const float bonus = static_cast<float>(endurance.level - 1);
     const float veteran = static_cast<float>(power(character.level - 1).to_double());
     Stats& stats = view.get<Stats>(e);
@@ -594,7 +595,20 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   const int effective_strength =
       attrs->strength.level + (gear != nullptr ? gear->strength_bonus : 0);
 
+  // The attacker's global "veteran" multiplier, POWER(level - 1) — the SAME curve and shape
+  // advance_progression uses to compound the earned HP/stamina pools. It scales only what you
+  // EARNED by grinding — the trained Strength levels — on damage below, so a fighter's grind
+  // finally sharpens their blade, not just their bars. Level 1 — and an attacker with no
+  // CharacterLevel — is POWER(0) = 1.0, so this is bit-identical until you actually level up.
+  // Fetched once here (nullable) and reused at the grant site; no RNG, pure Fixed LUT math.
+  CharacterLevel* character = reg.try_get<CharacterLevel>(attacker);
+  const float veteran =
+      static_cast<float>(power((character != nullptr ? character->level : 1) - 1).to_double());
+
   const Vec2 origin = tf->position;
+  // Reach is left FLAT (no veteran factor): scaling it would change which target a swing can
+  // even reach — target ACQUISITION — silently shifting who gets hit. A veteran hits harder,
+  // not from further; keep acquisition stable.
   const float reach = kBaseReach + static_cast<float>(effective_strength - 1) * kReachPerStrength;
 
   // Find the nearest attackable target in reach — a fragile mote (Hazard) or a hostile
@@ -624,8 +638,7 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
 
   // A connecting strike trains Striking -> Strength (a lot) + Dexterity (a little), whatever
   // it hits: swinging a weapon mostly builds power, and a touch of the reflex behind it.
-  grant_skill_xp(*skills, *attrs, SkillId::Striking, kStrikingPerHit,
-                 reg.try_get<CharacterLevel>(attacker));
+  grant_skill_xp(*skills, *attrs, SkillId::Striking, kStrikingPerHit, character);
 
   // A mote is fragile: hand it back for the caller to destroy outright.
   if (!target_is_enemy) return target;
@@ -644,8 +657,15 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // An enemy takes STR-vs-VIT damage to its HP — base plus Strength, softened by the
   // enemy's VIT. It is NOT destroyed here; handle_deaths reaps it at 0 HP, so a weak
   // hit only chips it and it takes several. (An Enemy always carries Stats.)
-  const float raw =
-      kBaseAttackDamage + static_cast<float>(effective_strength - 1) * kDamagePerStrength;
+  // Damage = base swing + earned-Strength delta (compounded by the veteran multiplier) + the
+  // weapon's granted +Strength (flat). Only the XP-EARNED levels compound — gear is loot, not
+  // grind, so it must NOT scale with an unrelated character level (that would make one blade
+  // worth wildly more on a veteran). Keeps the "multiply only what you earned" invariant honest
+  // and mirrors advance_progression, which scales the earned endurance.level - 1 alone.
+  const int gear_strength = gear != nullptr ? gear->strength_bonus : 0;
+  const float raw = kBaseAttackDamage +
+                    static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength * veteran +
+                    static_cast<float>(gear_strength) * kDamagePerStrength;
   const float base_damage = mitigate(raw, defence_of(reg, target));
 
   // A LUCKY strike CRITS for extra damage — the offensive-fortune mirror of a dodge,

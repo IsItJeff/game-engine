@@ -72,7 +72,11 @@ flowchart LR
 4. **The character level compounds the earned bonus** — that pool bonus is scaled
    by `POWER(character level − 1)`, the same diminishing curve skills use. Level 1
    is `POWER(0)` = 1.0 (no head start); a veteran's earned toughness then compounds
-   a little. It multiplies what you *earned*, never the base floor.
+   a little. It multiplies what you *earned*, never the base floor. The **same
+   multiplier scales the earned Strength delta on combat damage** (`perform_attack`),
+   so the veteran layer isn't just bigger bars — a seasoned fighter hits harder too.
+   (Reach is left flat, so a veteran hits harder without changing which targets a
+   swing can reach.)
 
 !!! note "XP comes from many places; leveling happens in one"
     Step 1 grants **either** the *movement* XP (Conditioning) **or**, when idle with

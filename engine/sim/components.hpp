@@ -280,10 +280,12 @@ struct Attributes {
 enum class AttrId : std::uint8_t { Endurance, Strength, Dexterity, Luck };
 
 // A single global "how experienced overall" level, fed by a fraction of ALL
-// activity (not one skill). Its level is a gentle multiplier on earned stats via
-// the same POWER curve, so a long-lived character is generally a bit better across
-// the board — the "veteran" layer on top of specific skills and attributes. Starts
-// at level 1 = POWER(0) = no head start, exactly like the other {level, xp} pairs.
+// activity (not one skill). Its level is a gentle multiplier — via the same POWER
+// curve — on the EARNED portion of stats: the earned HP/stamina pools
+// (advance_progression) and the earned Strength delta on combat damage
+// (perform_attack). So a long-lived character is genuinely a bit better across the
+// board — the "veteran" layer on top of specific skills and attributes. Starts at
+// level 1 = POWER(0) = no head start, exactly like the other {level, xp} pairs.
 struct CharacterLevel {
   int level = 1;
   Fixed xp{};
