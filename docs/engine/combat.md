@@ -14,7 +14,7 @@ The moving parts, in one place:
 |---|---|
 | **`perform_attack`** | resolves one swing — find nearest target in reach, deal damage, train Striking |
 | **`Enemy` creature** | HP + VIT + a swing cooldown; chases and hits the player |
-| **`chase_player`** | steers creatures toward the player (the hostile mirror of `steer_npcs`) |
+| **`chase_prey`** | steers creatures toward the nearest person, player or NPC (the hostile mirror of `steer_npcs`) |
 | **`resolve_creature_contacts`** | a creature's contact blow, softened by your VIT — or dodged by your DEX |
 | **`dodge_chance`** | a DEX-driven roll to slip a blow entirely (trains Evasion) |
 | **the spawner** | keeps creatures coming, so the fight never runs dry |
@@ -80,19 +80,24 @@ give waves texture:
 
 - **HP** (a `Stats` component) that strikes whittle down; **no regen**, so you can wear
   it down. **VIT** (an `Attributes` component) softens the blows it takes.
-- **`chase_player`** homes its velocity on the player each tick, at the creature's own
-  `chase_speed` — so a swarmer runs you down while a brute lumbers.
+- **`chase_prey`** homes its velocity on the **nearest person** each tick — the player
+  *or* an NPC — at the creature's own `chase_speed`, so a swarmer runs you down while a
+  brute lumbers.
 - **`resolve_creature_contacts`** — on a cooldown (~0.8 s), a creature in contact deals
-  its `attack_damage`, *softened by your VIT* (same `mitigate`), and trains your
-  Toughness (via `train_on_damage`). Unlike a mote it is **not consumed** — it keeps
-  swinging.
+  its `attack_damage` to whoever it caught, *softened by that victim's VIT* (same
+  `mitigate`), and trains their Toughness (via `train_on_damage`). Unlike a mote it is
+  **not consumed** — it keeps swinging.
 - Motes are excluded from creatures (`entt::exclude<Enemy>` in `resolve_contacts`), so
   ambient hazards can't cheaply kill one and bypass its VIT.
 
-!!! note "NPCs pitch in"
+!!! note "A real two-sided fight"
     Because `npc_attack` runs the shared `perform_attack`, any creature in an NPC's
-    reach gets struck — free *allied* behaviour (opportunistic, not active hunting).
-    NPCs fight creatures; creatures only hunt the player.
+    reach gets struck — free *allied* behaviour (opportunistic, not active hunting). And
+    because `chase_prey` / `resolve_creature_contacts` treat every person as prey,
+    creatures hunt and hurt NPCs too. So the two actually **war**: NPCs and creatures
+    skirmish across the field, and an NPC caught in the open can be run down and killed
+    for good (permadeath), not just the player. Same machinery for both — that's the
+    player == NPC parity guardrail.
 
 ### Slipping the blow — Evasion (Dexterity)
 
@@ -146,7 +151,7 @@ the same tick.
 Order is the definition of a tick (see [the tick and the systems](skeleton/tick-and-systems.md)):
 
 ```
-steer_npcs → chase_player → integrate_motion → npc_attack → … →
+steer_npcs → chase_prey → integrate_motion → npc_attack → … →
 resolve_contacts → resolve_creature_contacts → handle_deaths → collect_pickups → … → spawn_creature_if_due
 ```
 
@@ -155,17 +160,19 @@ current); death is checked *after* damage; loot is dropped by death, then collec
 
 ## What to expect
 
-Run the demo: red creatures close in from the edges, you press `J` to fight (watch a
-weak Strength take several hits, a grown one fewer), your health bar dips under their
-blows but you steady it by grabbing the orbs they drop, and the NPCs chip in. Keep
-moving — you outrun every creature (your 320 vs a brute's 70, a swarmer's 130), so a
-swarm is survivable by kiting. Stand and trade blows and you'll slowly train
-**Dexterity** — after a while some hits simply whiff, dodged outright.
+Run the demo: red creatures close in from the edges and go for whoever's nearest — you
+*or* a green NPC — so you'll see NPCs and creatures skirmish across the field (and an
+unlucky NPC get run down and killed for good). Press `J` to fight (watch a weak Strength
+take several hits, a grown one fewer); your health bar dips under their blows but you
+steady it by grabbing the orbs they drop, and the NPCs chip in. Keep moving — you outrun
+every creature (your 320 vs a brute's 70, a swarmer's 130), so a swarm is survivable by
+kiting. Stand and trade blows and you'll slowly train **Dexterity** — after a while some
+hits simply whiff, dodged outright.
 
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy`, `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_player`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` helpers.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` helpers.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due`, and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` command (`J`).
 - `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge + Evasion training, creature spawn/cap, loot drop + collect + fade.

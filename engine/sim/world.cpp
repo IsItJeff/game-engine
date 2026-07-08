@@ -41,7 +41,7 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel) {
 
 // Create one hostile creature from an archetype's numbers: HP (Stats) that attacks
 // whittle down, VIT (Attributes) that softens blows, and the Enemy marker (so
-// chase_player hunts, resolve_creature_contacts hurts, handle_deaths reaps at 0 HP).
+// chase_prey hunts, resolve_creature_contacts hurts, handle_deaths reaps at 0 HP).
 // No regen — you can wear it down; no Skills/CharacterLevel — it doesn't grow.
 entt::entity make_creature(entt::registry& reg, Vec2 pos, float hp, float chase_speed,
                            float attack_damage, int defence_level, Vec3 color, float radius) {
@@ -141,9 +141,9 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
     make_npc(reg, pos, Vec2{vel(rng), vel(rng)});
   }
 
-  // Two hostile creatures at opposite corners that hunt the player — one of each kind
-  // so both archetypes show from the start. Strike them (J) to wear their HP down; a
-  // stronger Strength kills faster. The spawner keeps a mix coming.
+  // Two hostile creatures at opposite corners that hunt the nearest person (you or an
+  // NPC) — one of each kind so both archetypes show from the start. Strike them (J) to
+  // wear their HP down; a stronger Strength kills faster. The spawner keeps a mix coming.
   make_brute(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
   make_swarmer(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
   return player;
@@ -173,8 +173,8 @@ void World::step() {
   // 3. Run the systems, in this fixed, readable order. Adding behaviour means
   //    writing a system and adding a line here.
   const float dt = static_cast<float>(kSecondsPerTick);
-  steer_npcs(registry_);    // NPCs decide where to flee (may set their velocity)
-  chase_player(registry_);  // creatures decide to home in on the player
+  steer_npcs(registry_);  // NPCs decide where to flee (may set their velocity)
+  chase_prey(registry_);  // creatures decide to home in on the nearest person (player or NPC)
   integrate_motion(registry_, dt);
   npc_attack(registry_);           // NPCs strike any hazard now in reach (positions are current)
   update_stamina(registry_, dt);   // moving costs stamina; resting restores it

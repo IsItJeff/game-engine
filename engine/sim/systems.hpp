@@ -33,10 +33,11 @@ void snapshot_previous(entt::registry& reg);
 // turns the velocity it sets into actual movement this tick.
 void steer_npcs(entt::registry& reg);
 
-// Steer creatures: each Enemy sets its Velocity to home straight in on the player —
-// the hostile mirror of steer_npcs (which flees). Like steer_npcs, MUST run before
-// integrate_motion so the chosen velocity turns into movement this tick.
-void chase_player(entt::registry& reg);
+// Steer creatures: each Enemy homes straight in on the NEAREST person — the player or an
+// NPC (anything with Stats that isn't itself a creature) — the hostile mirror of
+// steer_npcs (which flees). Like steer_npcs, MUST run before integrate_motion so the
+// chosen velocity turns into movement this tick.
+void chase_prey(entt::registry& reg);
 
 // Move every entity with a Transform and Velocity: position += velocity * dt.
 // This is Euler integration — the simplest way to turn a velocity into motion.

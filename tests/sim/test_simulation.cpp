@@ -681,6 +681,7 @@ TEST_CASE("creatures chase at their own speed (brute vs swarmer)", "[sim]") {
   const entt::entity p = reg.create();
   reg.emplace<eng::sim::Transform>(p, eng::Vec2{0.0f, 0.0f});
   reg.emplace<eng::sim::PlayerControlled>(p);
+  reg.emplace<eng::sim::Stats>(p);  // prey = things with a Stats sheet (see chase_prey)
   // Two creatures the same distance out, with different chase speeds.
   const entt::entity slow = reg.create();
   reg.emplace<eng::sim::Transform>(slow, eng::Vec2{100.0f, 0.0f});
@@ -691,11 +692,62 @@ TEST_CASE("creatures chase at their own speed (brute vs swarmer)", "[sim]") {
   reg.emplace<eng::sim::Velocity>(fast);
   reg.emplace<eng::sim::Enemy>(fast).chase_speed = 140.0f;
 
-  eng::sim::chase_player(reg);
+  eng::sim::chase_prey(reg);
 
   // Each homes in at its own chase_speed — the swarmer closes twice as fast.
   REQUIRE(glm::length(reg.get<eng::sim::Velocity>(slow).value) == Approx(70.0f));
   REQUIRE(glm::length(reg.get<eng::sim::Velocity>(fast).value) == Approx(140.0f));
+}
+
+TEST_CASE("a creature chases the nearest person, player or NPC", "[sim]") {
+  entt::registry reg;
+  // A player far to the right; an NPC close above; a creature at the origin.
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{1000.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Stats>(player);
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 20.0f});
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc);
+  const entt::entity creature = reg.create();
+  reg.emplace<eng::sim::Transform>(creature, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(creature);
+  reg.emplace<eng::sim::Enemy>(creature);  // default chase_speed 70
+
+  eng::sim::chase_prey(reg);
+
+  // The NPC (20 units up) is far nearer than the player (1000 right), so the creature
+  // steers straight UP toward the NPC — not sideways toward the player.
+  const eng::Vec2 v = reg.get<eng::sim::Velocity>(creature).value;
+  REQUIRE(v.y == Approx(70.0f));  // homing on the NPC, at chase_speed
+  REQUIRE(v.x == Approx(0.0f));   // not a whisker toward the far-off player
+}
+
+TEST_CASE("a creature's blow harms an NPC too, not just the player", "[sim]") {
+  // player == NPC parity: an NPC caught by a creature takes the same VIT-softened blow
+  // and trains the same way, because both flow through the one prey path in
+  // resolve_creature_contacts.
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc);
+  reg.emplace<eng::sim::Skills>(npc);
+  reg.emplace<eng::sim::Attributes>(npc);  // default Dexterity 1 -> no dodge, so the blow lands
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  const float before = reg.get<eng::sim::Stats>(npc).health.current;
+  std::mt19937 rng{1234};
+  eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+
+  REQUIRE(reg.get<eng::sim::Stats>(npc).health.current < before);  // the NPC took the hit
+  // ...and facing the swing trained its Evasion -> Dexterity, exactly as for the player.
+  const eng::sim::Skill* evasion = reg.get<eng::sim::Skills>(npc).find(eng::sim::SkillId::Evasion);
+  REQUIRE(evasion != nullptr);
+  REQUIRE(evasion->xp.to_double() > 0.0);
 }
 
 TEST_CASE("the two archetypes spawn with their own numbers (brute vs swarmer)", "[sim]") {
