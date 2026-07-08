@@ -101,8 +101,11 @@ struct Enemy {
 // A collectible a slain creature leaves behind: walk over it (collect_pickups) to
 // restore `heal` health and consume it. The first loot — a reward for winning the
 // fight that lets kills sustain you, and the seed of a fuller item system later.
+// `lifetime` counts down so an ungrabbed orb fades rather than piling up forever
+// (creatures die all over the field, many far from the player).
 struct Pickup {
   float heal = 25.0f;
+  float lifetime = 20.0f;  // seconds before an uncollected orb fades away
 };
 
 // --- Stats system ---

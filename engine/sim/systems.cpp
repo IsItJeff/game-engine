@@ -422,18 +422,24 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
   for (const Vec2& pos : loot_drops) spawn_pickup(reg, pos);  // loot for the win
 }
 
-void collect_pickups(entt::registry& reg) {
+void collect_pickups(entt::registry& reg, float dt) {
   constexpr float kPickupDistance = 15.0f;  // same reach as a contact
 
-  std::vector<entt::entity> taken;  // collect, then destroy (never mid-view)
+  std::vector<entt::entity> taken;  // collected or faded — collect, then destroy (never mid-view)
   auto players = reg.view<PlayerControlled, Stats, Transform>();
   auto pickups = reg.view<Pickup, Transform>();
   for (const entt::entity item : pickups) {
+    Pickup& pk = pickups.get<Pickup>(item);
+    pk.lifetime -= dt;
+    if (pk.lifetime <= 0.0f) {  // ungrabbed too long — it fades
+      taken.push_back(item);
+      continue;
+    }
     const Vec2 item_pos = pickups.get<Transform>(item).position;
     for (const entt::entity p : players) {
       if (glm::distance(players.get<Transform>(p).position, item_pos) >= kPickupDistance) continue;
       Vital& health = players.get<Stats>(p).health;
-      health.current += pickups.get<Pickup>(item).heal;
+      health.current += pk.heal;
       if (health.current > health.max) health.current = health.max;  // capped, no overheal
       taken.push_back(item);
       break;  // consumed by the first collector

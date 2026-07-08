@@ -112,8 +112,10 @@ void advance_progression(entt::registry& reg);
 // same tick and never dies.
 void handle_deaths(entt::registry& reg, Vec2 respawn_point);
 
-// Collect loot: a player overlapping a Pickup restores its `heal` health (capped) and
-// consumes it. Lets kills sustain you. Collect-then-destroy, like resolve_contacts.
-void collect_pickups(entt::registry& reg);
+// Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
+// player overlaps restores its `heal` health (capped) and is consumed; an orb whose
+// lifetime runs out fades away uncollected (so drops from far-off kills don't pile up
+// forever). Collect-then-destroy, like resolve_contacts.
+void collect_pickups(entt::registry& reg, float dt);
 
 }  // namespace eng::sim

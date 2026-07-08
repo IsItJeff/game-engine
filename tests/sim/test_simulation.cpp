@@ -594,8 +594,23 @@ TEST_CASE("a player collects a pickup and heals", "[sim]") {
   reg.emplace<eng::sim::Transform>(item, eng::Vec2{50.0f, 50.0f});  // right on the player
   reg.emplace<eng::sim::Pickup>(item);                              // heals 25
 
-  eng::sim::collect_pickups(reg);
+  eng::sim::collect_pickups(reg, 1.0f / 60.0f);
 
   REQUIRE(reg.get<eng::sim::Stats>(p).health.current == Approx(65.0f));  // 40 + 25
   REQUIRE(!reg.valid(item));                                             // consumed
+}
+
+TEST_CASE("an uncollected pickup fades after its lifetime", "[sim]") {
+  entt::registry reg;
+  // A pickup with no player anywhere near — it should time out and vanish rather
+  // than pile up forever.
+  const entt::entity item = reg.create();
+  reg.emplace<eng::sim::Transform>(item, eng::Vec2{500.0f, 500.0f});
+  reg.emplace<eng::sim::Pickup>(item);  // lifetime 20s
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 25 * eng::sim::kTicksPerSecond; ++i) eng::sim::collect_pickups(reg, dt);
+
+  REQUIRE(!reg.valid(item));  // it faded
+  REQUIRE(reg.storage<eng::sim::Pickup>().size() == 0);
 }
