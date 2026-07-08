@@ -129,6 +129,7 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     show_skill("toughness", eng::sim::SkillId::Toughness);
     show_skill("striking", eng::sim::SkillId::Striking);
     show_skill("recovery", eng::sim::SkillId::Recovery);
+    show_skill("evasion", eng::sim::SkillId::Evasion);  // appears once a creature has swung at you
   }
 
   ImGui::Checkbox("pause simulation", &paused);
@@ -145,7 +146,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "Space: spawn a mote. H: take 15 damage. "
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "brute takes several, fewer as your Strength climbs (it hits harder), while "
-      "your VIT softens its blows. Hitting back trains Striking → Strength. A slain "
+      "your VIT softens its blows — and standing to trade blows slowly trains Dexterity, "
+      "so before long some hits are dodged outright. Hitting back trains Striking → Strength. A "
+      "slain "
       "creature drops a cyan health orb — walk over it to heal AND raise your max HP a "
       "little, so kills sustain and grow you. Your keypresses become Commands; the "
       "fleeing, chasing, motes, loot, and deaths are all systems on the server.");

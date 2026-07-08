@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <limits>
+#include <random>
 
 #include "engine/net/loopback.hpp"
 #include "engine/net/server.hpp"
@@ -526,10 +527,68 @@ TEST_CASE("a creature's blow is softened by the player's VIT", "[sim]") {
   reg.emplace<eng::sim::Enemy>(foe);  // attack_damage 15, ready to swing
 
   const float before = reg.get<eng::sim::Stats>(player).health.current;
-  eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f);
+  std::mt19937 rng{1234};  // default Dexterity (level 1) never dodges, so the blow lands
+  eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
   const float dealt = before - reg.get<eng::sim::Stats>(player).health.current;
   REQUIRE(dealt > 0.0f);   // the creature landed a blow
   REQUIRE(dealt < 15.0f);  // ...but VIT softened it below the raw 15
+}
+
+TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it lands", "[sim]") {
+  // The bootstrap: at Dexterity 1 you can't dodge yet, so the blow lands — but facing
+  // it still trains Evasion and its Dexterity, which is what eventually lets you dodge.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Stats>(player);
+  reg.emplace<eng::sim::Skills>(player);
+  reg.emplace<eng::sim::Attributes>(player);  // default Dexterity level 1 -> 0% dodge
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  std::mt19937 rng{1234};
+  eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current < 100.0f);  // it landed (no dodge yet)
+  const eng::sim::Skill* evasion =
+      reg.get<eng::sim::Skills>(player).find(eng::sim::SkillId::Evasion);
+  REQUIRE(evasion != nullptr);
+  REQUIRE(evasion->xp.to_double() > 0.0);                                         // Evasion trained
+  REQUIRE(reg.get<eng::sim::Attributes>(player).dexterity.xp.to_double() > 0.0);  // ...and its DEX
+}
+
+TEST_CASE("a high-Dexterity player dodges some blows but not all", "[sim]") {
+  // Evasion softens the incoming stream but never negates it (capped at 50%): over many
+  // swings a trained dodger slips some and eats others. Deterministic from the seed.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Stats>(player);
+  reg.emplace<eng::sim::Skills>(player);
+  reg.emplace<eng::sim::Attributes>(player).dexterity.level = 18;  // past the 50% dodge cap
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  std::mt19937 rng{1234};
+  int dodges = 0;
+  int hits = 0;
+  for (int i = 0; i < 40; ++i) {
+    // Reset health each swing so the 0-floor never masks a hit as a dodge; dt = 1s
+    // clears the 0.8s cooldown so every call is a fresh committed swing.
+    reg.get<eng::sim::Stats>(player).health.current = 100.0f;
+    eng::sim::resolve_creature_contacts(reg, 1.0f, rng);
+    if (reg.get<eng::sim::Stats>(player).health.current == Approx(100.0f)) {
+      ++dodges;
+    } else {
+      ++hits;
+    }
+  }
+  REQUIRE(dodges > 0);  // some blows slipped...
+  REQUIRE(hits > 0);    // ...but a stream of hits still lands — never invulnerable
 }
 
 TEST_CASE("motes drift through creatures without hurting them", "[sim]") {
