@@ -88,7 +88,7 @@ struct Hazard {
 // Marks a hostile creature — a real fight, not a throwaway mote. Unlike a Hazard it
 // has HP (a Stats component) that attacks whittle down over several hits, and VIT
 // (an Attributes component) that softens the blows it receives; it chases the player
-// (chase_player) and hurts them on contact (resolve_creature_contacts) WITHOUT being
+// (chase_prey) and hurts them on contact (resolve_creature_contacts) WITHOUT being
 // consumed. Dies for good through the same handle_deaths permadeath path as an NPC.
 // `attack_damage` is its contact hit, before the victim's VIT defence mitigates it.
 // It swings on a cooldown (`attack_timer` counts down), so touching one is a series
@@ -97,7 +97,7 @@ struct Hazard {
 struct Enemy {
   float attack_damage = 15.0f;
   float attack_timer = 0.0f;  // seconds until it can swing again; 0 = ready
-  float chase_speed = 70.0f;  // how fast it closes on the player (chase_player)
+  float chase_speed = 70.0f;  // how fast it closes on its prey (chase_prey)
 };
 
 // A collectible a slain creature leaves behind: walk over it (collect_pickups) to

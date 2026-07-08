@@ -58,18 +58,36 @@ void steer_npcs(entt::registry& reg) {
   }
 }
 
-void chase_player(entt::registry& reg) {
-  // The player is the prey. In single-player there's one; take the first.
-  const entt::entity player = reg.view<PlayerControlled, Transform>().front();
-  if (!reg.valid(player)) return;
-  const Vec2 prey = reg.get<Transform>(player).position;
-
-  // Every creature homes straight in on the player (the hostile mirror of steer_npcs),
-  // at its OWN `chase_speed` — a brute lumbers, a swarmer sprints. All are slower than
-  // the player's 320 top speed, so a fight is always kite-able.
+void chase_prey(entt::registry& reg) {
+  // Creatures hunt PEOPLE — the player and NPCs alike. "Prey" is everything with a Stats
+  // sheet (so it can be hurt) that isn't itself a creature: motes and pickups have no
+  // Stats, and `exclude<Enemy>` drops the creatures, so this view is exactly players +
+  // NPCs. Each creature homes on the NEAREST one — the hostile mirror of steer_npcs
+  // fleeing its nearest hazard. This is what makes the world feel alive rather than
+  // player-centric: creatures and NPCs actually war, and an NPC caught in the open can be
+  // run down and killed for good (permadeath), not just the player.
+  auto prey = reg.view<Stats, Transform>(entt::exclude<Enemy>);
   auto creatures = reg.view<Enemy, Transform, Velocity>();
   for (const entt::entity c : creatures) {
-    const Vec2 toward = prey - creatures.get<Transform>(c).position;
+    const Vec2 c_pos = creatures.get<Transform>(c).position;
+
+    // Nearest person wins. Strict < keeps ties deterministic (first by iteration order).
+    // ponytail: no target-lock/hysteresis — a creature exactly between two people can
+    // flip its aim tick-to-tick; add a lock only if that wobble ever shows in play.
+    entt::entity target = entt::null;
+    float nearest = 0.0f;
+    for (const entt::entity person : prey) {
+      const float d = glm::distance(c_pos, prey.get<Transform>(person).position);
+      if (target == entt::null || d < nearest) {
+        nearest = d;
+        target = person;
+      }
+    }
+    if (target == entt::null) continue;  // nobody left to hunt — keep drifting
+
+    // Home in at its OWN chase_speed — a brute lumbers, a swarmer sprints. All are slower
+    // than the player's 320 top speed, so a fight is always kite-able.
+    const Vec2 toward = prey.get<Transform>(target).position - c_pos;
     const float len = glm::length(toward);
     if (len > 0.0f)
       creatures.get<Velocity>(c).value = (toward / len) * creatures.get<Enemy>(c).chase_speed;
@@ -514,18 +532,19 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
   const Fixed kEvasionPerSwing = Fixed::from_int(10);  // XP for facing a swing, dodged or not
   std::uniform_real_distribution<float> unit(0.0f, 1.0f);
 
-  // Creatures hunt the PLAYER (chase_player homes on them), so that's who they hit.
-  // This runs before handle_deaths, so a creature you kill this tick can still land a
-  // last "dying blow" while at 0 HP — an accepted quirk, not a bug (reorder ahead of
-  // handle_deaths if that's ever unwanted).
+  // Creatures hit whoever they're hunting — the player OR an NPC (same prey set as
+  // chase_prey: everything with Stats that isn't a creature). This runs before
+  // handle_deaths, so a creature you kill this tick can still land a last "dying blow"
+  // while at 0 HP — an accepted quirk, not a bug (reorder ahead of handle_deaths if
+  // that's ever unwanted).
   auto creatures = reg.view<Enemy, Transform>();
-  auto players = reg.view<PlayerControlled, Stats, Transform>();
+  auto prey = reg.view<Stats, Transform>(entt::exclude<Enemy>);  // players + NPCs
   for (const entt::entity c : creatures) {
     Enemy& enemy = creatures.get<Enemy>(c);
     if (enemy.attack_timer > 0.0f) enemy.attack_timer -= dt;  // cooling down between swings
     const Vec2 c_pos = creatures.get<Transform>(c).position;
-    for (const entt::entity p : players) {
-      if (glm::distance(players.get<Transform>(p).position, c_pos) >= kContactDistance) continue;
+    for (const entt::entity p : prey) {
+      if (glm::distance(prey.get<Transform>(p).position, c_pos) >= kContactDistance) continue;
       if (enemy.attack_timer > 0.0f) continue;  // in reach but mid-cooldown — no blow yet
       enemy.attack_timer = kAttackInterval;     // a committed swing — cooldown resets either way
 
@@ -545,10 +564,10 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       if (chance > 0.0f && unit(rng) < chance) continue;  // slipped it — no damage taken
 
       const float applied = mitigate(enemy.attack_damage, defence_of(reg, p));
-      Vital& health = players.get<Stats>(p).health;
+      Vital& health = prey.get<Stats>(p).health;
       health.current -= applied;
       if (health.current < 0.0f) health.current = 0.0f;
-      train_on_damage(reg, p, applied);  // enduring a creature's blow toughens the player
+      train_on_damage(reg, p, applied);  // enduring a creature's blow toughens the victim
     }
   }
 }
