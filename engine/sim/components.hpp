@@ -103,6 +103,25 @@ struct HitFlash {
   float remaining = 0.0f;
 };
 
+// How dark a near-dead dot gets. A floor (not 0) so a wounded entity dims to an ember
+// but never vanishes — you can still see the fight it's losing. A presentation knob.
+inline constexpr float kWoundedFloor = 0.35f;
+
+// Presentation-only, the steady twin of HitFlash: how bright to draw an entity given its
+// health, so the renderer can DIM a wounded dot (HitFlash shows the blow; this shows the
+// accumulated toll). Returns a 0..1 multiplier for the dot colour — full health = 1.0
+// (drawn exactly as authored), scaling down to kWoundedFloor at 0 HP. A pure function of
+// health, so it's unit-testable and reads no sim state itself; the renderer calls it.
+// `max <= 0` (an entity with no real health bar) returns 1.0 — unharmed, and no divide.
+inline float wounded_brightness(float current, float max) {
+  if (max <= 0.0f) return 1.0f;
+  float frac = current / max;
+  if (frac < 0.0f) frac = 0.0f;
+  if (frac > 1.0f)
+    frac = 1.0f;  // clamp: over-heal or transient overshoot never brightens past full
+  return kWoundedFloor + (1.0f - kWoundedFloor) * frac;
+}
+
 // Marks an entity as dangerous to touch. An entity with a Hazard deals `damage`
 // to any player it overlaps and is then consumed — destroyed (see the
 // resolve_contacts system). The drifting motes have this: touch one, take a hit,

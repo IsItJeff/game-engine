@@ -62,10 +62,19 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     const eng::sim::RenderDot& dot = view.get<const eng::sim::RenderDot>(e);
     const eng::Vec2 p = world_to_screen(blended, vp);
 
+    // Wounded dimming: darken the dot in proportion to its health, so the accumulated toll
+    // of a fight reads at a glance (the steady twin of the hit-flash blink). Applied to the
+    // BASE colour first, BEFORE the flash mix, so a fresh blow still pops white on a
+    // near-dead dot, then settles back to its dimmed base. Optional Stats (motes/pickups/
+    // weapons have none) — same try_get the debug panel uses.
+    eng::Vec3 rgb = dot.color;
+    if (const auto* st = world.registry().try_get<eng::sim::Stats>(e)) {
+      rgb *= eng::sim::wounded_brightness(st->health.current, st->health.max);
+    }
+
     // Hit-flash: a freshly-struck entity blinks white and fades. remaining runs from
     // kHitFlashSeconds down to 0, so t is 1 on the blow and eases to 0 — mixing the dot
     // toward white by that much. Optional component (most entities have none), so try_get.
-    eng::Vec3 rgb = dot.color;
     if (const auto* flash = world.registry().try_get<eng::sim::HitFlash>(e)) {
       const float t = flash->remaining / eng::sim::kHitFlashSeconds;
       rgb = glm::mix(rgb, eng::Vec3{1.0f, 1.0f, 1.0f}, t);

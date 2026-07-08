@@ -252,6 +252,16 @@ hit-flash it stops being a visual and becomes gameplay, and that invariant is th
 point. The stamp is unconditional on a landed hit (no roll), so the seeded streams stay
 byte-for-byte identical to before it existed.
 
+Its steady twin is **wounded dimming**: where the flash shows the *blow*, dimming shows the
+accumulated *toll*. The renderer scales each dot's colour by `wounded_brightness(health)` — a
+pure function that returns 1.0 at full health and fades toward a floor (`kWoundedFloor`, never
+to black) as HP drops. It's applied to the base colour *before* the flash mix, so a fresh hit
+on a near-dead dot still pops white and then settles back to its dimmed base. The whole field
+becomes a legible health map: you can see which brute you've nearly worn down, which colonist is
+one hit from Downed — and, now that a veteran hits harder, watch that edge play out on screen.
+Like the flash it's read-only presentation (a renderer-side multiply on existing `Stats`); the
+sim never consults it.
+
 ### Where it sits in the tick
 
 Order is the definition of a tick (see [the tick and the systems](skeleton/tick-and-systems.md)):
