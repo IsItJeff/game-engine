@@ -57,6 +57,25 @@ void steer_npcs(entt::registry& reg) {
   }
 }
 
+void chase_player(entt::registry& reg) {
+  // How fast a creature closes on the player. Slower than the player's top speed
+  // (320) so you can kite it, but faster than it drifts, so it's a real pursuer.
+  constexpr float kChaseSpeed = 70.0f;
+
+  // The player is the prey. In single-player there's one; take the first.
+  const entt::entity player = reg.view<PlayerControlled, Transform>().front();
+  if (!reg.valid(player)) return;
+  const Vec2 prey = reg.get<Transform>(player).position;
+
+  // Every creature homes straight in on the player (the hostile mirror of steer_npcs).
+  auto creatures = reg.view<Enemy, Transform, Velocity>();
+  for (const entt::entity c : creatures) {
+    const Vec2 toward = prey - creatures.get<Transform>(c).position;
+    const float len = glm::length(toward);
+    if (len > 0.0f) creatures.get<Velocity>(c).value = (toward / len) * kChaseSpeed;
+  }
+}
+
 void integrate_motion(entt::registry& reg, float dt) {
   // The classic update: new position = old position + velocity * time. Runs over
   // every entity that has both a Transform and a Velocity, and no others — that
@@ -250,9 +269,32 @@ void train_on_damage(entt::registry& reg, entt::entity victim, float damage) {
   // sources to balance against. advance_progression levels Toughness next tick.
 }
 
+namespace {
+
+// Ratio mitigation (the design's damage formula): defence softens a blow forever but
+// never negates it — at least a 10% chip always lands. raw > 0 and def >= 0, so the
+// denominator is positive; def == 0 gives raw*raw/raw == raw (full damage).
+float mitigate(float raw, float def) {
+  const float softened = raw * raw / (raw + def);
+  const float chip_floor = 0.10f * raw;
+  return softened > chip_floor ? softened : chip_floor;
+}
+
+// An entity's physical defence from its VIT (Endurance). No Attributes → no defence,
+// so a bare mote or a plain target takes full damage.
+float defence_of(const entt::registry& reg, entt::entity e) {
+  constexpr float kDefencePerVit = 3.0f;  // each Endurance level past 1 adds this much
+  const Attributes* a = reg.try_get<Attributes>(e);
+  return a != nullptr ? static_cast<float>(a->endurance.level - 1) * kDefencePerVit : 0.0f;
+}
+
+}  // namespace
+
 entt::entity perform_attack(entt::registry& reg, entt::entity attacker) {
   constexpr float kBaseReach = 45.0f;                 // a little past contact range (15)
   constexpr float kReachPerStrength = 6.0f;           // each Strength level past 1 adds reach
+  constexpr float kBaseAttackDamage = 12.0f;          // a swing's raw damage before Strength
+  constexpr float kDamagePerStrength = 4.0f;          // each Strength level past 1 hits harder
   const Fixed kStrikingPerHit = Fixed::from_int(10);  // XP for a strike that connects
 
   // A swinger needs a position (to reach from) and the progression pair to train.
@@ -265,25 +307,49 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker) {
   const float reach =
       kBaseReach + static_cast<float>(attrs->strength.level - 1) * kReachPerStrength;
 
-  // Find the nearest hazard within reach (strict <, so iteration order breaks ties
-  // deterministically — same rule steer_npcs and resolve_contacts use).
+  // Find the nearest attackable target in reach — a fragile mote (Hazard) or a hostile
+  // creature (Enemy). Strict < breaks ties by iteration order (deterministic).
   entt::entity target = entt::null;
   float nearest = reach;
+  bool target_is_enemy = false;
   auto hazards = reg.view<Hazard, Transform>();
   for (const entt::entity h : hazards) {
     const float d = glm::distance(origin, hazards.get<Transform>(h).position);
     if (d < nearest) {
       nearest = d;
       target = h;
+      target_is_enemy = false;
     }
   }
-
-  // A connecting strike trains Striking -> Strength. The caller destroys the target.
-  if (target != entt::null) {
-    skills->train(SkillId::Striking).xp += kStrikingPerHit;
-    attrs->strength.xp += kStrikingPerHit;
+  auto enemies = reg.view<Enemy, Transform>();
+  for (const entt::entity e : enemies) {
+    const float d = glm::distance(origin, enemies.get<Transform>(e).position);
+    if (d < nearest) {
+      nearest = d;
+      target = e;
+      target_is_enemy = true;
+    }
   }
-  return target;
+  if (target == entt::null) return entt::null;  // a whiff — nothing in reach, no XP
+
+  // A connecting strike trains Striking -> Strength, whatever it hits.
+  skills->train(SkillId::Striking).xp += kStrikingPerHit;
+  attrs->strength.xp += kStrikingPerHit;
+
+  // A mote is fragile: hand it back for the caller to destroy outright.
+  if (!target_is_enemy) return target;
+
+  // An enemy takes STR-vs-VIT damage to its HP — base plus Strength, softened by the
+  // enemy's VIT. It is NOT destroyed here; handle_deaths reaps it at 0 HP, so a weak
+  // hit only chips it and it takes several. (An Enemy always carries Stats.)
+  const float raw =
+      kBaseAttackDamage + static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength;
+  const float applied = mitigate(raw, defence_of(reg, target));
+  if (Stats* st = reg.try_get<Stats>(target); st != nullptr) {
+    st->health.current -= applied;
+    if (st->health.current < 0.0f) st->health.current = 0.0f;
+  }
+  return entt::null;
 }
 
 void npc_attack(entt::registry& reg) {
@@ -322,14 +388,18 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point) {
     players.get<Velocity>(e).value = Vec2{0.0f, 0.0f};   // ...and standing still
   }
 
-  // NPCs: permadeath. Collect the dead, then destroy them AFTER the loop —
-  // reg.destroy() during iteration invalidates the view (the same collect-then-
-  // destroy pattern resolve_contacts uses to consume motes). This is the branch
-  // the stats docs kept promising; here it finally exists.
+  // NPCs and creatures: permadeath. Collect the dead, then destroy them AFTER the
+  // loop — reg.destroy() during iteration invalidates the view (the same collect-
+  // then-destroy pattern resolve_contacts uses to consume motes). A slain Enemy
+  // dies here too, the same way an NPC does — one death path for everyone non-player.
   std::vector<entt::entity> dead;
   auto npcs = reg.view<Stats, Npc>();
   for (const entt::entity e : npcs) {
     if (npcs.get<Stats>(e).health.current <= 0.0f) dead.push_back(e);
+  }
+  auto creatures = reg.view<Stats, Enemy>();
+  for (const entt::entity e : creatures) {
+    if (creatures.get<Stats>(e).health.current <= 0.0f) dead.push_back(e);
   }
   for (const entt::entity e : dead) reg.destroy(e);
 }
@@ -370,6 +440,30 @@ void resolve_contacts(entt::registry& reg) {
   }
 
   for (const entt::entity e : consumed) reg.destroy(e);  // safe: iteration is done
+}
+
+void resolve_creature_contacts(entt::registry& reg, float dt) {
+  constexpr float kContactDistance = 15.0f;
+  constexpr float kAttackInterval = 0.8f;  // seconds between a creature's swings
+
+  // Creatures hunt the PLAYER (chase_player homes on them), so that's who they hit.
+  auto creatures = reg.view<Enemy, Transform>();
+  auto players = reg.view<PlayerControlled, Stats, Transform>();
+  for (const entt::entity c : creatures) {
+    Enemy& enemy = creatures.get<Enemy>(c);
+    if (enemy.attack_timer > 0.0f) enemy.attack_timer -= dt;  // cooling down between swings
+    const Vec2 c_pos = creatures.get<Transform>(c).position;
+    for (const entt::entity p : players) {
+      if (glm::distance(players.get<Transform>(p).position, c_pos) >= kContactDistance) continue;
+      if (enemy.attack_timer > 0.0f) continue;  // in reach but mid-cooldown — no blow yet
+      const float applied = mitigate(enemy.attack_damage, defence_of(reg, p));
+      Vital& health = players.get<Stats>(p).health;
+      health.current -= applied;
+      if (health.current < 0.0f) health.current = 0.0f;
+      train_on_damage(reg, p, applied);      // enduring a creature's blow toughens the player
+      enemy.attack_timer = kAttackInterval;  // swung — reset the cooldown
+    }
+  }
 }
 
 }  // namespace eng::sim

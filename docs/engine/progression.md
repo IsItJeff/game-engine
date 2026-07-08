@@ -11,7 +11,9 @@ Four strands are wired end to end so far, across two attributes:
   **Endurance**, which grows your **max health and stamina** *and* speeds how fast
   stamina comes back;
 - **attacking** trains **Striking**, which raises **Strength**, which lengthens your
-  **attack reach**.
+  **attack reach** *and* your **attack damage** — against the hostile **creatures** (red
+  dots with HP that hunt you), a higher Strength kills faster, while your Endurance
+  (VIT) softens the blows they land. Damage is `Strength`-vs-`VIT` ratio mitigation.
 
 The player and NPCs run the identical machinery — progression *and* combat — so a
 long-lived NPC that has moved, been hurt, and fought grows genuinely tougher and

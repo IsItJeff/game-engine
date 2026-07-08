@@ -39,9 +39,26 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel) {
   return e;
 }
 
+// Create one hostile creature: a real fight, not a throwaway mote. It has HP (Stats)
+// that attacks whittle down over several hits, VIT (Attributes) that softens the blows
+// it takes, and the Enemy marker (so chase_player hunts the player, resolve_creature_
+// contacts hurts them, and handle_deaths reaps it at 0 HP). Deep red so it reads as a
+// threat. No regen — you can wear it down; no Skills/CharacterLevel — it doesn't grow.
+entt::entity make_creature(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<Velocity>(e);
+  reg.emplace<RenderDot>(e, Vec3{0.85f, 0.2f, 0.2f}, 9.0f);  // deep red
+  reg.emplace<Stats>(e, Vital{40.0f, 40.0f, 0.0f});          // 40 HP, no regen
+  reg.emplace<Attributes>(e).endurance.level = 3;  // some VIT: softens attacks (STR-vs-VIT)
+  reg.emplace<Enemy>(e);
+  return e;
+}
+
 // Build the opening scene: a controllable player in the centre, a few wandering
-// NPCs, and a dozen ambient motes drifting in deterministic directions. Returns
-// the player entity.
+// NPCs, a couple of hunting creatures, and a dozen ambient motes drifting in
+// deterministic directions. Returns the player entity.
 entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   const Vec2 center{kFieldWidth * 0.5f, kFieldHeight * 0.5f};
 
@@ -72,6 +89,11 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
                    static_cast<float>((i + 1) * 140 % static_cast<int>(kFieldHeight))};
     make_npc(reg, pos, Vec2{vel(rng), vel(rng)});
   }
+
+  // Two hostile creatures at opposite corners that hunt the player — the first real
+  // fights. Strike them (J) to wear their HP down; a stronger Strength kills faster.
+  make_creature(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
+  make_creature(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
   return player;
 }
 
@@ -99,7 +121,8 @@ void World::step() {
   // 3. Run the systems, in this fixed, readable order. Adding behaviour means
   //    writing a system and adding a line here.
   const float dt = static_cast<float>(kSecondsPerTick);
-  steer_npcs(registry_);  // NPCs decide where to go (may set their velocity)
+  steer_npcs(registry_);    // NPCs decide where to flee (may set their velocity)
+  chase_player(registry_);  // creatures decide to home in on the player
   integrate_motion(registry_, dt);
   npc_attack(registry_);           // NPCs strike any hazard now in reach (positions are current)
   update_stamina(registry_, dt);   // moving costs stamina; resting restores it
@@ -108,7 +131,8 @@ void World::step() {
   // Collision runs after movement (positions are current), then death is checked
   // from any damage it dealt, then survivors regenerate. This order is the
   // definition of the tick — collision before death before heal.
-  resolve_contacts(registry_);
+  resolve_contacts(registry_);               // motes shatter on contact
+  resolve_creature_contacts(registry_, dt);  // creatures swing on their cooldown
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f});
   regenerate_vitals(registry_, dt);
 
