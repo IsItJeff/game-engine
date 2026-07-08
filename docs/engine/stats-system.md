@@ -124,12 +124,19 @@ is tuned to out-pace the fastest self-heal, or `regenerate_vitals` would undo it
 marker), the same "people, not monsters" set the creatures hunt; creatures themselves are
 combat foes with no belly to fill.
 
+NPCs **feed themselves**, too — the parity guardrail in full. A hungry colonist forages:
+when it's safe (no hazard to flee) and its hunger drops below a threshold, `steer_npcs`
+steers it toward the nearest food orb, and it eats on arrival through the same
+`collect_pickups` — healing, growing, and refilling exactly as the player does. That is
+the first *want-driven* NPC motion (until now they only ever fled), and it turns the loot
+orbs into a shared resource the colony competes over.
+
 !!! note "A known ceiling"
-    NPCs drain hunger but can't yet *eat* (only the player collects orbs), so a colonist
-    with no food supply slowly starves. The drain is kept gentle so the colony spawner
-    out-paces the loss; the real fix — NPC foraging/feeding behaviour, and real crops/meals
-    — is a later survival slice. This is the seed of the food-production economy the colony
-    sim is built around.
+    The only food is still loot orbs — dropped by creature deaths, so finite and clustered
+    where the fighting is. A colonist getting hungry in a quiet corner with no orbs nearby
+    can still starve. The full fix is a real food economy — crops, farming, stored meals —
+    a later survival slice; this is its seed. (The drain is also kept gentle so the 12 s
+    colony spawner out-paces attrition regardless.)
 
 ## Extending it
 

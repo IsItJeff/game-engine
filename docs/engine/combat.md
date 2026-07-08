@@ -207,7 +207,8 @@ Run the demo: red creatures close in from the edges and go for whoever's nearest
 unlucky NPC get run down and killed for good, though fresh colonists wander in over time
 to replace the fallen). Press `J` to fight (watch a weak Strength
 take several hits, a grown one fewer); your health bar dips under their blows but you
-steady it by grabbing the orbs they drop, and the NPCs chip in. Keep moving — you outrun
+steady it by grabbing the orbs they drop — though a hungry NPC may beat you to one, since
+colonists now forage for food when they're not fleeing. The NPCs chip in. Keep moving — you outrun
 every creature (your 320 vs a brute's 70, a swarmer's 130), so a swarm is survivable by
 kiting. Stand and trade blows and you'll slowly train **Dexterity** — after a while some
 hits simply whiff, dodged outright.

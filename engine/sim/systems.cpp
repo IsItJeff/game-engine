@@ -26,15 +26,24 @@ void steer_npcs(entt::registry& reg) {
   // component (rule 12: write the concrete thing first, abstract on the 2nd use).
   constexpr float kSenseRadius = 120.0f;
   constexpr float kFleeSpeed = 90.0f;
+  // Foraging: once hunger drops below this fraction of max, a safe NPC heads for the
+  // nearest food orb it can see. Larger sense radius than danger — a hungry colonist
+  // scans wider for a meal. Knobs.
+  constexpr float kHungerSeekFraction = 0.6f;
+  constexpr float kForageRadius = 260.0f;
+  constexpr float kForageSpeed = 80.0f;
 
-  // Nested loop: every NPC against every hazard — O(n*m), fine for a handful. A
-  // real crowd would query a spatial grid, the same upgrade resolve_contacts wants.
+  // Nested loops: every NPC against every hazard / every orb — O(n*m), fine for a handful.
+  // A real crowd would query a spatial grid, the same upgrade resolve_contacts wants.
+  // ponytail: no orb-reservation — several hungry NPCs can converge on one orb and the
+  // first to reach it eats (collect_pickups); add claims only if the scramble looks bad.
   auto npcs = reg.view<Npc, Transform, Velocity>();
   auto hazards = reg.view<Hazard, Transform>();
+  auto food = reg.view<Pickup, Transform>();
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
 
-    // Perception: find the single nearest hazard within sense range.
+    // Perception, priority 1 — danger: the single nearest hazard within sense range.
     float nearest = kSenseRadius;
     Vec2 threat{0.0f, 0.0f};
     bool sees_threat = false;
@@ -48,13 +57,34 @@ void steer_npcs(entt::registry& reg) {
       }
     }
 
-    // Action: flee straight away from the threat. With nothing in range the NPC
-    // keeps whatever velocity it already had, so it just drifts on.
+    // Fear beats hunger: flee straight away from a threat, ignoring food.
     if (sees_threat) {
       const Vec2 away = pos - threat;
       const float len = glm::length(away);
       if (len > 0.0f) npcs.get<Velocity>(n).value = (away / len) * kFleeSpeed;
+      continue;
     }
+
+    // Priority 2 — hunger: a safe but hungry colonist seeks the nearest orb (its FIRST
+    // want-driven motion; until now NPCs only ever fled). A fed one just drifts. It eats
+    // when it arrives, in collect_pickups — this only steers it there.
+    const Stats* stats = reg.try_get<Stats>(n);
+    if (stats == nullptr || stats->hunger.current >= stats->hunger.max * kHungerSeekFraction) {
+      continue;  // not hungry (or no Stats) — keep drifting
+    }
+    entt::entity meal = entt::null;
+    float nearest_food = kForageRadius;
+    for (const entt::entity f : food) {
+      const float d = glm::distance(pos, food.get<Transform>(f).position);
+      if (d < nearest_food) {
+        nearest_food = d;
+        meal = f;
+      }
+    }
+    if (meal == entt::null) continue;  // nothing edible in range — keep drifting
+    const Vec2 toward = food.get<Transform>(meal).position - pos;
+    const float len = glm::length(toward);
+    if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kForageSpeed;
   }
 }
 
@@ -186,10 +216,11 @@ void drain_hunger(entt::registry& reg, float dt) {
 
   // Every PERSON gets hungry — the player and NPCs (Stats without the Enemy marker, the
   // same "people, not monsters" set chase_prey hunts). Creatures are excluded: they're
-  // pure combat foes, not colonists with bellies to fill.
-  // ponytail: NPCs drain but can't yet EAT (collect_pickups is player-only), so a colonist
-  // with no food supply slowly starves — kept gentle so the 12s colony spawner outpaces the
-  // loss; the real fix is an NPC foraging/feeding behaviour (a later survival slice).
+  // pure combat foes, not colonists with bellies to fill. NPCs now feed themselves too:
+  // a hungry one forages for the nearest orb (steer_npcs) and eats it (collect_pickups).
+  // ponytail: the only food is still loot orbs (from creature deaths, finite and clustered
+  // where kills happen), so a colonist starving in a quiet corner can still die — the full
+  // fix is a real food economy (crops/meals), a later survival slice.
   auto view = reg.view<Stats>(entt::exclude<Enemy>);
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
@@ -542,7 +573,13 @@ void collect_pickups(entt::registry& reg, float dt) {
   constexpr float kPickupDistance = 15.0f;  // same reach as a contact
 
   std::vector<entt::entity> taken;  // collected or faded — collect, then destroy (never mid-view)
-  auto players = reg.view<PlayerControlled, Stats, Transform>();
+  // Anyone with a Stats sheet who ISN'T a creature can eat an orb — the player and hungry
+  // NPCs alike (the same "people, not monsters" set drain_hunger and chase_prey use). The
+  // exclude<Enemy> is load-bearing: creatures also carry Stats, and letting them heal and
+  // gain permanent max-HP off the very orbs they drop would break the fight. The eat body
+  // below already try_get-guards Skills/Attributes, so an NPC grows from loot exactly as the
+  // player does — the parity the design's "NPCs run the identical system" demands.
+  auto eaters = reg.view<Stats, Transform>(entt::exclude<Enemy>);
   auto pickups = reg.view<Pickup, Transform>();
   for (const entt::entity item : pickups) {
     Pickup& pk = pickups.get<Pickup>(item);
@@ -552,9 +589,9 @@ void collect_pickups(entt::registry& reg, float dt) {
       continue;
     }
     const Vec2 item_pos = pickups.get<Transform>(item).position;
-    for (const entt::entity p : players) {
-      if (glm::distance(players.get<Transform>(p).position, item_pos) >= kPickupDistance) continue;
-      Stats& stats = players.get<Stats>(p);
+    for (const entt::entity p : eaters) {
+      if (glm::distance(eaters.get<Transform>(p).position, item_pos) >= kPickupDistance) continue;
+      Stats& stats = eaters.get<Stats>(p);
       Vital& health = stats.health;
       // A permanent max-HP bump: grow base (which advance_progression keeps max in step
       // with each tick) and max now too — the direct max bump is also the only growth
