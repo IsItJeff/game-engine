@@ -267,6 +267,23 @@ struct Enemy {
   float attack_timer = 0.0f;            // seconds until it can swing again; 0 = ready
   float chase_speed = 70.0f;            // how fast it closes on its prey (chase_prey)
   DropKind drop = DropKind::HealthOrb;  // on death: what this archetype leaves behind
+  // If > 0, a landed blow also ENVENOMS the victim: it applies a Poisoned that chips health for a
+  // while after. 0 = not venomous. "Procs as data" (the design's P4) — an archetype knob, not a
+  // special case in the combat code. Swarmers are venomous; brutes/sentinels aren't.
+  float poison_per_second = 0.0f;
+};
+
+// A lingering damage-over-time left by a venomous blow (resolve_creature_contacts). Unlike a hit,
+// it keeps chipping `health` for `remaining` seconds AFTER the attacker has gone — the "you got
+// away but the venom lingers" threat that makes the fast swarm scarier to disengage from.
+// tick_poison ages it and reaps it at 0; the chip routes through the normal handle_deaths death
+// path. Venom also SUPPRESSES healing while it lasts (regenerate_vitals skips a poisoned entity),
+// so the chip lands in full instead of being cancelled by regen — that's what keeps the threat
+// real. Resistance is the bigger HP POOL a tougher character carries (VIT grows max), not
+// out-healing it.
+struct Poisoned {
+  float remaining = 0.0f;          // seconds of venom left
+  float damage_per_second = 0.0f;  // health chipped each second while it lasts
 };
 
 // A collectible a slain creature leaves behind: walk over it (collect_pickups) to

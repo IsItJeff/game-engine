@@ -366,7 +366,12 @@ void regenerate_vitals(entt::registry& reg, float dt) {
     // ...nor on an empty canteen: dehydration gates healing the same way starvation does, so both
     // needs net health strictly downward (drain_water also runs before this system in step()). One
     // `||` clause, so the two survival needs compose rather than either special-casing the other.
-    if (s.hunger.current <= 0.0f || s.water.current <= 0.0f) continue;
+    // ...nor while POISONED: venom SUPPRESSES healing (the classic poison rule), so its chip lands
+    // in full instead of being cancelled by a fed character's regen — that's what makes the
+    // lingering bite a real threat. tick_poison runs before this system and reaps expired Poisoned,
+    // so the flag here means active venom. A tougher character resists via its bigger HP POOL
+    // (VIT), not regen.
+    if (s.hunger.current <= 0.0f || s.water.current <= 0.0f || reg.all_of<Poisoned>(e)) continue;
 
     // Tougher characters heal faster (VIT). No Attributes -> boost 1.0 (bit-identical to
     // before), so creatures and bare entities are unchanged. Same shape as update_stamina.
@@ -1101,12 +1106,15 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // Back on your feet WHOLE — every vital, not just health. Hunger AND water especially must reset:
   // neither self-recovers, so reviving with an empty stomach (or a dry canteen) would re-starve (or
   // re-dehydrate) the player and drop them straight back down. Stamina too, so you don't get up
-  // mid-exhaustion. Any Need added later must reset HERE for the same reason.
-  const auto revive = [](Stats& s, Velocity& v) {
+  // mid-exhaustion. Active VENOM is cleared as well — else a rescue would hand you back a body that
+  // can't heal (poison gates regen), re-endangering you. Any Need/lethal status added later must
+  // reset HERE for the same reason.
+  const auto revive = [&reg](entt::entity e, Stats& s, Velocity& v) {
     s.health.current = s.health.max;
     s.stamina.current = s.stamina.max;
     s.hunger.current = s.hunger.max;
     s.water.current = s.water.max;
+    reg.remove<Poisoned>(e);  // no lingering lethal status through a revive
     v.value = Vec2{0.0f, 0.0f};
   };
 
@@ -1143,7 +1151,7 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
 
     down->timer -= dt;
     if (rescuer != entt::null) {
-      revive(s, players.get<Velocity>(e));  // up in place — you keep the ground you fell on
+      revive(e, s, players.get<Velocity>(e));  // up in place — you keep the ground you fell on
       reg.remove<Downed>(e);
       // The first MORAL deed: hauling up a helpless ally is Charity, credited to the RESCUER (not
       // the rescued). This closes the loop on the compassion axis — compassion sets how FAST an NPC
@@ -1154,7 +1162,7 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
     } else if (down->timer <= 0.0f) {
       // Unrescued: the humane fallback so a solo player isn't stuck down forever — respawn
       // whole at the field centre. A DELAYED, earned-back respawn, not the old instant one.
-      revive(s, players.get<Velocity>(e));
+      revive(e, s, players.get<Velocity>(e));
       players.get<Transform>(e).position = respawn_point;
       reg.remove<Downed>(e);
     }
@@ -1304,6 +1312,7 @@ void resolve_contacts(entt::registry& reg) {
 void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng) {
   constexpr float kContactDistance = 15.0f;
   constexpr float kAttackInterval = 0.8f;              // seconds between a creature's swings
+  constexpr float kPoisonDuration = 3.0f;              // how long a venomous bite lingers (a knob)
   const Fixed kEvasionPerSwing = Fixed::from_int(10);  // XP for facing a swing, dodged or not
   std::uniform_real_distribution<float> unit(0.0f, 1.0f);
 
@@ -1346,8 +1355,39 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       if (health.current < 0.0f) health.current = 0.0f;
       train_on_damage(reg, p, applied);  // enduring a creature's blow toughens the victim
       stamp_flash(reg, p);               // the struck victim blinks white
+
+      // A venomous archetype's landed blow LINGERS: (re)apply Poisoned so the venom keeps chipping
+      // after the swarm moves on — the reason a fast swarm is scary to disengage from. Refreshed on
+      // each fresh bite. get_or_emplace is safe mid-iteration (Poisoned isn't in the prey view).
+      // Non-venomous creatures (poison_per_second 0) skip this, so an unpoisoned world is
+      // unchanged.
+      if (enemy.poison_per_second > 0.0f) {
+        Poisoned& venom = reg.get_or_emplace<Poisoned>(p);
+        venom.remaining = kPoisonDuration;
+        venom.damage_per_second = enemy.poison_per_second;
+      }
     }
   }
+}
+
+void tick_poison(entt::registry& reg, float dt) {
+  // Chip each poisoned entity's health by its venom, age the timer, and reap the status when spent.
+  // Collect-then-remove: removing a component mid-view-walk invalidates the iterator (the ECS trap
+  // decay_flashes/handle_deaths avoid). The chip routes through handle_deaths (reaps at 0), exactly
+  // like starvation/dehydration — so venom can be lethal, but a tougher character's regen (VIT)
+  // partly offsets it: an emergent resistance, no special case.
+  std::vector<entt::entity> cured;
+  auto view =
+      reg.view<Poisoned, Stats>(entt::exclude<Downed>);  // a downed body is inert (invariant)
+  for (const entt::entity e : view) {
+    Poisoned& venom = view.get<Poisoned>(e);
+    Vital& health = view.get<Stats>(e).health;
+    health.current -= venom.damage_per_second * dt;
+    if (health.current < 0.0f) health.current = 0.0f;
+    venom.remaining -= dt;
+    if (venom.remaining <= 0.0f) cured.push_back(e);
+  }
+  for (const entt::entity e : cured) reg.remove<Poisoned>(e);
 }
 
 void decay_flashes(entt::registry& reg, float dt) {

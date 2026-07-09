@@ -980,6 +980,7 @@ TEST_CASE("an unrescued downed player respawns whole at the centre on expiry", "
   stats.hunger.current = 0.0f;   // ...of starvation...
   stats.stamina.current = 0.0f;  // ...and exhausted
   stats.water.current = 0.0f;  // ...and parched (each Need must come back full or it re-downs you)
+  reg.emplace<eng::sim::Poisoned>(player, eng::sim::Poisoned{5.0f, 10.0f});  // ...and envenomed
 
   const eng::Vec2 centre{640.0f, 360.0f};
   eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // 1st call: goes Downed (no ally near)
@@ -992,6 +993,8 @@ TEST_CASE("an unrescued downed player respawns whole at the centre on expiry", "
   REQUIRE(after.hunger.current == Approx(after.hunger.max));    // ...fed (not re-starving)...
   REQUIRE(after.stamina.current == Approx(after.stamina.max));  // ...and rested...
   REQUIRE(after.water.current == Approx(after.water.max));  // ...and watered (not re-dehydrating)
+  REQUIRE_FALSE(
+      reg.all_of<eng::sim::Poisoned>(player));  // ...and cured of venom (no lethal status)
   REQUIRE(reg.get<eng::sim::Transform>(player).position.x == Approx(centre.x));  // ...at the centre
 }
 
@@ -1905,6 +1908,78 @@ TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it 
   REQUIRE(evasion != nullptr);
   REQUIRE(evasion->xp.to_double() > 0.0);                                         // Evasion trained
   REQUIRE(reg.get<eng::sim::Attributes>(player).dexterity.xp.to_double() > 0.0);  // ...and its DEX
+}
+
+TEST_CASE("poison chips health over time and then wears off", "[sim]") {
+  // The lingering half of a venomous bite: it keeps chipping health for its duration (through the
+  // normal death path), then tick_poison reaps the status.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Stats>(e);                                      // full health (100)
+  reg.emplace<eng::sim::Poisoned>(e, eng::sim::Poisoned{2.0f, 10.0f});  // 2s of 10/s venom
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::tick_poison(reg, dt);  // 1 second
+  const float after_1s = reg.get<eng::sim::Stats>(e).health.current;
+  REQUIRE(after_1s < 100.0f);                  // venom chipped health...
+  REQUIRE(reg.all_of<eng::sim::Poisoned>(e));  // ...and half of a 2s dose still lingers
+
+  for (int i = 0; i < 2 * eng::sim::kTicksPerSecond; ++i)
+    eng::sim::tick_poison(reg, dt);  // 2 more s
+  REQUIRE(reg.get<eng::sim::Stats>(e).health.current <
+          after_1s);                                 // it chipped more before expiring...
+  REQUIRE_FALSE(reg.all_of<eng::sim::Poisoned>(e));  // ...then wore off (reaped)
+}
+
+TEST_CASE("a venomous creature's bite leaves the victim poisoned; a plain one doesn't", "[sim]") {
+  // A landed blow from a venomous archetype (swarmers) applies Poisoned; a non-venomous one leaves
+  // none. Fires for any victim — player or NPC — through the same resolve_creature_contacts
+  // (parity).
+  const auto poisoned_after_bite = [](float foe_poison, bool victim_is_npc) {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);
+    reg.emplace<eng::sim::Attributes>(victim);  // Dexterity 1 -> never dodges, so the bite lands
+    if (victim_is_npc)
+      reg.emplace<eng::sim::Npc>(victim);
+    else
+      reg.emplace<eng::sim::PlayerControlled>(victim);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});  // in contact (distance 0)
+    reg.emplace<eng::sim::Enemy>(foe).poison_per_second = foe_poison;
+
+    std::mt19937 rng{1234};
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return reg.all_of<eng::sim::Poisoned>(victim);
+  };
+  REQUIRE(poisoned_after_bite(9.0f, false));        // a venomous bite poisons the player...
+  REQUIRE(poisoned_after_bite(9.0f, true));         // ...and an NPC identically (parity)...
+  REQUIRE_FALSE(poisoned_after_bite(0.0f, false));  // ...a non-venomous bite leaves no venom
+}
+
+TEST_CASE("poison suppresses healing, so venom nets health strictly down", "[sim]") {
+  // Venom gates regen (regenerate_vitals skips a poisoned entity), so even a high-regen character
+  // LOSES health while poisoned instead of out-healing the chip — the same gate starvation uses,
+  // and the reason the lingering bite is a real threat rather than cancelled by a fed character's
+  // regen.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  auto& s = reg.emplace<eng::sim::Stats>(e);
+  s.health = eng::sim::Vital{50.0f, 100.0f, 8.0f};  // wounded, heals 8/s base...
+  reg.emplace<eng::sim::Attributes>(e).endurance.level =
+      8;  // ...boosted to 13.6/s, ABOVE the venom
+  reg.emplace<eng::sim::Poisoned>(e,
+                                  eng::sim::Poisoned{2.0f, 9.0f});  // 9/s venom (< the 13.6 regen)
+
+  const float before = s.health.current;
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) {  // one second, the real tick order
+    eng::sim::tick_poison(reg, dt);                      // venom chips...
+    eng::sim::regenerate_vitals(reg,
+                                dt);  // ...and healing is gated off while poisoned, no clawback
+  }
+  REQUIRE(reg.get<eng::sim::Stats>(e).health.current < before);  // strictly down despite high regen
 }
 
 TEST_CASE("a high-Dexterity player dodges some blows but not all", "[sim]") {
