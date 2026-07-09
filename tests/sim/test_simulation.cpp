@@ -2210,6 +2210,37 @@ TEST_CASE("a worn-down creature enrages and hits harder", "[sim]") {
   REQUIRE(wounded_hit > healthy_hit);          // ...and the cornered beast hit harder
 }
 
+TEST_CASE("a finishing blow hits a worn-down creature harder: execute, the mirror of enrage",
+          "[sim]") {
+  // The offensive twin of enrage: a creature already below the same worn-down fraction of its HP
+  // takes MORE from the next blow, so a half-dead foe both rages and folds fast. Two identical
+  // foes, the same swing (LCK/DEX 1 -> no crit, no dodge, no RNG); the ONLY difference is current
+  // HP, so any damage gap is the execute bonus alone.
+  const auto damage_dealt = [](float current_hp) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);
+    reg.emplace<eng::sim::Skills>(atk);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});                 // inside reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{current_hp, 100.0f, 0.0f});  // max 100
+    reg.emplace<eng::sim::Attributes>(
+        foe);  // default DEX 1 -> dodge_chance 0, so every swing lands
+    reg.emplace<eng::sim::Enemy>(foe);
+
+    std::mt19937 rng{1234};
+    eng::sim::perform_attack(reg, atk, rng);
+    return current_hp - reg.get<eng::sim::Stats>(foe).health.current;
+  };
+  const float healthy = damage_dealt(100.0f);  // full HP (100%) -> no execute
+  const float wounded = damage_dealt(20.0f);   // 20% (< 30% threshold) -> execute bonus
+  const float on_edge = damage_dealt(35.0f);   // 35% (> 30%) -> still no execute
+  REQUIRE(healthy > 0.0f);                     // the swing landed...
+  REQUIRE(wounded > healthy);                  // ...and the worn-down foe took more...
+  REQUIRE(on_edge == Approx(healthy));         // ...but only once it's past the threshold
+}
+
 TEST_CASE("a raised guard softens a creature's blow", "[sim]") {
   // A Blocking victim takes less damage — the reward that pays for the mobility a guard costs.
   const auto hit_damage = [](bool guarding) {

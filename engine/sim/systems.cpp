@@ -980,9 +980,21 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   const float crit = crit_chance(attrs->luck.level);
   const float applied =
       (crit > 0.0f && unit(rng) < crit) ? base_damage * kCritMultiplier : base_damage;
+
+  // EXECUTE: a creature already worn below kExecuteThreshold of its HP takes MORE from the
+  // finishing blow — the offensive MIRROR of enrage (resolve_creature_contacts), which is keyed on
+  // the SAME 0.3 fraction. Together they make a half-dead foe a sharp risk/reward: below 30% it
+  // lashes out harder (enrage) but also folds faster (execute), so you commit to the finish or you
+  // pay for leaving it there. A pure comparison on the target's CURRENT fraction before this blow
+  // lands — no RNG — so a low creature dies a little sooner but replay stays bit-identical.
+  constexpr float kExecuteThreshold =
+      0.3f;                              // below this fraction of its HP, a foe is finishable...
+  constexpr float kExecuteBonus = 1.5f;  // ...and the finishing blow lands this much harder
   if (Stats* st = reg.try_get<Stats>(target); st != nullptr) {
     const bool was_alive = st->health.current > 0.0f;
-    st->health.current -= applied;
+    const float dealt =
+        st->health.current < st->health.max * kExecuteThreshold ? applied * kExecuteBonus : applied;
+    st->health.current -= dealt;
     if (st->health.current < 0.0f) st->health.current = 0.0f;
     stamp_flash(reg, target);  // the struck target blinks white
     // The killing blow on a HOSTILE is a Valor deed for the attacker — the SECOND deed through the
