@@ -1550,6 +1550,135 @@ TEST_CASE("an NPC that fells a creature via npc_attack earns Valor (parity)", "[
   REQUIRE(eng::sim::standing(*led) == 5);  // a colonist's kill is Valor, same as the player's
 }
 
+TEST_CASE("a player who strikes a peaceful colonist earns Cruelty and sinks their standing",
+          "[sim]") {
+  // The morality ledger's VILLAIN mirror: with nothing hostile in reach, a PLAYER swinging near a
+  // colonist hits it — a deliberate act of Cruelty that both wounds the victim and drops the
+  // striker's standing below zero. This is the first deed that makes standing NEGATIVE, so it also
+  // proves the signed formula sinks as well as it lifts.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(player);
+  reg.emplace<eng::sim::Skills>(player);
+  reg.emplace<eng::sim::PlayerControlled>(player);  // the gate: only a player turns cruel
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{20.0f, 0.0f});  // inside reach
+  reg.emplace<eng::sim::Stats>(colonist, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+
+  std::mt19937 rng{1234};  // the cruel branch draws no RNG at all
+  eng::sim::perform_attack(reg, player, rng);
+
+  REQUIRE(reg.get<eng::sim::Stats>(colonist).health.current < 40.0f);  // the betrayal wounded them
+  const eng::sim::BehaviorLedger* led = reg.try_get<eng::sim::BehaviorLedger>(player);
+  REQUIRE(led != nullptr);
+  REQUIRE(eng::sim::standing(*led) == -6);  // Cruelty ×6 -> the first negative standing
+}
+
+TEST_CASE("a hostile in reach shields a nearby colonist: no accidental Cruelty mid-combat",
+          "[sim]") {
+  // The safety gate that makes cruelty a CHOICE, not a slip: hostiles are always searched first and
+  // win the target, so even a player standing beside a colonist strikes the CREATURE while one is
+  // in reach — no cruelty is recorded, and the colonist is untouched. You can only turn on the
+  // colony when there's nothing else to fight.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(player);
+  reg.emplace<eng::sim::Skills>(player);
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{15.0f, 0.0f});  // in reach
+  reg.emplace<eng::sim::Stats>(colonist, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{25.0f, 0.0f});  // also in reach, further off
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);  // default DEX 1 -> dodge_chance 0, so the strike lands
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  std::mt19937 rng{1234};
+  eng::sim::perform_attack(reg, player, rng);
+
+  REQUIRE(reg.get<eng::sim::Stats>(colonist).health.current == 40.0f);  // colonist unharmed
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current < 40.0f);        // the creature took the hit
+  // No ledger at all: the cruel branch never ran (a hostile was in reach), and the foe survived the
+  // chip, so there's no Valor either.
+  REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(player) == nullptr);
+}
+
+TEST_CASE("an NPC never turns cruel: only the player can strike the colony", "[sim]") {
+  // The player-only gate through npc_attack: an NPC with a peaceful colonist beside it and nothing
+  // hostile around swings a whiff (motes/enemies only) — it does NOT strike its neighbour, so no
+  // Cruelty is ever recorded on an NPC. NPC-vs-NPC villainy is a later ring's AI, not a side effect
+  // of the shared perform_attack.
+  entt::registry reg;
+  const entt::entity aggressor = reg.create();
+  reg.emplace<eng::sim::Transform>(aggressor, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(aggressor).strength.level = 20;
+  reg.emplace<eng::sim::Skills>(aggressor);
+  reg.emplace<eng::sim::Npc>(aggressor);
+  const entt::entity neighbour = reg.create();
+  reg.emplace<eng::sim::Transform>(neighbour, eng::Vec2{10.0f, 0.0f});  // well inside reach
+  reg.emplace<eng::sim::Stats>(neighbour, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(neighbour);
+  reg.emplace<eng::sim::Npc>(neighbour);
+
+  std::mt19937 rng{1234};
+  eng::sim::npc_attack(reg, rng);
+
+  REQUIRE(reg.get<eng::sim::Stats>(neighbour).health.current ==
+          40.0f);  // untouched by its neighbour
+  REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(aggressor) == nullptr);  // no NPC ever turns cruel
+}
+
+TEST_CASE("the cruel branch stays its hand: a downed colonist and an empty swing record nothing",
+          "[sim]") {
+  // The two do-NOTHING guards of the villain path, each deliberate branch logic that ships without
+  // a visible effect of its own: (1) a DOWNED colonist is excluded from the victim search — no
+  // infamy for kicking a fallen body — and (2) a player swinging at literally nothing (no hostile,
+  // no colonist in reach) still just whiffs. Neither leaves a ledger.
+  {
+    // (1) A player, a colonist in reach that is already Downed, nothing hostile around.
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(player);
+    reg.emplace<eng::sim::Skills>(player);
+    reg.emplace<eng::sim::PlayerControlled>(player);
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{15.0f, 0.0f});  // in reach
+    reg.emplace<eng::sim::Stats>(colonist, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    reg.emplace<eng::sim::Downed>(colonist);  // excluded from the cruel search
+
+    std::mt19937 rng{1234};
+    eng::sim::perform_attack(reg, player, rng);
+
+    REQUIRE(reg.get<eng::sim::Stats>(colonist).health.current == 40.0f);  // a corpse is spared
+    REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(player) == nullptr);    // so no Cruelty
+  }
+  {
+    // (2) A player alone — nothing hostile, no colonist in reach: a plain whiff, no deed.
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(player);
+    reg.emplace<eng::sim::Skills>(player);
+    reg.emplace<eng::sim::PlayerControlled>(player);
+
+    std::mt19937 rng{1234};
+    // Extra parens: Catch2 can't decompose `entity == entt::null` (entt's operator== is ambiguous
+    // with ExprLhs), so evaluate the bool ourselves.
+    REQUIRE((eng::sim::perform_attack(reg, player, rng) == entt::null));  // hand nothing back
+    REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(player) == nullptr);    // and record nothing
+  }
+}
+
 TEST_CASE("a veteran attacker hits harder than a fresh one at equal Strength", "[sim]") {
   // The Character Level is a global "veteran" multiplier. It already scaled the earned HP
   // pool; now it scales the earned Strength delta on a swing's damage too (POWER(level - 1)),

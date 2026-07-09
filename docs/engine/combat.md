@@ -55,6 +55,11 @@ flowchart TD
   hostile `Enemy`. A mote is fragile (one hit); a creature has HP and takes several.
 - Any **connecting** swing trains **Striking → Strength**, whatever it hits — *even a
   strike the creature dodges* (you learn from a whiff; only the damage is skipped).
+- **The dark branch:** when a **player** swings with *no hostile* in reach but a peaceful
+  colonist beside them, the whiff becomes a **cruel strike** — the same damage, and a
+  Cruelty deed that sinks their standing. Hostiles always win the target, so this only
+  fires with nothing else to fight; it is the villain path, covered in
+  [Morality](morality.md#how-it-works).
 
 ### The damage contest — Strength vs VIT
 

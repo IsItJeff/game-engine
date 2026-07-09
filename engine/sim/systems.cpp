@@ -27,6 +27,12 @@ constexpr std::int32_t kRescueCharity = 1;
 // monster reads as +5 standing.
 constexpr std::int32_t kValorKill = 1;
 
+// Striking a PEACEFUL colonist is a Cruelty deed of this size on the attacker — one atomic deed
+// unit, the VILLAIN mirror of Valor and the first deed that SINKS standing. standing weights
+// Cruelty ×6, so one betrayal reads as -6 standing: villainy is dearer than heroism is cheap, on
+// purpose.
+constexpr std::int32_t kCrueltyStrike = 1;
+
 // How far a single deed nudges the actor's matching PERSONALITY axis (deed-driven DRIFT). Small and
 // bounded on purpose — the design wants "the war changed him", not a wholly different person: at 2
 // per deed a full ±100 swing takes ~50 deeds, so a demo's handful gives a visible-but-partial
@@ -846,6 +852,17 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // not from further; keep acquisition stable.
   const float reach = kBaseReach + static_cast<float>(effective_strength - 1) * kReachPerStrength;
 
+  // The raw damage of THIS swing, computed once for whoever it lands on (a hostile below, or a
+  // colonist in the cruel-strike branch). base + earned-Strength delta (compounded by the veteran
+  // multiplier) + the weapon's granted +Strength (flat). Only the XP-EARNED levels compound — gear
+  // is loot, not grind, so it must NOT scale with an unrelated character level (that would make one
+  // blade worth wildly more on a veteran). Keeps the "multiply only what you earned" invariant
+  // honest and mirrors advance_progression, which scales the earned endurance.level - 1 alone.
+  const int gear_strength = gear != nullptr ? gear->strength_bonus : 0;
+  const float raw = kBaseAttackDamage +
+                    static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength * veteran +
+                    static_cast<float>(gear_strength) * kDamagePerStrength;
+
   // Find the nearest attackable target in reach — a fragile mote (Hazard) or a hostile
   // creature (Enemy). Strict < breaks ties by iteration order (deterministic).
   entt::entity target = entt::null;
@@ -869,7 +886,42 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       target_is_enemy = true;
     }
   }
-  if (target == entt::null) return entt::null;  // a whiff — nothing in reach, no XP
+  if (target == entt::null) {
+    // Nothing hostile in reach. A PLAYER may still choose to swing at a peaceful colonist here — a
+    // deliberate act of CRUELTY, the villain mirror of Valor and the first deed that DROPS
+    // standing. Gated three ways so it reads as a choice, never a slip: (1) only a player swings
+    // this way — NPCs never turn on the colony (npc_attack shares this function; an NPC-villain AI
+    // is a later ring), (2) hostiles were searched first and always win the target, so you can
+    // reach a colonist only with nothing else to fight, (3) it must be in reach. Downed bodies are
+    // excluded — no infamy for kicking a corpse.
+    if (reg.all_of<PlayerControlled>(attacker)) {
+      entt::entity victim = entt::null;
+      float nearest_npc = reach;
+      auto colonists = reg.view<Npc, Transform>(entt::exclude<Downed>);
+      for (const entt::entity c : colonists) {
+        const float d = glm::distance(origin, colonists.get<Transform>(c).position);
+        if (d < nearest_npc) {
+          nearest_npc = d;
+          victim = c;
+        }
+      }
+      if (victim != entt::null) {
+        // A cruel strike lands plainly — no dodge, no crit (an unsuspecting colonist doesn't slip a
+        // betrayal, and there's no "lucky" cruelty), so this branch draws NO RNG and leaves the
+        // seeded stream untouched. It still trains Striking (a swing that connects) and blinks the
+        // victim like any other hit; the colonist takes the same STR-vs-VIT damage and
+        // handle_deaths reaps it at 0 HP (NPC = permadeath — you can thin your own colony).
+        grant_skill_xp(*skills, *attrs, SkillId::Striking, kStrikingPerHit, character);
+        if (Stats* st = reg.try_get<Stats>(victim); st != nullptr) {
+          st->health.current -= mitigate(raw, defence_of(reg, victim));
+          if (st->health.current < 0.0f) st->health.current = 0.0f;
+          stamp_flash(reg, victim);
+        }
+        record_deed(reg, attacker, Deed::Cruelty, kCrueltyStrike);
+      }
+    }
+    return entt::null;  // a whiff (or the cruel strike above) — nothing to hand back to destroy
+  }
 
   // A connecting strike trains Striking -> Strength (a lot) + Dexterity (a little), whatever
   // it hits: swinging a weapon mostly builds power, and a touch of the reflex behind it.
@@ -889,18 +941,9 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   const float dodge = dodge_chance(target_attrs != nullptr ? target_attrs->dexterity.level : 1);
   if (dodge > 0.0f && unit(rng) < dodge) return entt::null;  // slipped it — no damage dealt
 
-  // An enemy takes STR-vs-VIT damage to its HP — base plus Strength, softened by the
-  // enemy's VIT. It is NOT destroyed here; handle_deaths reaps it at 0 HP, so a weak
-  // hit only chips it and it takes several. (An Enemy always carries Stats.)
-  // Damage = base swing + earned-Strength delta (compounded by the veteran multiplier) + the
-  // weapon's granted +Strength (flat). Only the XP-EARNED levels compound — gear is loot, not
-  // grind, so it must NOT scale with an unrelated character level (that would make one blade
-  // worth wildly more on a veteran). Keeps the "multiply only what you earned" invariant honest
-  // and mirrors advance_progression, which scales the earned endurance.level - 1 alone.
-  const int gear_strength = gear != nullptr ? gear->strength_bonus : 0;
-  const float raw = kBaseAttackDamage +
-                    static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength * veteran +
-                    static_cast<float>(gear_strength) * kDamagePerStrength;
+  // An enemy takes STR-vs-VIT damage to its HP — the swing's `raw` (computed above), softened by
+  // the enemy's VIT. It is NOT destroyed here; handle_deaths reaps it at 0 HP, so a weak hit only
+  // chips it and it takes several. (An Enemy always carries Stats.)
   const float base_damage = mitigate(raw, defence_of(reg, target));
 
   // A LUCKY strike CRITS for extra damage — the offensive-fortune mirror of a dodge,
