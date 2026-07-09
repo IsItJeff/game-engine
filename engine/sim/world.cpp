@@ -469,6 +469,18 @@ void World::apply_command(const Command& cmd) {
       }
       break;
     }
+    case CommandKind::Throw: {
+      // The ranged twin of Attack: the player hurls at the nearest hostile in range
+      // (perform_throw), spending stamina. Same anti-cheat match-by-player-id and the same view
+      // requirements plus Stats (the stamina it spends). perform_throw wounds the target in place —
+      // nothing to collect-and-destroy, so no struck list.
+      auto throwers = registry_.view<PlayerControlled, Transform, Attributes, Skills, Stats>();
+      for (const entt::entity a : throwers) {
+        if (throwers.get<PlayerControlled>(a).player != cmd.player) continue;
+        perform_throw(registry_, a);
+      }
+      break;
+    }
     case CommandKind::Equip: {
       // Wear the nearest dropped gear in reach (weapon or armour) — the target is computed
       // server-side via the shared equip_nearest_gear (the same fold NPCs use, so gear can't

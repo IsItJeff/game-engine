@@ -34,6 +34,7 @@ enum class CommandKind {
   SpawnMote,     // create a new drifting entity
   DamagePlayer,  // subtract from a player's health
   Attack,        // strike the nearest hazard within reach
+  Throw,         // hurl at the nearest hostile at range, spending stamina
   Equip,         // wield the nearest dropped Weapon within reach
   Drop,          // ditch the wielded weapon at your feet, shedding its heft
 };
@@ -73,6 +74,11 @@ inline Command damage_player(PlayerId player, float amount) {
 // in reach), so the intent carries only who is swinging.
 inline Command attack(PlayerId player) {
   return Command{CommandKind::Attack, player, {}, {}, 0.0f};
+}
+// Throw: like Attack, the target (nearest hostile in range) is computed server-side, so the intent
+// carries only who is throwing. Named `hurl` because `throw` is a reserved keyword.
+inline Command hurl(PlayerId player) {
+  return Command{CommandKind::Throw, player, {}, {}, 0.0f};
 }
 // Equip: like Attack, the target (the nearest dropped weapon in reach) is computed
 // server-side, so the intent carries only who is reaching for one.

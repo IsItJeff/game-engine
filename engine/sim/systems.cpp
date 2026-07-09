@@ -685,6 +685,9 @@ const SkillDef& skill_def(SkillId id) {
   static const SkillDef kRecovery{AttrId::Endurance, {}};
   static const SkillDef kEvasion{AttrId::Dexterity, {}};
   static const SkillDef kScavenging{AttrId::Luck, {}};
+  // Throwing is Striking's mirror: aim-led (Dexterity main) with a little hurl-power (Strength
+  // 1/4), where Striking is power-led (Strength main) with a little footwork (Dexterity 1/4).
+  static const SkillDef kThrowing{AttrId::Dexterity, {{AttrId::Strength, Fixed::from_ratio(1, 4)}}};
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -698,6 +701,8 @@ const SkillDef& skill_def(SkillId id) {
       return kEvasion;
     case SkillId::Scavenging:
       return kScavenging;
+    case SkillId::Throwing:
+      return kThrowing;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -1048,6 +1053,74 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       record_deed(reg, attacker, Deed::Valor, kValorKill);
   }
   return entt::null;
+}
+
+void perform_throw(entt::registry& reg, entt::entity attacker) {
+  // The player's RANGED option — hurl something at the nearest hostile far out of melee reach,
+  // chipping an approaching swarm before it closes. Two things set it apart from a melee swing:
+  //   - it draws NO RNG (no dodge, no crit, no execute) — a plain, reliable, MODEST hit, so ranged
+  //     trades melee's burst potential for range and certainty; and
+  //   - it COSTS STAMINA, so you can soften a wave but not kite forever — spend the bar and you
+  //   drop
+  //     to the same exhausted crawl a sprint causes (update_stamina's gate). That cost is the whole
+  //     balance: without it, range with no downside would dominate melee.
+  // Player-only for now: there is no npc_throw system, so NPCs still only melee (a creature-ranged
+  // AI is a later ring). ponytail: instant hitscan — the target just blinks (stamp_flash); a
+  // visible projectile that travels is a presentation follow-up, not a mechanic change.
+  constexpr float kThrowRange = 350.0f;       // vastly longer than a melee swing's ~45 reach
+  constexpr float kThrowStaminaCost = 15.0f;  // each connecting throw spends this
+  constexpr float kBaseThrowDamage = 8.0f;  // raw before Dexterity (weaker than a melee swing's 12)
+  constexpr float kDamagePerDexterity = 3.0f;  // each Dexterity level past 1 sharpens the throw
+  const Fixed kThrowingPerHit = Fixed::from_int(10);
+
+  const Transform* tf = reg.try_get<Transform>(attacker);
+  Attributes* attrs = reg.try_get<Attributes>(attacker);
+  Skills* skills = reg.try_get<Skills>(attacker);
+  Stats* stats = reg.try_get<Stats>(attacker);
+  if (tf == nullptr || attrs == nullptr || skills == nullptr || stats == nullptr) return;
+
+  // Nearest hostile in range — deterministic strict-< tie-break. Enemies only: a throw is an
+  // anti-creature tool, so it never targets a peaceful colonist (villainy stays a deliberate MELEE
+  // choice, perform_attack) nor a mote.
+  const Vec2 origin = tf->position;
+  entt::entity target = entt::null;
+  float nearest = kThrowRange;
+  auto enemies = reg.view<Enemy, Transform>();
+  for (const entt::entity e : enemies) {
+    const float d = glm::distance(origin, enemies.get<Transform>(e).position);
+    if (d < nearest) {
+      nearest = d;
+      target = e;
+    }
+  }
+  if (target == entt::null) return;  // nothing in range — a held throw: no stamina spent, no XP
+
+  // Winding up needs stamina in hand — an exhausted thrower fizzles (nothing spent, no XP), the
+  // ranged echo of the empty-stamina melee crawl. Strict <, so a throw at exactly the cost still
+  // lands and a throw at exactly 0 can't.
+  if (stats->stamina.current < kThrowStaminaCost) return;
+  stats->stamina.current -= kThrowStaminaCost;
+
+  // A connecting throw trains Throwing -> Dexterity (a lot) + Strength (a little) — the mirror of a
+  // swing training Striking -> Strength + Dexterity.
+  CharacterLevel* character = reg.try_get<CharacterLevel>(attacker);
+  grant_skill_xp(*skills, *attrs, SkillId::Throwing, kThrowingPerHit, character);
+
+  // DEX-vs-VIT damage: base + earned-Dexterity delta, softened by the target's VIT. No gear/veteran
+  // scaling and no crit — a throw is deliberately the simple, reliable option.
+  const float raw =
+      kBaseThrowDamage + static_cast<float>(attrs->dexterity.level - 1) * kDamagePerDexterity;
+  const float applied = mitigate(raw, defence_of(reg, target));
+  if (Stats* st = reg.try_get<Stats>(target); st != nullptr) {
+    const bool was_alive = st->health.current > 0.0f;
+    st->health.current -= applied;
+    if (st->health.current < 0.0f) st->health.current = 0.0f;
+    stamp_flash(reg, target);
+    // A ranged kill is still a kill — credit Valor on the alive->dead transition, exactly as a
+    // melee killing blow does, so the morality ledger doesn't care which hand felled the foe.
+    if (was_alive && st->health.current <= 0.0f)
+      record_deed(reg, attacker, Deed::Valor, kValorKill);
+  }
 }
 
 void npc_attack(entt::registry& reg, std::mt19937& rng) {

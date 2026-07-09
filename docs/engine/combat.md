@@ -188,6 +188,32 @@ mobility for mitigation. **Plant and tank, or move and dodge — not both.** It 
 it, and the softening system reads `Blocking` on *any* entity — so an NPC-guard behaviour would fall
 out for free (today only the player, being input-driven, ever guards).
 
+### Throwing — the ranged option (F)
+
+Every attack so far has been melee: you must close to within ~45 units. **Throwing** (press **F**)
+is the player's first way to hit at a distance — `perform_throw` hurls at the nearest hostile within
+`kThrowRange` (350, vastly further than a swing) and chips its HP. Its job is to **soften an
+approaching swarm before it reaches you**, not to replace melee, and two rules keep it in that lane:
+
+- **It costs stamina.** Each connecting throw spends `kThrowStaminaCost` (15). A *standing* character
+  regenerates stamina (~20/s), so a patient, stationary plink lives off that regen — but it roots you
+  in the swarm's path and, at low Dexterity, barely dents a brute. Throw *faster* than regen can
+  refill, or throw *on the move* — kiting drains ~40/s, far more than regen — and the bar empties and
+  drops you to the same exhausted crawl a sprint causes (`update_stamina`'s gate). So the cost is what
+  keeps range honest: you can *soften* an approach, but you can't *burst* a swarm down or *kite* one
+  forever for free. Out of stamina, the throw **fizzles** — nothing spent, no damage.
+- **It's plain.** Unlike a swing, a throw draws **no RNG** — no dodge, no crit, no execute — for a
+  modest, *reliable* `kBaseThrowDamage` (8, less than melee's 12) plus your earned **Dexterity**,
+  softened by the target's VIT. Ranged trades melee's burst potential (crits, execute) for range and
+  certainty. It trains **Throwing → Dexterity** (a little Strength too) — the aim-led mirror of a
+  swing's Striking → Strength; and a *killing* throw credits **Valor** just like a melee kill, so
+  the morality ledger doesn't care which hand felled the foe.
+
+It targets `Enemy` creatures only — never a peaceful colonist (villainy stays a deliberate melee
+choice) nor a mote. Player-only for now: there is no `npc_throw`, so NPCs still only melee.
+*ponytail:* the throw is an instant hitscan — the target just blinks (`stamp_flash`); a visible
+projectile that travels the gap is a presentation follow-up, not a mechanic change.
+
 ### Keeping the fight alive — the spawners
 
 Killing everything used to leave the world quiet. `spawn_creature_if_due` (end of
@@ -379,7 +405,7 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Blocking` (the raised guard), `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, and *executes* a worn-down foe for bonus damage), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command` (`game/app/main.cpp` holds `K`).
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, and *executes* a worn-down foe for bonus damage), `perform_throw` (the stamina-costed ranged option), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), and guard (K) inputs come from `game/app/main.cpp`.
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).

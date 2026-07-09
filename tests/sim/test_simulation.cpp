@@ -1636,6 +1636,124 @@ TEST_CASE("player input reaches the world through the transport seam", "[sim]") 
   REQUIRE(now_x > start_x);
 }
 
+TEST_CASE("a thrown attack chips a distant creature and spends stamina", "[sim]") {
+  // The player's RANGED option: hurl at a hostile far beyond melee reach (~45 units). It chips the
+  // creature at range, costs stamina (so it can't be kited forever), and trains Throwing ->
+  // Dexterity — the aim-led mirror of a swing's Striking -> Strength.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::Stats>(atk);
+  const float stamina_before = reg.get<eng::sim::Stats>(atk).stamina.current;
+
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(
+      foe, eng::Vec2{200.0f, 0.0f});  // way past melee reach, in throw range
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::perform_throw(reg, atk);
+
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current < 40.0f);  // the throw connected at range...
+  REQUIRE(reg.get<eng::sim::Stats>(atk).stamina.current < stamina_before);  // ...and cost stamina
+  REQUIRE(reg.get<eng::sim::Skills>(atk).find(eng::sim::SkillId::Throwing) != nullptr);
+  REQUIRE(reg.get<eng::sim::Attributes>(atk).dexterity.xp >
+          eng::Fixed{});  // trained Throwing -> DEX
+}
+
+TEST_CASE("a throw beyond its range whiffs: no damage, no stamina spent", "[sim]") {
+  // The range gate. A creature past the throw range is a held throw — nothing thrown, so no stamina
+  // is spent (the cost is only paid on a connecting hurl).
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::Stats>(atk);
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{400.0f, 0.0f});  // beyond the 350 throw range
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::perform_throw(reg, atk);
+
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == 40.0f);  // untouched — out of range
+  REQUIRE(reg.get<eng::sim::Stats>(atk).stamina.current ==
+          Approx(100.0f));  // a held throw costs nothing
+}
+
+TEST_CASE("an exhausted thrower fizzles: a throw needs stamina in hand", "[sim]") {
+  // The stamina gate on ranged. With a creature in range but the bar nearly empty, the throw
+  // fizzles: the foe is untouched and no stamina is spent, so an emptied bar cuts you off from
+  // ranged until you recover (bursting or kiting is what empties it).
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::Stats>(atk).stamina.current = 5.0f;  // below the ~15 throw cost
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{100.0f, 0.0f});  // well within range
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::perform_throw(reg, atk);
+
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == 40.0f);  // no throw -> foe unharmed
+  REQUIRE(reg.get<eng::sim::Stats>(atk).stamina.current == Approx(5.0f));  // stamina untouched
+}
+
+TEST_CASE("a throw only targets creatures: a peaceful colonist is never hit", "[sim]") {
+  // The Enemy-only filter that sets a throw apart from a melee swing: unlike perform_attack's
+  // cruel-strike branch, perform_throw never targets an Npc, so a colonist standing in range is
+  // ignored entirely — villainy stays a deliberate MELEE choice. With only a colonist near, the
+  // throw is a pure no-op: colonist unharmed, no stamina spent, no deed recorded.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::Stats>(atk);
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{100.0f, 0.0f});  // in range, but peaceful
+  reg.emplace<eng::sim::Stats>(colonist, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+
+  eng::sim::perform_throw(reg, atk);
+
+  REQUIRE(reg.get<eng::sim::Stats>(colonist).health.current == 40.0f);       // colonist unharmed
+  REQUIRE(reg.get<eng::sim::Stats>(atk).stamina.current == Approx(100.0f));  // no target -> no cost
+  REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(atk) == nullptr);            // and no Cruelty deed
+}
+
+TEST_CASE("a killing throw earns Valor, exactly like a melee kill", "[sim]") {
+  // A ranged kill is still a kill: the same alive->dead Valor credit as a melee killing blow, so
+  // the morality ledger doesn't care which hand felled the foe.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk).dexterity.level = 20;  // throws hard enough to one-shot
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::Stats>(atk);
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{100.0f, 0.0f});        // in range
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{2.0f, 2.0f, 0.0f});  // frail
+  reg.emplace<eng::sim::Attributes>(foe).endurance.level = 1;            // low VIT
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::perform_throw(reg, atk);
+
+  const eng::sim::BehaviorLedger* led = reg.try_get<eng::sim::BehaviorLedger>(atk);
+  REQUIRE(led != nullptr);
+  REQUIRE(eng::sim::standing(*led) == 5);  // a ranged kill is Valor ×5, same as a melee kill
+}
+
 TEST_CASE("attacking a creature whittles its HP by Strength vs its VIT", "[sim]") {
   entt::registry reg;
   // A player-like attacker at the origin (Strength level 1 to start).

@@ -130,6 +130,14 @@ void train_on_damage(entt::registry& reg, entt::entity victim, float damage);
 // player's Attack command and npc_attack. A no-op without Transform+Attributes+Skills.
 entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt19937& rng);
 
+// The player's RANGED option: hurl at the nearest hostile far out of melee reach for a modest,
+// RNG-free (no dodge/crit/execute) chip that COSTS STAMINA, so a wave can be softened but not kited
+// forever. Trains Throwing -> Dexterity; credits Valor on a killing throw, exactly like a melee
+// kill. A no-op if nothing hostile is in range or the thrower is out of stamina (an exhausted
+// fizzle). Player-driven only (no npc_throw); needs Transform + Attributes + Skills + Stats. Draws
+// no rng, so unlike perform_attack it takes none.
+void perform_throw(entt::registry& reg, entt::entity attacker);
+
 // NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),
 // training Striking -> Strength just as the player does — so NPCs build Strength too,
 // not only Endurance. Complements steer_npcs (flee): a threat that closes to reach
