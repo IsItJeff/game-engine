@@ -136,6 +136,24 @@ inline float wounded_brightness(float current, float max) {
   return kWoundedFloor + (1.0f - kWoundedFloor) * frac;
 }
 
+// How saturated the personality tint gets at the ±100 extremes. A presentation KNOB — the
+// warm/cool ramp reads differently against the green base, enemy-red, player-blue, and the
+// window background, so it wants eyeballing in the live renderer, not just a unit test.
+inline constexpr float kPersonalityTintStrength = 0.4f;
+
+// Presentation-only, like wounded_brightness: a colour MULTIPLIER that tints a dot by its
+// BRAVERY so a colonist's nerve reads on screen — build_scene spawns a brave/coward spread you
+// otherwise couldn't tell apart. Warms the brave toward yellow (more red, less blue) and cools
+// the coward toward teal (less red, more blue), leaving GREEN untouched so a tinted NPC stays
+// green-dominant — never mistaken for enemy-red or player-blue. Bravery 0 (or no Personality)
+// returns exactly {1,1,1}: no tint, bit-identical. Pure and unit-testable; the renderer
+// multiplies the dot's colour by it. Only bravery for now (the most behaviourally loaded axis,
+// read twice); ponytail: a second-axis cue (e.g. greed) would need a channel this doesn't use.
+inline Vec3 personality_tint(std::int8_t bravery) {
+  const float t = static_cast<float>(bravery) / 100.0f;  // [-1 coward .. +1 brave]
+  return Vec3{1.0f + t * kPersonalityTintStrength, 1.0f, 1.0f - t * kPersonalityTintStrength};
+}
+
 // Marks an entity as dangerous to touch. An entity with a Hazard deals `damage`
 // to any player it overlaps and is then consumed — destroyed (see the
 // resolve_contacts system). The drifting motes have this: touch one, take a hit,

@@ -1382,6 +1382,30 @@ TEST_CASE("wounded_brightness dims a dot toward the floor as health falls", "[si
           Approx(1.0f));  // no bar -> full, no divide-by-zero
 }
 
+TEST_CASE("personality_tint warms the brave and cools the coward, neutral untinted", "[sim]") {
+  // Pure presentation helper: a colour multiplier so bravery reads on screen. Neutral is the
+  // identity, the extremes shift red-vs-blue in mirror image, and green is never touched (so a
+  // tinted NPC stays green-dominant, never enemy-red or player-blue).
+  const eng::Vec3 neutral = eng::sim::personality_tint(0);
+  REQUIRE(neutral.r == 1.0f);  // bravery 0 -> {1,1,1} EXACTLY: an IEEE identity, so a neutral or
+  REQUIRE(neutral.g == 1.0f);  // no-Personality dot renders bit-identical to before (not just ~1)
+  REQUIRE(neutral.b == 1.0f);
+
+  const eng::Vec3 brave = eng::sim::personality_tint(100);
+  REQUIRE(brave.r > 1.0f);           // warm: red up...
+  REQUIRE(brave.b < 1.0f);           // ...blue down...
+  REQUIRE(brave.g == Approx(1.0f));  // ...green untouched (stays green-dominant)
+
+  const eng::Vec3 coward = eng::sim::personality_tint(-100);
+  REQUIRE(coward.r < 1.0f);  // cool: the mirror — red down...
+  REQUIRE(coward.b > 1.0f);  // ...blue up...
+  REQUIRE(coward.g == Approx(1.0f));
+
+  // Symmetric about neutral: the brave's red shift equals the coward's blue shift, and vice-versa.
+  REQUIRE(brave.r == Approx(coward.b));
+  REQUIRE(brave.b == Approx(coward.r));
+}
+
 TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it lands", "[sim]") {
   // The bootstrap: at Dexterity 1 you can't dodge yet, so the blow lands — but facing
   // it still trains Evasion and its Dexterity, which is what eventually lets you dodge.

@@ -62,12 +62,21 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     const eng::sim::RenderDot& dot = view.get<const eng::sim::RenderDot>(e);
     const eng::Vec2 p = world_to_screen(blended, vp);
 
-    // Wounded dimming: darken the dot in proportion to its health, so the accumulated toll
-    // of a fight reads at a glance (the steady twin of the hit-flash blink). Applied to the
-    // BASE colour first, BEFORE the flash mix, so a fresh blow still pops white on a
-    // near-dead dot, then settles back to its dimmed base. Optional Stats (motes/pickups/
-    // weapons have none) — same try_get the debug panel uses.
+    // The dot's colour is layered from the base outward: personality tints it, health dims it,
+    // a fresh blow flashes it white. Each is a renderer-only cue the sim never reads, and each is
+    // optional (most entities have none), so each is a try_get guard on the base `rgb`.
     eng::Vec3 rgb = dot.color;
+
+    // Personality tint: colour a colonist by its BRAVERY (warm = brave, cool = coward) so the
+    // build_scene spread reads on screen. Only NPCs carry Personality (the player and creatures
+    // don't), so the try_get guard alone scopes it — no special-casing needed.
+    if (const auto* pers = world.registry().try_get<eng::sim::Personality>(e)) {
+      rgb *= eng::sim::personality_tint(pers->bravery);
+    }
+
+    // Wounded dimming: darken the dot in proportion to its health, so the accumulated toll of a
+    // fight reads at a glance (the steady twin of the hit-flash blink). Optional Stats (motes/
+    // pickups/weapons have none) — same try_get the debug panel uses.
     if (const auto* st = world.registry().try_get<eng::sim::Stats>(e)) {
       rgb *= eng::sim::wounded_brightness(st->health.current, st->health.max);
     }

@@ -106,6 +106,14 @@ This is the smallest honest seed of the master plan's **personality/morality** l
 real behaviours *read* and that change visible motion. The remaining four (compassion, industry,
 loyalty, sociability) append to the same struct as more behaviours grow to read them.
 
+And you can now *see* it: the renderer tints each colonist's dot by its **bravery** — the brave
+warm toward yellow, the cowardly cool toward teal, green left untouched so a tinted NPC stays
+green-dominant (never confused for an enemy or the player). It's a pure `personality_tint`
+helper (the twin of `wounded_brightness`), a colour multiplier the sim never reads — so the
+brave/coward spread `build_scene` seeds reads at a glance. (The warm/cool palette is a tuning
+knob, eyeballed in the live renderer; greed is left untinted for now — a second-axis cue wants a
+channel this one doesn't already use.)
+
 !!! info "Greedy and memoryless — on purpose"
     It flees the *single nearest* threat, with no memory. An NPC can dodge one
     mote straight into another. That is fine: real steering behaviours (Reynolds)
