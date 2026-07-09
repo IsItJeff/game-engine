@@ -130,6 +130,13 @@ swarm on the retreat.
   dangerous and finishing it fast is the safe play. Pure sim (it reads the creature's own health),
   no new state. It mostly bites on the tanky brute/sentinel you wear down — a swarmer usually dies
   before it enrages.
+- **Execute** — the offensive *mirror* of enrage, keyed on the **same** 30% line
+  (`kExecuteThreshold`): a strike on a creature already below it lands `kExecuteBonus` (1.5×)
+  harder, so a worn-down foe **folds faster**. Together they turn the sub-30% band into a genuine
+  risk/reward — the cornered beast both rages *and* is finishable, so you commit to the kill or you
+  pay for dawdling. Also pure sim (reads the target's current HP fraction), no RNG, so a low
+  creature just dies a touch sooner and replay stays bit-identical. Applies to the melee strike on
+  hostiles (`perform_attack`), NPCs and player alike; a cruel strike on a colonist doesn't execute.
 - Motes are excluded from creatures (`entt::exclude<Enemy>` in `resolve_contacts`), so
   ambient hazards can't cheaply kill one and bypass its VIT.
 
@@ -372,7 +379,7 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Blocking` (the raised guard), `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command` (`game/app/main.cpp` holds `K`).
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, and *executes* a worn-down foe for bonus damage), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command` (`game/app/main.cpp` holds `K`).
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).
