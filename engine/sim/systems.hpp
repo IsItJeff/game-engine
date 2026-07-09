@@ -76,6 +76,11 @@ void drain_water(entt::registry& reg, float dt);
 // to. Downed bodies and creatures don't drink. (P6.)
 void drink(entt::registry& reg, float dt);
 
+// Tend the food plots and feed grazers: every FoodSource regrows its stock a little each tick, then
+// hands food to nearby hungry people (refilling hunger, DEPLETING the plot). A picked-bare plot
+// can't feed until it regrows — the design's renewable-but-finite food production. (P6.)
+void graze(entt::registry& reg, float dt);
+
 // Resolve contact damage: any entity with Stats (the player or an NPC) that
 // overlaps a Hazard takes its `damage`, and the hazard is then consumed
 // (destroyed). A SYSTEM, not a command — collision is the sim's own rule, so it

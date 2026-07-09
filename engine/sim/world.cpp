@@ -34,6 +34,22 @@ entt::entity make_water_source(entt::registry& reg, Vec2 pos, float radius) {
   return e;
 }
 
+// Create a fixed FoodSource — a berry patch / garden a hungry colonist grazes (the `graze` system).
+// Like the pond it's Transform+PrevTransform+RenderDot (a green plot, drawn at its reach), but it's
+// FINITE: `stock` depletes as colonists eat and regrows over time, so it's the renewable-crop seed,
+// not an infinite buffet. Scenery — no Stats/Velocity.
+entt::entity make_food_source(entt::registry& reg, Vec2 pos, float radius) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.25f, 0.55f, 0.2f},
+                         radius);  // leafy green plot, drawn at its reach
+  FoodSource fs{};
+  fs.radius = radius;
+  reg.emplace<FoodSource>(e, fs);
+  return e;
+}
+
 // Create one NPC: a wandering non-player character. It has Stats (so it takes
 // contact damage and could regenerate) and the Npc marker (so handle_deaths
 // destroys it on death rather than respawning it — permadeath). It is otherwise a
@@ -245,11 +261,12 @@ void spawn_npc_if_due(entt::registry& reg, float& timer, std::mt19937& rng, floa
 entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   const Vec2 center{kFieldWidth * 0.5f, kFieldHeight * 0.5f};
 
-  // A single pond in the lower field — the colony's water. Created FIRST so it draws UNDER everyone
-  // who walks into it. Off-centre so it's a landmark to walk to, not underfoot at spawn. One well
-  // is the seed of the water economy; wander thirsty and you'll watch colonists peel off to drink
-  // here.
+  // A pond in the lower field and a berry patch in the upper — the colony's water and food. Both
+  // created FIRST so they draw UNDER everyone standing on them, and off-centre so they're landmarks
+  // to walk to. Watch thirsty colonists peel off to the pond and hungry ones to the garden; the
+  // garden is finite, so a well-fed crowd picks it bare and it must regrow before it feeds again.
   make_water_source(reg, Vec2{center.x, kFieldHeight * 0.8f}, 60.0f);
+  make_food_source(reg, Vec2{center.x, kFieldHeight * 0.2f}, 55.0f);
 
   const entt::entity player = reg.create();
   reg.emplace<Transform>(player, center);
@@ -342,7 +359,8 @@ void World::step() {
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt);
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
   drink(registry_, dt);            // anyone standing in a water source refills their canteen
-  npc_equip(registry_);            // unarmed NPCs wield a dropped weapon they've reached
+  graze(registry_, dt);  // ...and in a food plot refills hunger (the plot regrows/depletes)
+  npc_equip(registry_);  // unarmed NPCs wield a dropped weapon they've reached
   regenerate_vitals(registry_, dt);
   decay_flashes(registry_, dt);  // age the hit-flashes left by this tick's blows (presentation)
 

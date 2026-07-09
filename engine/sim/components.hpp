@@ -371,6 +371,19 @@ struct WaterSource {
   float radius = 60.0f;
 };
 
+// A fixed food plot — a berry patch / garden a hungry character GRAZES to refill hunger (the
+// `graze` system). Unlike the water pond it is FINITE: `stock` falls as colonists eat and REGROWS
+// over time toward `max_stock`, so a picked-over patch must recover — the seed of the design's food
+// PRODUCTION chain (crops, farming), distinct from both the one-shot loot orb and the ambient,
+// infinite pond. It fixes the "starving in a quiet corner with no orbs" gap: a colonist can always
+// walk to a plot.
+struct FoodSource {
+  float stock = 100.0f;            // food available to eat right now
+  float max_stock = 100.0f;        // regrows up to this
+  float regrow_per_second = 2.0f;  // a slow renewal — a plot feeds a few, then needs time
+  float radius = 60.0f;            // how close you must be to graze
+};
+
 // --- Progression: skills feed attributes ---
 //
 // The game grows characters the "learn by doing" way, and in three layers:

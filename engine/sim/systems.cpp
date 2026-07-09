@@ -82,6 +82,7 @@ void steer_npcs(entt::registry& reg) {
   auto downed = reg.view<Downed, Transform>();
   auto weapons = reg.view<Weapon, Transform>();
   auto sources = reg.view<WaterSource, Transform>();
+  auto plots = reg.view<FoodSource, Transform>();
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
 
@@ -176,17 +177,32 @@ void steer_npcs(entt::registry& reg) {
     const bool hungry =
         stats != nullptr && stats->hunger.current < stats->hunger.max * seek_fraction;
     if (hungry) {
-      entt::entity meal = entt::null;
+      // Head for the nearest FOOD — a scattered loot orb OR a fixed food plot with stock left,
+      // whichever is closer. Track the target POSITION (not entity) so the two kinds compete on one
+      // ruler; a bare plot (stock 0) isn't worth the walk, so it's skipped. Orbs are eaten in
+      // collect_pickups, plots grazed in graze.
+      Vec2 meal_pos{0.0f, 0.0f};
+      bool has_meal = false;
       float nearest_food = kForageRadius;
       for (const entt::entity f : food) {
         const float d = glm::distance(pos, food.get<Transform>(f).position);
         if (d < nearest_food) {
           nearest_food = d;
-          meal = f;
+          meal_pos = food.get<Transform>(f).position;
+          has_meal = true;
         }
       }
-      if (meal != entt::null) {
-        const Vec2 toward = food.get<Transform>(meal).position - pos;
+      for (const entt::entity pl : plots) {
+        if (plots.get<FoodSource>(pl).stock <= 0.0f) continue;  // a picked-bare patch isn't a meal
+        const float d = glm::distance(pos, plots.get<Transform>(pl).position);
+        if (d < nearest_food) {
+          nearest_food = d;
+          meal_pos = plots.get<Transform>(pl).position;
+          has_meal = true;
+        }
+      }
+      if (has_meal) {
+        const Vec2 toward = meal_pos - pos;
         const float len = glm::length(toward);
         if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kForageSpeed * move_scale;
         continue;  // heading for a meal — don't also go weapon-hunting
@@ -490,6 +506,41 @@ void drink(entt::registry& reg, float dt) {
         if (water.current > water.max) water.current = water.max;  // capped, no over-fill
         break;                                                     // one source is enough
       }
+    }
+  }
+}
+
+void graze(entt::registry& reg, float dt) {
+  // Hunger restored per second while grazing — and the stock the plot loses to give it. Fast enough
+  // that a few seconds at a patch fills you, so it's a real "walk to the garden" destination. A
+  // knob.
+  constexpr float kFeedPerSecond = 40.0f;
+  // The food twin of drink, with one difference: the plot is FINITE. Each tick every plot first
+  // REGROWS a little (capped at max_stock), then feeds nearby hungry people, DRAWING DOWN its stock
+  // — so a picked-bare patch stops giving until it recovers. Eaters are the same set as drink/eat
+  // (Stats + Transform, not creatures or downed bodies). Feeding order follows the view, so a small
+  // plot feeds whoever the view reaches first until it runs dry — deterministic contention.
+  auto grazers = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
+  auto plots = reg.view<FoodSource, Transform>();
+  // ponytail: no per-grazer cap ACROSS plots, so a colonist standing in two OVERLAPPING plots would
+  // eat from both this tick. Only one plot exists and plots don't overlap, so it's a non-issue
+  // today; add a per-grazer "already ate this tick" set if overlapping crops ever ship.
+  for (const entt::entity src : plots) {
+    FoodSource& fs = plots.get<FoodSource>(src);
+    fs.stock += fs.regrow_per_second * dt;                 // crops regrow...
+    if (fs.stock > fs.max_stock) fs.stock = fs.max_stock;  // ...up to the plot's yield
+    const Vec2 src_pos = plots.get<Transform>(src).position;
+    for (const entt::entity e : grazers) {
+      if (fs.stock <= 0.0f) break;  // the patch is bare — nothing left to give this tick
+      Vital& hunger = grazers.get<Stats>(e).hunger;
+      const float room = hunger.max - hunger.current;
+      if (room <= 0.0f) continue;  // already full
+      if (glm::distance(grazers.get<Transform>(e).position, src_pos) > fs.radius) continue;
+      float bite = kFeedPerSecond * dt;  // ...but no more than the eater needs or the plot holds
+      if (bite > room) bite = room;
+      if (bite > fs.stock) bite = fs.stock;
+      hunger.current += bite;
+      fs.stock -= bite;
     }
   }
 }
