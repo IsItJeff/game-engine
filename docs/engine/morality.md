@@ -3,8 +3,9 @@
 ## What it is
 
 The first trace of a character's **moral history**. Personality is who a colonist
-*is* (fixed, innate — see [NPC behaviour](npc-behaviour.md)); morality is what they
-have *done* (earned, mutable). It starts as one component and one recorded deed:
+*is* (innate, and only slowly drifting — see [NPC behaviour](npc-behaviour.md) and the
+[Drift](#drift-deeds-reshape-character) section below); morality is what they have *done*
+(earned, directly accumulated). It starts as one component and one recorded deed:
 
 - **`BehaviorLedger`** — a per-character tally of six deed **dimensions** (Violence,
   Honesty, Loyalty, Charity, Cruelty, Valor), each an accumulator.
@@ -78,6 +79,26 @@ swing on the already-dead foe.
     cutting down a *peaceful* colonist (Cruelty / unjust Violence) needs both a reason to
     harm an ally and the "justness" rule, both deferred.
 
+## Drift: deeds reshape character
+
+Morality and personality aren't two separate ledgers — a deed does *two* things at the
+one `record_deed` write-point. Besides adding to the ledger, it **drifts the actor's
+matching `Personality` axis** a small, bounded step: **Valor → bravery** (fighting
+monsters hardens you), **Charity → compassion** (hauling up the fallen softens you). This
+is the design's *"you are what you do"* / "the war changed him" — a character reshaped by
+its own history, not just a fixed dial rolled at birth.
+
+The step is deliberately small (`kDeedDriftStep`, ~50 deeds for a full ±100 swing), so a
+handful of deeds shifts you visibly but never into a wholly different person. And it lands
+where it can be *seen*: bravery is the **tinted** axis and the one `steer_npcs` reads
+twice (flee radius + rescue commitment), so a colonist that keeps fighting warms toward
+yellow and starts holding its ground — a character arc read from its deeds alone.
+
+Two guard-rails carry it. It uses `try_get`, **never** `get_or_emplace`: an actor with no
+`Personality` (the player, every creature) accrues the deed on its ledger but *stays*
+Personality-free, so the bit-identical absent-Personality world is preserved. And only the
+two wired deeds drift — the other four axes/deeds wire themselves the day their deeds land.
+
 ## What to expect
 
 You can now **see** it: a character's dot **grows** with its positive `standing`, so a
@@ -118,9 +139,10 @@ for free) lands when deeds start to matter over long play.
 - `engine/sim/components.hpp` — `Deed` (the six dimensions), `BehaviorLedger` (the
   earned counterpart of `Personality`), the pure `standing` function, and `renown_scale`
   (the presentation twin of `personality_tint`).
-- `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point);
-  the Charity credit in `handle_deaths`' rescue branch, and the Valor credit in
-  `perform_attack`'s killing-blow branch.
+- `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point,
+  which also **drifts** the actor's matching `Personality` axis); the Charity credit in
+  `handle_deaths`' rescue branch, and the Valor credit in `perform_attack`'s
+  killing-blow branch.
 - `game/app/main.cpp` — `draw_entities` scales a dot's radius by
   `renown_scale(standing(...))`, so renown reads on screen.
 - `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired deeds with

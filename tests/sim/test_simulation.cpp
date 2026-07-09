@@ -895,6 +895,44 @@ TEST_CASE("standing weights each deed dimension by the design's signed factors",
   REQUIRE(standing_of(eng::sim::Deed::Violence) == -4);  // -.8 ×5
 }
 
+TEST_CASE("a deed drifts the actor's matching personality axis, bounded and clamped", "[sim]") {
+  // The design's "you are what you do": recording a deed nudges the actor's matching Personality
+  // axis a bounded step — Valor hardens bravery, Charity softens toward compassion — so a character
+  // is reshaped by its deeds. The drift is small and CLAMPS at the ±100 axis bound.
+  entt::registry reg;
+  const entt::entity n = reg.create();
+  reg.emplace<eng::sim::Personality>(n, eng::sim::Personality{0, 0, 0, 0});
+
+  eng::sim::record_deed(reg, n, eng::sim::Deed::Valor, 1);
+  eng::sim::record_deed(reg, n, eng::sim::Deed::Valor, 1);
+  REQUIRE(reg.get<eng::sim::Personality>(n).bravery == 4);     // two Valor deeds -> +2 each
+  REQUIRE(reg.get<eng::sim::Personality>(n).compassion == 0);  // Valor doesn't touch compassion
+
+  eng::sim::record_deed(reg, n, eng::sim::Deed::Charity, 1);
+  REQUIRE(reg.get<eng::sim::Personality>(n).compassion == 2);  // Charity -> compassion
+  REQUIRE(reg.get<eng::sim::Personality>(n).bravery == 4);     // ...and leaves bravery alone
+
+  // A long heroic career CLAMPS at the axis bound rather than overflowing the int8.
+  for (int i = 0; i < 100; ++i) eng::sim::record_deed(reg, n, eng::sim::Deed::Valor, 1);
+  REQUIRE(reg.get<eng::sim::Personality>(n).bravery == 100);  // pinned at +100, no wrap
+}
+
+TEST_CASE("a deed on an entity with no Personality drifts nothing (stays Personality-free)",
+          "[sim]") {
+  // Drift is try_get, never emplace: an actor without a Personality — the player, every creature —
+  // must accrue the deed on its ledger yet NOT sprout a Personality, or the bit-identical
+  // absent-Personality world would break.
+  entt::registry reg;
+  const entt::entity e = reg.create();  // no Personality
+
+  eng::sim::record_deed(reg, e, eng::sim::Deed::Valor, 1);
+
+  REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(e) !=
+          nullptr);  // the deed still landed on the ledger...
+  REQUIRE(eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(e)) == 5);
+  REQUIRE(reg.try_get<eng::sim::Personality>(e) == nullptr);  // ...but no Personality was conjured
+}
+
 TEST_CASE("rescuing a downed ally records a Charity deed on the rescuer", "[sim]") {
   // The first deed wired to a live event: completing a rescue in handle_deaths credits the RESCUER
   // (not the rescued) with Charity. It fires identically whether the rescuer is an NPC or a player,

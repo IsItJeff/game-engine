@@ -81,7 +81,9 @@ carries the design's first **P7** axis — **`bravery`** (an `int8` in `[-100, +
 Neutral `0` — or no `Personality` at all — is the base radius exactly, so this is bit-identical
 for anyone without a leaning (the player has none, and stays neutral). The opening four NPCs get
 a fixed spread (two cowards, two brave) so you can watch the difference from the first frame;
-reinforcements roll a random bravery from the spawner's *own* isolated RNG stream.
+reinforcements roll a coherent *archetype* (bravery among its axes) from the spawner's *own*
+isolated RNG stream. And a colonist's axes aren't frozen for life: its own **deeds drift** them —
+a fighter grows braver, a rescuer more compassionate (see [Morality](morality.md)).
 
 Bravery reads a **second time** on the rescue rung, which is where it becomes a real character
 trait rather than a flee tweak: it scales how far an NPC will *commit* to saving a downed ally.

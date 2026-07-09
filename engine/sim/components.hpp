@@ -63,12 +63,13 @@ struct PlayerControlled {
   float move_speed = 300.0f;
 };
 
-// A character's PERSONALITY — fixed innate leanings that BEHAVIOURS read to make decisions
-// (the P7 seed). The design's model has six int8 axes in [-100, +100]: bravery, compassion,
-// industry, loyalty, greed, sociability. `bravery`, `greed`, `compassion`, and `industry` are wired
-// so far; the remaining two append here as behaviours grow to read them. Neutral 0 = "no leaning",
-// so an entity with all-zero axes — or no Personality at all — behaves exactly as it did before
-// this existed (bit-identical).
+// A character's PERSONALITY — innate leanings that BEHAVIOURS read to make decisions (the P7 seed),
+// and that the character's own DEEDS slowly reshape (record_deed drifts the matching axis — "you
+// are what you do"; see morality). The design's model has six int8 axes in [-100, +100]: bravery,
+// compassion, industry, loyalty, greed, sociability. `bravery`, `greed`, `compassion`, and
+// `industry` are wired so far; the remaining two append here as behaviours grow to read them.
+// Neutral 0 = "no leaning", so an entity with all-zero axes — or no Personality at all — behaves
+// exactly as it did before this existed (bit-identical).
 struct Personality {
   std::int8_t bravery = 0;     // [-100 coward .. +100 brave]; shapes how near a hazard gets before
                                // an NPC flees (steer_npcs). A coward bolts early, the brave hold.
@@ -92,12 +93,13 @@ struct Personality {
 enum class Deed : std::uint8_t { Violence, Honesty, Loyalty, Charity, Cruelty, Valor, Count };
 
 // A character's EARNED moral history: how much of each Deed kind they have accumulated over a life.
-// The mutable counterpart of the innate, fixed Personality — opposite in nature and lifetime, so it
-// is a SEPARATE component. It is added LAZILY: an entity earns a ledger only on its FIRST deed
-// (record_deed does the get_or_emplace), so anyone who never acts has none and replays exactly as
-// before this existed (bit-identical). int32 (not Personality's int8) because deeds ACCUMULATE over
-// a life and must clear the design's hero gate (standing > +500), well past int8's ±127; an int32
-// array element also lets `dims[i] += mag` add without a cast under -Wconversion.
+// The directly-accumulated counterpart of the innate, only-slowly-drifting Personality — different
+// in nature and lifetime, so it is a SEPARATE component. It is added LAZILY: an entity earns a
+// ledger only on its FIRST deed (record_deed does the get_or_emplace), so anyone who never acts has
+// none and replays exactly as before this existed (bit-identical). int32 (not Personality's int8)
+// because deeds ACCUMULATE over a life and must clear the design's hero gate (standing > +500),
+// well past int8's ±127; an int32 array element also lets `dims[i] += mag` add without a cast under
+// -Wconversion.
 struct BehaviorLedger {
   std::array<std::int32_t, static_cast<std::size_t>(Deed::Count)> dims{};
 };
