@@ -16,6 +16,11 @@ namespace {
 // and handle_deaths does the actual revive at this reach — one constant so "close enough to
 // run to" and "close enough to lift" can never drift apart.
 constexpr float kReviveDistance = 20.0f;
+
+// A completed rescue is a Charity deed of this size on the RESCUER — one atomic "deed unit"
+// (magnitude is a tuning knob; JSON-authored weights are a later milestone). standing weights
+// Charity ×4, so one save reads as +4 standing.
+constexpr std::int32_t kRescueCharity = 1;
 }  // namespace
 
 void snapshot_previous(entt::registry& reg) {
@@ -897,6 +902,16 @@ void spawn_armour(entt::registry& reg, Vec2 pos) {
   reg.emplace<Armour>(e);
 }
 
+void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_t mag) {
+  // The whole morality write-path, one line: lazily give the actor a ledger on its first deed, then
+  // add the magnitude to the chosen dimension. No switch — every dimension accrues identically, so
+  // the array index does the routing a switch otherwise would (and a new Deed can't be forgotten,
+  // it just indexes a fresh slot). get_or_emplace keeps a never-acting entity ledger-free, so the
+  // absent-ledger world is bit-identical to before morality existed. Touches no registry view, so
+  // it is safe to call mid-iteration (as handle_deaths does).
+  reg.get_or_emplace<BehaviorLedger>(actor).dims[static_cast<std::size_t>(kind)] += mag;
+}
+
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // A zero-health entity meets one of two fates, and which one is the game's core rule
   // made concrete: a PLAYER goes DOWNED (helpless where they fell, then rescued-in-place
@@ -932,22 +947,28 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
     // Already downed. A living ally (any non-downed person) within reach hauls you up where
     // you fell — the co-op rescue. NPCs don't SEEK the downed yet, so today this fires when
     // one happens by; the forage "seek nearest X" pattern is the seed of making it deliberate.
-    bool rescued = false;
+    entt::entity rescuer = entt::null;  // the ally who reaches them — and the deed's actor
     const Vec2 pos = players.get<Transform>(e).position;
     auto allies = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
     for (const entt::entity a : allies) {
       if (a == e || allies.get<Stats>(a).health.current <= 0.0f)
         continue;  // self / a corpse can't help
       if (glm::distance(pos, allies.get<Transform>(a).position) < kReviveDistance) {
-        rescued = true;
+        rescuer = a;  // the entity handle both proves the rescue AND names who to credit
         break;
       }
     }
 
     down->timer -= dt;
-    if (rescued) {
+    if (rescuer != entt::null) {
       revive(s, players.get<Velocity>(e));  // up in place — you keep the ground you fell on
       reg.remove<Downed>(e);
+      // The first MORAL deed: hauling up a helpless ally is Charity, credited to the RESCUER (not
+      // the rescued). This closes the loop on the compassion axis — compassion sets how FAST an NPC
+      // reaches a rescue; finishing one now leaves a permanent moral trace. Emplacing the rescuer's
+      // ledger doesn't disturb the players view being iterated (BehaviorLedger isn't one of its
+      // components), the same reason the Downed emplace above is safe here.
+      record_deed(reg, rescuer, Deed::Charity, kRescueCharity);
     } else if (down->timer <= 0.0f) {
       // Unrescued: the humane fallback so a solo player isn't stuck down forever — respawn
       // whole at the field centre. A DELAYED, earned-back respawn, not the old instant one.
