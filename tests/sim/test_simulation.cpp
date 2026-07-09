@@ -836,6 +836,60 @@ TEST_CASE("a colonist runs in and revives a downed ally, beating the timer", "[s
   REQUIRE(reg.get<eng::sim::Transform>(player).position.y == Approx(100.0f));  // ...not at centre
 }
 
+TEST_CASE("creatures ignore a downed body and hunt whoever's still standing", "[sim]") {
+  // A Downed body is inert to the fight: chase_prey drops it from the prey set, so a creature
+  // re-targets the living instead of camping a corpse.
+  entt::registry reg;
+  const entt::entity creature = reg.create();
+  reg.emplace<eng::sim::Transform>(creature, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(creature);
+  reg.emplace<eng::sim::Enemy>(creature);
+  // A downed body right next to it (would be the nearest prey), and a standing NPC further out.
+  const entt::entity fallen = reg.create();
+  reg.emplace<eng::sim::Transform>(fallen, eng::Vec2{10.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(fallen).health.current = 0.0f;
+  reg.emplace<eng::sim::Downed>(fallen);
+  const entt::entity standing = reg.create();
+  reg.emplace<eng::sim::Transform>(standing, eng::Vec2{0.0f, 100.0f});
+  reg.emplace<eng::sim::Stats>(standing);
+  reg.emplace<eng::sim::Npc>(standing);
+
+  eng::sim::chase_prey(reg);
+
+  // It homes on the STANDING NPC (up, +y) — NOT the adjacent downed body (which would be +x).
+  REQUIRE(reg.get<eng::sim::Velocity>(creature).value.y > 0.0f);
+  REQUIRE(reg.get<eng::sim::Velocity>(creature).value.x == Approx(0.0f));
+}
+
+TEST_CASE("a downed body takes no hits: no free grind from creatures or motes", "[sim]") {
+  // Closing the risk-free-progression exploit: neither a creature swing nor a mote may train a
+  // helpless body's skills or stamp a flash on it — it is not a valid target while down.
+  entt::registry reg;
+  const entt::entity fallen = reg.create();
+  reg.emplace<eng::sim::Transform>(fallen, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(fallen).health.current = 0.0f;
+  reg.emplace<eng::sim::Skills>(fallen);
+  reg.emplace<eng::sim::Attributes>(fallen).dexterity.level = 8;  // would dodge+train if attacked
+  reg.emplace<eng::sim::Downed>(fallen);
+  const entt::entity creature = reg.create();
+  reg.emplace<eng::sim::Transform>(creature, eng::Vec2{0.0f, 0.0f});  // right on top of it
+  reg.emplace<eng::sim::Enemy>(creature);
+  const entt::entity mote = reg.create();
+  reg.emplace<eng::sim::Transform>(mote, eng::Vec2{0.0f, 0.0f});  // also right on top of it
+  reg.emplace<eng::sim::Hazard>(mote);
+
+  std::mt19937 rng{1234};
+  eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+  eng::sim::resolve_contacts(reg);
+
+  // Trained NOTHING (no Evasion from the creature, no Toughness from the mote) and no hit-flash.
+  REQUIRE(reg.get<eng::sim::Skills>(fallen).find(eng::sim::SkillId::Evasion) == nullptr);
+  REQUIRE(reg.get<eng::sim::Skills>(fallen).find(eng::sim::SkillId::Toughness) == nullptr);
+  REQUIRE_FALSE(reg.all_of<eng::sim::HitFlash>(fallen));
+  // ...and the mote drifts through rather than being consumed (no hit occurred).
+  REQUIRE(reg.valid(mote));
+}
+
 TEST_CASE("touching a hazard damages the player and consumes the hazard", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
