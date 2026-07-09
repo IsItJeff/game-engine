@@ -120,12 +120,14 @@ too: strike your own colonists and the number goes negative and the title flips 
 Suspect → Notorious*. (The dot doesn't yet *shrink* below neutral — a negative-renown visual
 is the villain twin of the growth cue, still to come.)
 
-And now standing **acts**, not just shows: the first *gameplay* reader has landed. A player who
-crosses the *Suspect* line becomes a **threat colonists flee** — `steer_npcs` folds a villain
-into its danger rung, so turn on the colony and it recoils from you exactly as it flees a hazard
-(see [NPC behaviour](npc-behaviour.md)). The *richer* readers — NPCs that befriend a hero or
-protect the weak from a villain — are a later ring, but the "believed standing changes behaviour"
-seam is now real. Under the hood it is pinned by tests: a rescuer's ledger gains Charity, a
+And now standing **acts**, not just shows — *both* ways. A player who crosses the *Suspect* line
+becomes a **threat colonists flee**; a player who crosses the mirror *Known* line becomes a **hero
+they rally to**. `steer_npcs` folds a villain into its top-priority danger rung (turn on the colony
+and it recoils from you like a hazard) and a hero into its bottom-priority rally rung (idle
+colonists gather around their champion). Villainy repels, heroism attracts — the two faces of one
+scalar (see [NPC behaviour](npc-behaviour.md)). The *richer* readers — graded wariness, protecting
+the weak, befriending — are a later ring, but the "believed standing changes behaviour" seam is now
+real on both sides. Under the hood it is pinned by tests: a rescuer's ledger gains Charity, a
 monster-slayer's gains Valor, a player who cuts down a colonist gains Cruelty and goes negative
 (and colonists then flee that player, but not a hero or an unproven one); a bystander, an unrescued
 timer-expiry respawn, a chip that doesn't kill, and a colonist shielded by a nearby hostile all
@@ -133,12 +135,12 @@ record nothing.
 
 ## The tradeoffs
 
-- **`standing`'s gameplay reader is still thin.** It has ONE: colonists flee a villain
-  (`steer_npcs`). That's a binary flee at a single threshold — the design's graded *perceive*
-  (wariness scaling to flight by standing *and* the onlooker's own bravery/might, plus the hero
-  side: befriend, rally, protect) is a later ring. The signed formula shipped in full before any
-  of this was needed, so both wiring Cruelty and wiring the fear read were one-line additions —
-  the payoff of locking the schema early.
+- **`standing`'s gameplay readers are still coarse.** There are TWO, mirror images: colonists
+  flee a villain and rally to a hero (`steer_npcs`). Both are *binary* at a single threshold — the
+  design's graded *perceive* (the pull/push scaling with standing *and* the onlooker's own
+  bravery/might, plus richer stances: befriend, protect the weak, exploit) is a later ring. The
+  signed formula shipped in full before any of this was needed, so wiring Cruelty, the fear read,
+  and the rally read were each one-line-ish additions — the payoff of locking the schema early.
 - **Cruelty is player-only.** An NPC can't yet turn on the colony — `perform_attack` gates
   the cruel branch on `PlayerControlled`, because it is shared with `npc_attack` and a
   generic "hit a neighbour when no enemy is near" would make colonists brawl constantly. The

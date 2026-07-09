@@ -505,10 +505,12 @@ TEST_CASE("a colonist flees a villain player: standing's first gameplay reader",
 }
 
 TEST_CASE("only villainy drives the colony off: a hero or unproven player is not feared", "[sim]") {
-  // The bit-identical guard: fear fires ONLY at/below the Suspect line, so the pre-cruelty world is
-  // unchanged. A celebrated hero (positive standing) and an unproven player (no ledger at all) both
-  // leave a nearby colonist at rest — standing reads as a threat only when it's villainous.
-  const auto colonist_speed_near_player = [](bool make_hero) {
+  // Fear fires ONLY at/below the Suspect line, so a non-villain is never FLED (never +x, away from
+  // the player at the origin). A celebrated hero is the opposite — it RALLIES the colonist TOWARD
+  // it
+  // (-x; see the rally tests) — and an unproven player (no ledger) is neither feared nor rallied,
+  // so its colonist stays at rest. Neither reads as a threat.
+  const auto colonist_flee_x = [](bool make_hero) {
     entt::registry reg;
     const entt::entity player = reg.create();
     reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
@@ -521,11 +523,10 @@ TEST_CASE("only villainy drives the colony off: a hero or unproven player is not
     reg.emplace<eng::sim::Velocity>(colonist);
     reg.emplace<eng::sim::Npc>(colonist);
     eng::sim::steer_npcs(reg);
-    const eng::Vec2 v = reg.get<eng::sim::Velocity>(colonist).value;
-    return v.x * v.x + v.y * v.y;  // squared speed — zero iff the colonist never moved
+    return reg.get<eng::sim::Velocity>(colonist).value.x;  // > 0 would be fleeing (away)
   };
-  REQUIRE(colonist_speed_near_player(true) == Approx(0.0f));   // a hero -> the colonist stays put
-  REQUIRE(colonist_speed_near_player(false) == Approx(0.0f));  // an unproven player -> likewise
+  REQUIRE(colonist_flee_x(true) < 0.0f);            // a hero -> rallied toward (-x), never fled
+  REQUIRE(colonist_flee_x(false) == Approx(0.0f));  // an unproven player -> unmoved, not fled
 }
 
 TEST_CASE("a downed villain is no threat: fear yields, and the colony moves to help", "[sim]") {
@@ -551,6 +552,75 @@ TEST_CASE("a downed villain is no threat: fear yields, and the colony moves to h
 
   // Toward the fallen villain (-x) to rescue, NOT fleeing away (+x): the fear reader skipped it.
   REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x < 0.0f);
+}
+
+TEST_CASE("an idle colonist rallies to a renowned hero: the twin of villain-fear", "[sim]") {
+  // The inverted mirror of the flee: a colonist with nothing urgent to do drifts TOWARD a player
+  // whose deeds have earned "Known"+ standing (>= +kKnownAt), gathering around its champion — the
+  // exact opposite of fleeing a Suspect villain.
+  entt::registry reg;
+  const entt::entity hero = reg.create();
+  reg.emplace<eng::sim::Transform>(hero, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(hero);
+  eng::sim::record_deed(reg, hero, eng::sim::Deed::Valor, 3);  // +15 standing -> "Known"
+  REQUIRE(eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(hero)) >= eng::sim::kKnownAt);
+
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{50.0f, 0.0f});  // within rally radius, idle
+  reg.emplace<eng::sim::Velocity>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+
+  eng::sim::steer_npcs(reg);
+
+  // Steers LEFT (-x), toward the hero at the origin.
+  REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x < 0.0f);
+}
+
+TEST_CASE("rally is the lowest priority: a real need overrides the pull of a hero", "[sim]") {
+  // Rally never overrides survival. A colonist beside a renowned hero but ALSO within reach of a
+  // hazard flees the hazard (priority 1) — it does not drift to the champion while in danger. Both
+  // the hero and the hazard sit to the LEFT, so a rally would pull the colonist left; fleeing sends
+  // it right, proving which rung won.
+  entt::registry reg;
+  const entt::entity hero = reg.create();
+  reg.emplace<eng::sim::Transform>(hero, eng::Vec2{-50.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(hero);
+  eng::sim::record_deed(reg, hero, eng::sim::Deed::Valor, 5);  // +25 -> clearly Known+
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{-40.0f, 0.0f});  // close, to the left
+  reg.emplace<eng::sim::Hazard>(hazard);
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+
+  eng::sim::steer_npcs(reg);
+
+  // Flees RIGHT (+x) from the hazard — survival beats rally, so it does NOT drift left to the hero.
+  REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x > 0.0f);
+}
+
+TEST_CASE("rally needs a real hero: below the Known line, an idle colonist stays put", "[sim]") {
+  // The threshold + bit-identical guard (mirror of the fear side): rally fires ONLY at/above
+  // +kKnownAt. An unproven player (no ledger) and a merely-positive one below the line both leave
+  // an idle colonist adrift — no pull until you're a bona fide hero.
+  const auto idle_colonist_speed = [](int valor_deeds) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(player);
+    if (valor_deeds > 0) eng::sim::record_deed(reg, player, eng::sim::Deed::Valor, valor_deeds);
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{50.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    eng::sim::steer_npcs(reg);
+    const eng::Vec2 v = reg.get<eng::sim::Velocity>(colonist).value;
+    return v.x * v.x + v.y * v.y;  // squared speed — zero iff it never moved
+  };
+  REQUIRE(idle_colonist_speed(0) == Approx(0.0f));  // unproven (no ledger) -> no pull
+  REQUIRE(idle_colonist_speed(2) ==
+          Approx(0.0f));  // +10 standing, below Known (15) -> still no pull
 }
 
 TEST_CASE("bravery shapes how far an NPC will commit to a rescue", "[sim]") {
