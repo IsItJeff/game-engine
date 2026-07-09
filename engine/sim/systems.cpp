@@ -66,6 +66,11 @@ void steer_npcs(entt::registry& reg) {
   // as foraging; npc_equip does the actual wield on reach. Knobs.
   constexpr float kWeaponSeekRadius = 260.0f;
   constexpr float kWeaponSeekSpeed = 85.0f;
+  // Thirst: once water drops below this fraction of max, a safe NPC heads for the nearest
+  // WaterSource (the drink system tops it up on arrival). Same wide-scan shape as foraging. Knobs.
+  constexpr float kThirstSeekFraction = 0.6f;
+  constexpr float kWaterSeekRadius = 260.0f;
+  constexpr float kWaterSeekSpeed = 80.0f;
 
   // Nested loops: every NPC against every hazard / orb / fallen ally / weapon — O(n*m), fine
   // for a handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts
@@ -76,6 +81,7 @@ void steer_npcs(entt::registry& reg) {
   auto food = reg.view<Pickup, Transform>();
   auto downed = reg.view<Downed, Transform>();
   auto weapons = reg.view<Weapon, Transform>();
+  auto sources = reg.view<WaterSource, Transform>();
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
 
@@ -184,6 +190,29 @@ void steer_npcs(entt::registry& reg) {
         const float len = glm::length(toward);
         if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kForageSpeed * move_scale;
         continue;  // heading for a meal — don't also go weapon-hunting
+      }
+    }
+
+    // Priority 3.5 — thirst: a safe NPC running low on water heads for the nearest WaterSource (the
+    // drink system tops it up on arrival). Ranks just below hunger — both are survival needs; if
+    // BOTH bite the same tick it forages first and seeks water the next. Reuses the `stats` fetched
+    // for the hunger rung; a plain need threshold (no personality read yet, unlike greed on
+    // forage).
+    if (stats != nullptr && stats->water.current < stats->water.max * kThirstSeekFraction) {
+      entt::entity well = entt::null;
+      float nearest_water = kWaterSeekRadius;
+      for (const entt::entity w : sources) {
+        const float d = glm::distance(pos, sources.get<Transform>(w).position);
+        if (d < nearest_water) {
+          nearest_water = d;
+          well = w;
+        }
+      }
+      if (well != entt::null) {
+        const Vec2 toward = sources.get<Transform>(well).position - pos;
+        const float len = glm::length(toward);
+        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kWaterSeekSpeed * move_scale;
+        continue;  // heading for a drink — don't also go weapon-hunting
       }
     }
 
@@ -318,7 +347,10 @@ void regenerate_vitals(entt::registry& reg, float dt) {
     // Downed/revive net, so a colonist that can't reach food permadies a bit sooner. If that
     // reads too harsh in play, the knobs are food-drop rate, drain rate, and NPC regen — not a
     // special-case here (special-casing NPCs would break the player==NPC parity that's the point).
-    if (s.hunger.current <= 0.0f) continue;
+    // ...nor on an empty canteen: dehydration gates healing the same way starvation does, so both
+    // needs net health strictly downward (drain_water also runs before this system in step()). One
+    // `||` clause, so the two survival needs compose rather than either special-casing the other.
+    if (s.hunger.current <= 0.0f || s.water.current <= 0.0f) continue;
 
     // Tougher characters heal faster (VIT). No Attributes -> boost 1.0 (bit-identical to
     // before), so creatures and bare entities are unchanged. Same shape as update_stamina.
@@ -406,6 +438,58 @@ void drain_hunger(entt::registry& reg, float dt) {
     if (s.hunger.current <= 0.0f) {
       s.health.current -= kStarvationPerSecond * dt;
       if (s.health.current < 0.0f) s.health.current = 0.0f;
+    }
+  }
+}
+
+void drain_water(entt::registry& reg, float dt) {
+  // The twin of drain_hunger for the second Need — same moving/idle drain split, same 0-empties-
+  // then-chips-health shape, independent knobs. Water is refilled at a WaterSource (drink), never
+  // by resting, so like hunger its regen is 0 and this system only ever takes it away.
+  constexpr float kDrainPerSecond = 0.3f;          // at rest
+  constexpr float kExertionDrainPerSecond = 0.3f;  // added while moving
+  constexpr float kDehydrationPerSecond = 12.0f;   // health lost per second once water hits 0
+  // Same set as hunger: every person (Stats without Enemy), not creatures. regenerate_vitals gates
+  // healing off while water is 0 (as it does for hunger), so dehydration nets health strictly down.
+  auto view = reg.view<Stats>(entt::exclude<Enemy>);
+  for (const entt::entity e : view) {
+    Stats& s = view.get<Stats>(e);
+    float drain = kDrainPerSecond;
+    if (const Velocity* v = reg.try_get<Velocity>(e);
+        v != nullptr && glm::length(v->value) > 0.0f) {
+      drain += kExertionDrainPerSecond;  // moving costs extra
+    }
+    s.water.current -= drain * dt;
+    if (s.water.current < 0.0f) s.water.current = 0.0f;  // never below empty
+
+    if (s.water.current <= 0.0f) {  // dehydrating — the same death path as starving
+      s.health.current -= kDehydrationPerSecond * dt;
+      if (s.health.current < 0.0f) s.health.current = 0.0f;
+    }
+  }
+}
+
+void drink(entt::registry& reg, float dt) {
+  // How fast water refills while standing in a source — quick, so a few seconds at the well tops
+  // you off, but not instant, so you must LINGER (the design's "walk to the well" spatial loop). A
+  // knob.
+  constexpr float kDrinkPerSecond = 40.0f;
+  // Drinkers: any person (Stats + Transform) that isn't a creature or a downed body — the same
+  // exclude<Enemy, Downed> as collect_pickups, so an unconscious body doesn't drink and creatures
+  // (which never thirst) are skipped. The source is NOT consumed, so many can share one well.
+  auto drinkers = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
+  auto sources = reg.view<WaterSource, Transform>();
+  for (const entt::entity d : drinkers) {
+    Vital& water = drinkers.get<Stats>(d).water;
+    if (water.current >= water.max) continue;  // already full — nothing to draw
+    const Vec2 pos = drinkers.get<Transform>(d).position;
+    for (const entt::entity s : sources) {
+      if (glm::distance(pos, sources.get<Transform>(s).position) <=
+          sources.get<WaterSource>(s).radius) {
+        water.current += kDrinkPerSecond * dt;
+        if (water.current > water.max) water.current = water.max;  // capped, no over-fill
+        break;                                                     // one source is enough
+      }
     }
   }
 }
@@ -963,13 +1047,15 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // by an ally or respawned when the timer runs out); an NPC dies for good (permadeath).
   // (kReviveDistance is the file-scope constant steer_npcs also runs rescuers toward.)
 
-  // Back on your feet WHOLE — every vital, not just health. Hunger especially must reset
-  // (it never self-recovers, so reviving with an empty stomach would drop a starved player
-  // straight back down); stamina too, so you don't get up mid-exhaustion.
+  // Back on your feet WHOLE — every vital, not just health. Hunger AND water especially must reset:
+  // neither self-recovers, so reviving with an empty stomach (or a dry canteen) would re-starve (or
+  // re-dehydrate) the player and drop them straight back down. Stamina too, so you don't get up
+  // mid-exhaustion. Any Need added later must reset HERE for the same reason.
   const auto revive = [](Stats& s, Velocity& v) {
     s.health.current = s.health.max;
     s.stamina.current = s.stamina.max;
     s.hunger.current = s.hunger.max;
+    s.water.current = s.water.max;
     v.value = Vec2{0.0f, 0.0f};
   };
 

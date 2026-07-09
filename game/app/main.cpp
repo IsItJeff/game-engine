@@ -146,6 +146,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::Text("hunger: %.0f / %.0f", static_cast<double>(hu.current),
                 static_cast<double>(hu.max));
     ImGui::ProgressBar(hu.current / hu.max);  // falls over time; eat orbs to refill, or starve
+    const eng::sim::Vital& wa = stats->water;
+    ImGui::Text("water: %.0f / %.0f", static_cast<double>(wa.current), static_cast<double>(wa.max));
+    ImGui::ProgressBar(wa.current / wa.max);  // falls over time; drink at the pond, or dehydrate
   }
 
   // Progression: the attribute the player has grown, and progress toward the next

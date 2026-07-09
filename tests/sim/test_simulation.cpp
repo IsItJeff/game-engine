@@ -187,6 +187,98 @@ TEST_CASE("a starving character cannot heal, so starvation always nets health do
   REQUIRE(reg.get<eng::sim::Stats>(e).health.current < before);  // strictly down despite high VIT
 }
 
+TEST_CASE("water drains over time, faster while moving than at rest", "[sim]") {
+  // The SECOND Need, the twin of hunger: it only falls (no self-recovery), and exertion drains it
+  // faster (the design's "exertion drains needs"). Applies to any person (bare Stats) — parity.
+  entt::registry reg;
+  const entt::entity rester = reg.create();
+  reg.emplace<eng::sim::Stats>(rester);     // water starts full (100)
+  reg.emplace<eng::sim::Velocity>(rester);  // zero velocity -> at rest
+  const entt::entity mover = reg.create();
+  reg.emplace<eng::sim::Stats>(mover);
+  reg.emplace<eng::sim::Velocity>(mover, eng::Vec2{50.0f, 0.0f});  // moving = exerting
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) eng::sim::drain_water(reg, dt);
+
+  REQUIRE(reg.get<eng::sim::Stats>(rester).water.current < 100.0f);  // it fell...
+  REQUIRE(reg.get<eng::sim::Stats>(rester).water.current > 0.0f);    // ...gently (not empty in 10s)
+  REQUIRE(reg.get<eng::sim::Stats>(mover).water.current <
+          reg.get<eng::sim::Stats>(rester).water.current);  // exertion costs extra water
+}
+
+TEST_CASE("an empty canteen dehydrates health and blocks healing", "[sim]") {
+  // Dehydration is starvation's twin: at 0 water it chips health through the same death path, and
+  // regenerate_vitals gates healing off (the `|| water<=0` clause), so a parched character nets
+  // health strictly DOWN even with a strong heal — the same guarantee starvation has. Hunger stays
+  // full, isolating the WATER gate.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  auto& s = reg.emplace<eng::sim::Stats>(e);
+  s.health = eng::sim::Vital{50.0f, 100.0f, 8.0f};  // wounded, heals 8/s
+  s.water.current = 0.0f;                           // parched
+  reg.emplace<eng::sim::Attributes>(e).endurance.level =
+      8;  // boosted regen (13.6/s) would beat 12/s
+
+  const float before = s.health.current;
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) {  // one second, the real tick order
+    eng::sim::drain_water(reg, dt);                      // chips health at 0 water...
+    eng::sim::regenerate_vitals(reg, dt);  // ...and the water gate blocks the clawback
+  }
+  REQUIRE(reg.get<eng::sim::Stats>(e).health.current < before);
+}
+
+TEST_CASE("drinking at a water source refills water without consuming the source", "[sim]") {
+  // The refill loop: standing in a source tops your water up, and the source PERSISTS (unlike a
+  // one-shot food orb) — so many can drink and you return to it. Standing outside its radius
+  // refills nothing.
+  entt::registry reg;
+  const entt::entity well = reg.create();
+  reg.emplace<eng::sim::Transform>(well, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::WaterSource>(well, eng::sim::WaterSource{60.0f});
+
+  const entt::entity in_pool = reg.create();
+  reg.emplace<eng::sim::Transform>(in_pool, eng::Vec2{20.0f, 0.0f});  // within the 60 radius
+  reg.emplace<eng::sim::Stats>(in_pool).water.current = 10.0f;        // parched
+  const entt::entity dry = reg.create();
+  reg.emplace<eng::sim::Transform>(dry, eng::Vec2{200.0f, 0.0f});  // well outside
+  reg.emplace<eng::sim::Stats>(dry).water.current = 10.0f;
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::drink(reg, dt);  // 1 second
+
+  REQUIRE(reg.get<eng::sim::Stats>(in_pool).water.current > 10.0f);  // the one in the pool drank...
+  REQUIRE(reg.get<eng::sim::Stats>(dry).water.current == Approx(10.0f));  // ...the far one didn't
+  REQUIRE(reg.valid(well));  // the source is NOT consumed
+}
+
+TEST_CASE("a thirsty NPC steers toward the nearest water source", "[sim]") {
+  // The thirst rung: a safe, low-water NPC heads for the nearest WaterSource; a well-watered one
+  // ignores it (falls through to arm-up/drift). Ranks below hunger, above arm-up.
+  entt::registry reg;
+  const entt::entity well = reg.create();
+  reg.emplace<eng::sim::Transform>(well, eng::Vec2{300.0f, 0.0f});  // off to the +x
+  reg.emplace<eng::sim::WaterSource>(well, eng::sim::WaterSource{60.0f});
+
+  const entt::entity thirsty = reg.create();
+  reg.emplace<eng::sim::Transform>(thirsty, eng::Vec2{100.0f, 0.0f});  // 200 away, inside seek 260
+  reg.emplace<eng::sim::Velocity>(thirsty);
+  reg.emplace<eng::sim::Npc>(thirsty);
+  reg.emplace<eng::sim::Stats>(thirsty).water.current =
+      10.0f;  // parched -> below the 0.6 threshold
+  const entt::entity sated = reg.create();
+  reg.emplace<eng::sim::Transform>(sated, eng::Vec2{100.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(sated);
+  reg.emplace<eng::sim::Npc>(sated);
+  reg.emplace<eng::sim::Stats>(sated);  // full water -> not thirsty
+
+  eng::sim::steer_npcs(reg);
+
+  REQUIRE(reg.get<eng::sim::Velocity>(thirsty).value.x > 0.0f);  // steering toward the well (+x)...
+  REQUIRE(reg.get<eng::sim::Velocity>(sated).value.x == 0.0f);   // ...the sated one ignores it
+}
+
 TEST_CASE("health regen scales with Endurance (VIT) when fed", "[sim]") {
   // The other half: a FED tougher character heals faster — VIT now speeds HP regen, mirroring
   // how it already speeds stamina recovery. Two wounded, fed entities differing only in Endurance.
@@ -819,6 +911,7 @@ TEST_CASE("an unrescued downed player respawns whole at the centre on expiry", "
   stats.health.current = 0.0f;   // dead...
   stats.hunger.current = 0.0f;   // ...of starvation...
   stats.stamina.current = 0.0f;  // ...and exhausted
+  stats.water.current = 0.0f;  // ...and parched (each Need must come back full or it re-downs you)
 
   const eng::Vec2 centre{640.0f, 360.0f};
   eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // 1st call: goes Downed (no ally near)
@@ -830,6 +923,7 @@ TEST_CASE("an unrescued downed player respawns whole at the centre on expiry", "
   REQUIRE(after.health.current == Approx(after.health.max));    // ...at full health...
   REQUIRE(after.hunger.current == Approx(after.hunger.max));    // ...fed (not re-starving)...
   REQUIRE(after.stamina.current == Approx(after.stamina.max));  // ...and rested...
+  REQUIRE(after.water.current == Approx(after.water.max));  // ...and watered (not re-dehydrating)
   REQUIRE(reg.get<eng::sim::Transform>(player).position.x == Approx(centre.x));  // ...at the centre
 }
 
