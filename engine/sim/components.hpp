@@ -139,11 +139,18 @@ struct Hazard {
 // It swings on a cooldown (`attack_timer` counts down), so touching one is a series
 // of discrete blows, not a per-tick grind. `chase_speed` is per-creature so archetypes
 // can differ — a slow tanky brute vs a fast fragile swarmer (see make_creature).
+// What a creature leaves behind when it dies — keyed on its archetype, so the drop is
+// DETERMINISTIC (no roll on the shared stream). The three make the loot economy symmetric: a
+// swarmer yields SUSTAIN (a health orb), a brute OFFENCE (a weapon), a sentinel DEFENCE (armour).
+// Exhaustive by design — handle_deaths switches on it with no default, so a fourth kind is a
+// compile error until it's handled (the same -Wswitch discipline as SkillId/AttrId/CommandKind).
+enum class DropKind : std::uint8_t { HealthOrb, Weapon, Armour };
+
 struct Enemy {
   float attack_damage = 15.0f;
-  float attack_timer = 0.0f;  // seconds until it can swing again; 0 = ready
-  float chase_speed = 70.0f;  // how fast it closes on its prey (chase_prey)
-  bool drops_weapon = false;  // on death: true drops a Weapon (brutes), false a health orb
+  float attack_timer = 0.0f;            // seconds until it can swing again; 0 = ready
+  float chase_speed = 70.0f;            // how fast it closes on its prey (chase_prey)
+  DropKind drop = DropKind::HealthOrb;  // on death: what this archetype leaves behind
 };
 
 // A collectible a slain creature leaves behind: walk over it (collect_pickups) to

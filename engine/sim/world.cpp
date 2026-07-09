@@ -64,7 +64,17 @@ entt::entity make_creature(entt::registry& reg, Vec2 pos, float hp, float chase_
 entt::entity make_brute(entt::registry& reg, Vec2 pos) {
   const entt::entity e = make_creature(reg, pos, 40.0f, 70.0f, 15.0f, 3, Vec3{0.85f, 0.2f, 0.2f},
                                        9.0f);  // deep red
-  reg.get<Enemy>(e).drops_weapon = true;       // the hard kill pays out a weapon, not a health orb
+  reg.get<Enemy>(e).drop = DropKind::Weapon;   // the hard kill pays out a weapon
+  return e;
+}
+// A SENTINEL: the slow, heavily-plated tank — highest HP (60) and defence (VIT 5), but it
+// lumbers (chase 50, slower than a brute), and on death it drops its ARMOUR (the defensive
+// counterpart of the brute's weapon), giving armour a renewable battlefield source. ponytail:
+// its HP / defence / speed and its spawn share (below) are tuning knobs, not load-bearing.
+entt::entity make_sentinel(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = make_creature(reg, pos, 60.0f, 50.0f, 12.0f, 5, Vec3{0.45f, 0.5f, 0.62f},
+                                       10.0f);  // slate blue, big
+  reg.get<Enemy>(e).drop = DropKind::Armour;
   return e;
 }
 entt::entity make_swarmer(entt::registry& reg, Vec2 pos) {
@@ -107,9 +117,14 @@ void spawn_creature_if_due(entt::registry& reg, float& timer, std::mt19937& rng,
       pos = {kFieldWidth, along * kFieldHeight};
       break;  // right
   }
-  // Roughly one brute for every two swarmers — mostly a fast fragile swarm with the
-  // occasional tanky brute to anchor it. From the seeded rng, so still deterministic.
-  if (unit(rng) < 0.35f) {
+  // The archetype mix, from ONE seeded draw (kept a single draw so the shared stream stays
+  // aligned): a rare heavily-plated sentinel (10%), the occasional tanky brute (25%, its band
+  // carved to make room for the sentinel), and mostly the fast fragile swarm (the rest). Still
+  // deterministic. ponytail: the 0.10 / 0.35 bands are balance knobs.
+  const float which = unit(rng);
+  if (which < 0.10f) {
+    make_sentinel(reg, pos);
+  } else if (which < 0.35f) {
     make_brute(reg, pos);
   } else {
     make_swarmer(reg, pos);

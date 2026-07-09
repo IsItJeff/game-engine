@@ -924,7 +924,8 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // dies here too, the same way an NPC does — one death path for everyone non-player.
   std::vector<entt::entity> dead;
   std::vector<Vec2> orb_drops;     // where slain swarmers fell — a health orb lands at each
-  std::vector<Vec2> weapon_drops;  // ...and where brutes fell — a weapon instead
+  std::vector<Vec2> weapon_drops;  // ...where brutes fell — a weapon instead...
+  std::vector<Vec2> armour_drops;  // ...and where sentinels fell — a piece of armour
   auto npcs = reg.view<Stats, Npc>();
   for (const entt::entity e : npcs) {
     if (npcs.get<Stats>(e).health.current <= 0.0f) dead.push_back(e);
@@ -933,16 +934,27 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   for (const entt::entity e : creatures) {
     if (creatures.get<Stats>(e).health.current <= 0.0f) {
       dead.push_back(e);
-      // The two archetypes drop different loot: a brute yields a WEAPON (the hard kill pays
-      // out gear), a swarmer the usual health orb. Keyed on the archetype flag, so the drop
-      // is deterministic — no roll on the shared stream.
-      (creatures.get<Enemy>(e).drops_weapon ? weapon_drops : orb_drops)
-          .push_back(reg.get<Transform>(e).position);
+      // Each archetype drops its own loot, keyed on DropKind — so the drop is deterministic (no
+      // roll on the shared stream). Exhaustive switch, NO default: a new DropKind won't compile
+      // until it's handled here. Capture the position BEFORE the destroy loop below.
+      const Vec2 pos = reg.get<Transform>(e).position;
+      switch (creatures.get<Enemy>(e).drop) {
+        case DropKind::HealthOrb:
+          orb_drops.push_back(pos);
+          break;
+        case DropKind::Weapon:
+          weapon_drops.push_back(pos);
+          break;
+        case DropKind::Armour:
+          armour_drops.push_back(pos);
+          break;
+      }
     }
   }
   for (const entt::entity e : dead) reg.destroy(e);
   for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);     // sustain from a swarmer
-  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos);  // gear from a brute
+  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos);  // offence from a brute
+  for (const Vec2& pos : armour_drops) spawn_armour(reg, pos);  // defence from a sentinel
 }
 
 void collect_pickups(entt::registry& reg, float dt) {
