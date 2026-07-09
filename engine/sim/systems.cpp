@@ -1152,7 +1152,11 @@ void advance_projectiles(entt::registry& reg, float dt) {
         st->health.current -= p.damage;
         if (st->health.current < 0.0f) st->health.current = 0.0f;
         stamp_flash(reg, p.target);
-        if (was_alive && st->health.current <= 0.0f && reg.valid(p.owner))
+        // Valor is for felling a HOSTILE, so credit it only when the shot killed an Enemy (a
+        // player's throw). A creature's spit homes on a PERSON, so this guard keeps a spitter from
+        // ever earning Valor for killing a colonist (creatures have no morality anyway).
+        if (was_alive && st->health.current <= 0.0f && reg.all_of<Enemy>(p.target) &&
+            reg.valid(p.owner))
           record_deed(reg, p.owner, Deed::Valor, kValorKill);
       }
       spent.push_back(s);
@@ -1161,6 +1165,65 @@ void advance_projectiles(entt::registry& reg, float dt) {
     }
   }
   for (const entt::entity s : spent) reg.destroy(s);
+}
+
+void creature_spit(entt::registry& reg, float dt) {
+  // The RANGED creature attack, the hostile mirror of the player's throw — and the payoff of the
+  // Projectile primitive. A spitter (Enemy with spit_range > 0) periodically launches a homing spit
+  // at the nearest PERSON within range, reusing the exact same Projectile advance_projectiles
+  // flies. So a ranged enemy fell out of the primitive with no new movement/impact code — only the
+  // launch.
+  constexpr float kSpitInterval = 1.5f;  // seconds between a spitter's shots (a knob)
+
+  // Prey = people (Stats, not a creature, not downed) — the same set chase_prey homes on. A downed
+  // body is spared (nothing to gain shooting a helpless target; matches the melee rule).
+  auto prey = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
+
+  // Collect the shots to launch, THEN spawn them, so we never reg.create() while iterating the
+  // Enemy/Transform view (the new projectile carries a Transform, a pool the view touches).
+  struct Shot {
+    Vec2 from;
+    entt::entity target;
+    entt::entity owner;
+    float damage;
+  };
+  std::vector<Shot> shots;
+  auto spitters = reg.view<Enemy, Transform>();
+  for (const entt::entity e : spitters) {
+    Enemy& enemy = spitters.get<Enemy>(e);
+    if (enemy.spit_range <= 0.0f) continue;  // melee-only creatures never spit
+    if (enemy.spit_timer > 0.0f) {
+      enemy.spit_timer -= dt;  // still reloading
+      continue;
+    }
+    // Loaded — find the nearest person in range. Strict < breaks ties deterministically.
+    const Vec2 pos = spitters.get<Transform>(e).position;
+    entt::entity victim = entt::null;
+    float nearest = enemy.spit_range;
+    for (const entt::entity person : prey) {
+      const float d = glm::distance(pos, prey.get<Transform>(person).position);
+      if (d < nearest) {
+        nearest = d;
+        victim = person;
+      }
+    }
+    if (victim == entt::null) continue;  // no one in range — hold fire, stay loaded
+
+    // Fire: reset the reload and queue a spit carrying VIT-mitigated damage (mitigated once at
+    // launch, like the player's throw — the projectile then just delivers it).
+    enemy.spit_timer = kSpitInterval;
+    shots.push_back({pos, victim, e, mitigate(enemy.spit_damage, defence_of(reg, victim))});
+  }
+
+  // Launch the queued spits. A violet bolt, distinct from the player's bright-yellow throw, so
+  // incoming fire reads at a glance.
+  for (const Shot& s : shots) {
+    const entt::entity bolt = reg.create();
+    reg.emplace<Transform>(bolt, s.from);
+    reg.emplace<PrevTransform>(bolt, s.from);
+    reg.emplace<RenderDot>(bolt, Vec3{0.8f, 0.3f, 0.85f}, 4.0f);
+    reg.emplace<Projectile>(bolt, Projectile{s.target, s.owner, s.damage, kProjectileSpeed});
+  }
 }
 
 void npc_attack(entt::registry& reg, std::mt19937& rng) {

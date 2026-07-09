@@ -128,6 +128,20 @@ entt::entity make_swarmer(entt::registry& reg, Vec2 pos) {
   reg.get<Enemy>(e).poison_per_second = 9.0f;
   return e;
 }
+// A SPITTER: the ranged artillery — the hostile mirror of the player's throw, and the payoff of the
+// Projectile primitive. Fragile (25 HP) and SLOW (chase 55, it hangs back) with only a feeble bite
+// (attack_damage 4), but it launches a homing spit from well out of your melee reach (spit_range
+// 250 > a swing's ~45) that chips you every ~1.5s. So it flips the usual pressure: you must CLOSE
+// on it (or throw back) to shut it down, rather than kite. ponytail: HP/speed/range/damage and its
+// 15% spawn share are balance knobs.
+entt::entity make_spitter(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = make_creature(reg, pos, 25.0f, 55.0f, 4.0f, 1, Vec3{0.6f, 0.25f, 0.7f},
+                                       7.0f);  // violet
+  Enemy& enemy = reg.get<Enemy>(e);
+  enemy.spit_range = 250.0f;
+  enemy.spit_damage = 7.0f;
+  return e;
+}
 
 // Keep the fight alive: once the spawn timer runs out, add a creature at a field edge
 // (if we're under the cap) and reset it. Deterministic — the timer is a fixed per-tick
@@ -159,13 +173,15 @@ void spawn_creature_if_due(entt::registry& reg, float& timer, std::mt19937& rng,
       break;  // right
   }
   // The archetype mix, from ONE seeded draw (kept a single draw so the shared stream stays
-  // aligned): a rare heavily-plated sentinel (10%), the occasional tanky brute (25%, its band
-  // carved to make room for the sentinel), and mostly the fast fragile swarm (the rest). Still
-  // deterministic. ponytail: the 0.10 / 0.35 bands are balance knobs.
+  // aligned): a rare heavily-plated sentinel (10%), a ranged spitter (15%), the occasional tanky
+  // brute (20%), and mostly the fast fragile swarm (the rest). Still deterministic. ponytail: the
+  // 0.10 / 0.25 / 0.45 bands are balance knobs.
   const float which = unit(rng);
   if (which < 0.10f) {
     make_sentinel(reg, pos);
-  } else if (which < 0.35f) {
+  } else if (which < 0.25f) {
+    make_spitter(reg, pos);
+  } else if (which < 0.45f) {
     make_brute(reg, pos);
   } else {
     make_swarmer(reg, pos);
@@ -314,11 +330,13 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
              ((i % 2) * 2 - 1) * 75, ((i / 2) * 2 - 1) * 80, ((1 - i / 2) * 2 - 1) * 80);
   }
 
-  // Two hostile creatures at opposite corners that hunt the nearest person (you or an
-  // NPC) — one of each kind so both archetypes show from the start. Strike them (J) to
-  // wear their HP down; a stronger Strength kills faster. The spawner keeps a mix coming.
+  // A few hostile creatures at the edges that hunt the nearest person (you or an NPC) — one of each
+  // kind so the archetypes show from the start. Strike them (J) to wear their HP down, or THROW (F)
+  // at range; a stronger Strength kills faster. The violet SPITTER hangs back and plinks you from
+  // afar (close on it or throw back). The spawner keeps a mix coming.
   make_brute(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
   make_swarmer(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
+  make_spitter(reg, Vec2{kFieldWidth * 0.85f, kFieldHeight * 0.15f});
 
   // A couple of armour pieces on the field (dull-bronze dots) — walk onto one and press E to
   // don it for +defence at the cost of a slower second wind, the defensive twin of a weapon.
@@ -367,7 +385,8 @@ void World::step() {
   resolve_contacts(registry_);                     // motes shatter on contact
   resolve_creature_contacts(registry_, dt, rng_);  // creatures swing; player may dodge (DEX)
   tick_poison(registry_, dt);                      // venom from a swarmer's bite chips health...
-  advance_projectiles(registry_, dt);              // thrown shots fly to their target and land
+  creature_spit(registry_, dt);                    // ranged creatures launch a spit at a person...
+  advance_projectiles(registry_, dt);              // ...and thrown/spat shots fly home and land
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f},
                 dt);               // ...then 0-HP reaped
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones

@@ -1805,6 +1805,81 @@ TEST_CASE("a thrown shot whose target dies mid-flight is wasted, not orphaned", 
   REQUIRE(reg.storage<eng::sim::Projectile>().size() == 0u);  // the shot was dropped, no crash
 }
 
+namespace {
+// Build a lone spitter at the origin (spit_range 250, the given spit_damage) plus one person at
+// `victim_x`. Returns {spitter, victim}. Used by the creature_spit tests below.
+std::pair<entt::entity, entt::entity> make_spitter_and_person(entt::registry& reg, float victim_x,
+                                                              float spit_damage,
+                                                              bool victim_is_npc) {
+  const entt::entity spitter = reg.create();
+  reg.emplace<eng::sim::Transform>(spitter, eng::Vec2{0.0f, 0.0f});
+  eng::sim::Enemy& enemy = reg.emplace<eng::sim::Enemy>(spitter);
+  enemy.spit_range = 250.0f;
+  enemy.spit_damage = spit_damage;
+  reg.emplace<eng::sim::Stats>(spitter, eng::sim::Vital{25.0f, 25.0f, 0.0f});
+  const entt::entity victim = reg.create();
+  reg.emplace<eng::sim::Transform>(victim, eng::Vec2{victim_x, 0.0f});
+  reg.emplace<eng::sim::Stats>(victim, eng::sim::Vital{50.0f, 50.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(victim);  // default VIT
+  if (victim_is_npc) reg.emplace<eng::sim::Npc>(victim);
+  return {spitter, victim};
+}
+}  // namespace
+
+TEST_CASE("a spitter launches a homing spit at a person in range", "[sim]") {
+  // The ranged CREATURE attack, reusing the Projectile primitive: a spitter with a person inside
+  // its spit_range fires a homing bolt, and advance_projectiles flies it in and chips the victim —
+  // the hostile mirror of the player's throw, sharing the same projectile machinery.
+  entt::registry reg;
+  const auto [spitter, victim] = make_spitter_and_person(reg, 100.0f, 7.0f, false);
+  (void)spitter;
+
+  eng::sim::creature_spit(reg, 1.0f / 60.0f);
+  REQUIRE(reg.storage<eng::sim::Projectile>().size() == 1u);         // a spit is airborne...
+  eng::sim::advance_projectiles(reg, 1.0f);                          // ...fly it home
+  REQUIRE(reg.get<eng::sim::Stats>(victim).health.current < 50.0f);  // the spit chipped the victim
+}
+
+TEST_CASE("a spitter with no one in range holds its fire", "[sim]") {
+  // The range gate: a person past spit_range draws no shot.
+  entt::registry reg;
+  const auto [spitter, victim] = make_spitter_and_person(reg, 400.0f, 7.0f, false);  // out of range
+  (void)spitter;
+  (void)victim;
+
+  eng::sim::creature_spit(reg, 1.0f / 60.0f);
+  REQUIRE(reg.storage<eng::sim::Projectile>().size() == 0u);  // nothing in range -> no spit
+}
+
+TEST_CASE("a spitter reloads between shots: no spit while its cooldown ticks", "[sim]") {
+  // The spit cooldown: after firing, spit_timer holds it off, so two back-to-back ticks yield only
+  // ONE shot, not a stream.
+  entt::registry reg;
+  const auto [spitter, victim] = make_spitter_and_person(reg, 100.0f, 7.0f, false);
+  (void)spitter;
+  (void)victim;
+
+  eng::sim::creature_spit(reg, 1.0f / 60.0f);                 // fires once
+  eng::sim::creature_spit(reg, 1.0f / 60.0f);                 // still reloading -> no second shot
+  REQUIRE(reg.storage<eng::sim::Projectile>().size() == 1u);  // exactly one spit, not two
+}
+
+TEST_CASE("a spitter earns no Valor for felling a colonist: creatures have no morality", "[sim]") {
+  // The Valor guard in advance_projectiles: Valor is only for felling a HOSTILE, and a spit's
+  // target is a PERSON, so a spitter that kills a colonist records nothing (a creature never gets a
+  // ledger).
+  entt::registry reg;
+  const auto [spitter, colonist] =
+      make_spitter_and_person(reg, 100.0f, 1000.0f, true);  // lethal spit
+
+  eng::sim::creature_spit(reg, 1.0f / 60.0f);
+  eng::sim::advance_projectiles(reg, 1.0f);  // the lethal spit lands and fells the colonist
+
+  REQUIRE(reg.get<eng::sim::Stats>(colonist).health.current == 0.0f);  // the colonist was felled...
+  REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(spitter) ==
+          nullptr);  // ...but the spitter earned nothing
+}
+
 TEST_CASE("attacking a creature whittles its HP by Strength vs its VIT", "[sim]") {
   entt::registry reg;
   // A player-like attacker at the origin (Strength level 1 to start).
@@ -3123,16 +3198,19 @@ TEST_CASE("a creature's blow harms an NPC too, not just the player", "[sim]") {
   REQUIRE(evasion->xp.to_double() > 0.0);
 }
 
-TEST_CASE("the two archetypes spawn with their own numbers (brute vs swarmer)", "[sim]") {
-  // make_brute/make_swarmer are file-local, but a fresh World seeds exactly one of
-  // each. Pin their HP/speed/damage here: make_creature takes three adjacent float
-  // params (hp, chase_speed, attack_damage) that a future archetype could transpose
-  // silently — this is the guard that would catch it.
+TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, spitter)",
+          "[sim]") {
+  // make_brute/make_swarmer/make_spitter are file-local, but a fresh World seeds one of each. Pin
+  // their HP/speed/damage here: make_creature takes three adjacent float params (hp, chase_speed,
+  // attack_damage) that a future archetype could transpose silently — this is the guard that would
+  // catch it. The spitter also pins its ranged knobs (spit_range/damage), which melee kinds leave
+  // 0.
   eng::sim::World world;
   entt::registry& reg = world.registry();
 
   bool saw_brute = false;
   bool saw_swarmer = false;
+  bool saw_spitter = false;
   for (const entt::entity e : reg.view<eng::sim::Enemy>()) {
     const float hp = reg.get<eng::sim::Stats>(e).health.max;
     const eng::sim::Enemy& en = reg.get<eng::sim::Enemy>(e);
@@ -3141,15 +3219,24 @@ TEST_CASE("the two archetypes spawn with their own numbers (brute vs swarmer)", 
       saw_brute = true;
       REQUIRE(en.chase_speed == Approx(70.0f));
       REQUIRE(en.attack_damage == Approx(15.0f));
-      REQUIRE(dex == 1);  // default Dexterity -> dodge_chance 0
-    } else {              // swarmer: fragile, fast, weak — and slippery
+      REQUIRE(dex == 1);               // default Dexterity -> dodge_chance 0
+      REQUIRE(en.spit_range == 0.0f);  // melee-only
+    } else if (hp == Approx(25.0f)) {  // spitter: fragile, slow, feeble melee — but RANGED
+      saw_spitter = true;
+      REQUIRE(en.chase_speed == Approx(55.0f));
+      REQUIRE(en.attack_damage == Approx(4.0f));
+      REQUIRE(en.spit_range == Approx(250.0f));
+      REQUIRE(en.spit_damage == Approx(7.0f));
+    } else {  // swarmer: fragile, fast, weak — and slippery
       saw_swarmer = true;
       REQUIRE(hp == Approx(15.0f));
       REQUIRE(en.chase_speed == Approx(130.0f));
       REQUIRE(en.attack_damage == Approx(8.0f));
-      REQUIRE(dex == 8);  // innate Dexterity -> ~21% chance to dodge a strike
+      REQUIRE(dex == 8);               // innate Dexterity -> ~21% chance to dodge a strike
+      REQUIRE(en.spit_range == 0.0f);  // melee-only
     }
   }
   REQUIRE(saw_brute);
   REQUIRE(saw_swarmer);
+  REQUIRE(saw_spitter);
 }

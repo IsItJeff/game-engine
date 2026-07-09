@@ -94,18 +94,20 @@ just as they never train.)
 
 ### The enemy — a creature that fights back
 
-An `Enemy` is a real fight, not a throwaway mote. Two archetypes (from `make_creature`)
+An `Enemy` is a real fight, not a throwaway mote. A handful of archetypes (from `make_creature`)
 give waves texture:
 
 | Kind | HP | Chase speed | Hit | Dodge | Feel |
 |---|---|---|---|---|---|
 | **Brute** (red) | 40 | 70 | 15 | 0% | slow, tanky, hits hard — wear it down, kite it |
 | **Swarmer** (orange) | 15 | 130 | 8 | ~21% | fast, fragile (~one strike), weak, *slippery*, and **venomous** — corners you in numbers, and its bite lingers |
+| **Spitter** (violet) | 25 | 55 | 4 | 0% | slow, fragile, feeble in melee — but **ranged**: plinks you with a homing spit from beyond your reach, so you must close on it or throw back |
 
 The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips ~1 strike in
-5, its innate Dexterity) *and venomous* — its bite leaves a poison that keeps chipping you after
-you break away, so the two archetypes threaten you for opposite reasons: the brute up front, the
-swarm on the retreat.
+5, its innate Dexterity) *and venomous*, and the spitter is **RANGED** — so they threaten you for
+different reasons: the brute up front, the swarm on the retreat, the spitter from a distance you
+can't melee. (A slow, heavily-plated **sentinel** — 60 HP, VIT 5 — rounds out the reinforcement mix
+and drops armour.)
 
 - **HP** (a `Stats` component) that strikes whittle down; **no regen**, so you can wear
   it down. **VIT** (an `Attributes` component) softens the blows it takes.
@@ -116,6 +118,13 @@ swarm on the retreat.
   its `attack_damage` to whoever it caught, *softened by that victim's VIT* (same
   `mitigate`), and trains their Toughness (via `train_on_damage`). Unlike a mote it is
   **not consumed** — it keeps swinging.
+- **`creature_spit`** — the ranged mirror of that swing, and the **payoff of the `Projectile`
+  primitive** (the player's *Throwing* section below): a **spitter** (any `Enemy` with
+  `spit_range > 0`), off its own reload, launches a *homing* spit at the nearest person in range —
+  the same `Projectile` your throw uses, so a ranged enemy needed no new movement/impact code, only
+  the launch. A killing spit records **no** Valor (its target is a person, not a hostile; creatures
+  have no morality). "Procs as data" again — a spitter is just three `Enemy` knobs
+  (`spit_range` / `spit_damage` / `spit_timer`), not a new creature class.
 - **Venom (`Poisoned` + `tick_poison`)** — a landed blow from a venomous archetype (a swarmer's
   `Enemy::poison_per_second > 0`, "procs as data") also applies a `Poisoned` status that keeps
   chipping the victim's `health` for a few seconds *after* the attacker moves on — routed through
@@ -412,9 +421,9 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Blocking` (the raised guard), `Projectile` (a thrown bolt in flight), `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, and *executes* a worn-down foe for bonus damage), `perform_throw` (the stamina-costed ranged option — launches a `Projectile`), `advance_projectiles` (flies each bolt home and lands it), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), and guard (K) inputs come from `game/app/main.cpp`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, and *executes* a worn-down foe for bonus damage), `perform_throw` (the stamina-costed ranged option — launches a `Projectile`), `advance_projectiles` (flies each bolt home and lands it), `creature_spit` (a ranged enemy launches a spit through the same `Projectile`), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), and guard (K) inputs come from `game/app/main.cpp`.
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
-- `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
+- `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` / `make_spitter` / `make_sentinel` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).
 - `engine/sim/components.hpp` — `Weapon` and `Armour` (dropped gear) and `Equipped` (the two-slot mods cache); `engine/sim/systems.cpp` `equip_nearest_gear` (the non-clobbering fold), `spawn_armour`, and the `defence_of` / `update_stamina` hooks.
 - `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, LCK crits + Scavenging training, creature spawn/cap, loot drop + collect + fade, weapon drop/wield/reach/damage/heft.

@@ -105,11 +105,18 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
 void tick_poison(entt::registry& reg, float dt);
 
 // Fly every in-flight Projectile toward its homing target and, on arrival, apply its carried damage
-// (crediting the owner Valor on a killing hit) and despawn. A shot whose target has died mid-flight
-// is despawned unhit (a wasted throw). The delayed-impact half of a throw (perform_throw launches
-// it). MUST run after integrate_motion (positions current) and before handle_deaths (a killed
-// target reaps the same tick). Draws no RNG.
+// (crediting the owner Valor on a killing hit, but only for felling a hostile) and despawn. A shot
+// whose target has died mid-flight is despawned unhit (a wasted throw). The delayed-impact half of
+// a throw (perform_throw launches it). MUST run after integrate_motion (positions current) and
+// before handle_deaths (a killed target reaps the same tick). Draws no RNG.
 void advance_projectiles(entt::registry& reg, float dt);
+
+// The RANGED creature attack — the hostile mirror of the player's throw. Each spitter (an Enemy
+// with spit_range > 0), off its own spit cooldown, launches a homing Projectile (the same
+// primitive) at the nearest person in range. So a ranged enemy reuses advance_projectiles
+// wholesale. MUST run after integrate_motion (positions current); place it before
+// advance_projectiles so a fresh spit starts flying the same tick. Draws no RNG.
+void creature_spit(entt::registry& reg, float dt);
 
 // Age every entity's HitFlash and remove the ones that have burned out. Pure
 // presentation upkeep — HitFlash is stamped at the damage sites so the renderer can
