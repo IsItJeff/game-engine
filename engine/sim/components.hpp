@@ -220,6 +220,24 @@ inline float renown_scale(std::int32_t standing_value) {
   return 1.0f + t * kRenownMaxScale;
 }
 
+// The lower title threshold — cross it (in either direction) and you stop being anonymous. The
+// upper one reuses kRenownFullAt, so the title flips to "Renowned" exactly when the renown dot-size
+// caps.
+inline constexpr std::int32_t kKnownAt = 15;
+
+// A character's TITLE — the design's "derived recognition": a pure query over `standing`, never a
+// stored slot, so it's always in sync with the deeds behind it. Five bands, symmetric about neutral
+// (villain titles are ready but unreachable until a villain deed exists). This is the seed of the
+// richer title system (Master Smith, Dragonslayer, the Butcher — from build + gear + deeds too);
+// today it reads standing alone. Pure and unit-testable; the HUD shows it, the sim never reads it.
+inline const char* standing_title(std::int32_t standing_value) {
+  if (standing_value >= kRenownFullAt) return "Renowned";
+  if (standing_value >= kKnownAt) return "Known";
+  if (standing_value <= -kRenownFullAt) return "Notorious";
+  if (standing_value <= -kKnownAt) return "Suspect";
+  return "Unproven";
+}
+
 // Marks an entity as dangerous to touch. An entity with a Hazard deals `damage`
 // to any player it overlaps and is then consumed — destroyed (see the
 // resolve_contacts system). The drifting motes have this: touch one, take a hit,

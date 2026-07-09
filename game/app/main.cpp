@@ -178,6 +178,17 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
           world.registry().try_get<eng::sim::CharacterLevel>(player)) {
     ImGui::Text("character level: %d", cl->level);  // the slow "veteran" multiplier on earned stats
   }
+  // Morality: the player's standing (climbs with Valor kills / Charity rescues; goes negative once
+  // villain deeds land) and its derived title. No BehaviorLedger until the first deed, so try_get
+  // -> a neutral 0 / "Unproven". Labelled "standing" (the signed scalar), not "renown" (its
+  // positive half, which the dot-size shows).
+  {
+    const eng::sim::BehaviorLedger* led =
+        world.registry().try_get<eng::sim::BehaviorLedger>(player);
+    const std::int32_t standing_value = led != nullptr ? eng::sim::standing(*led) : 0;
+    ImGui::Text("standing: %d (%s)", static_cast<int>(standing_value),
+                eng::sim::standing_title(standing_value));
+  }
   if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
     // Show one learned skill's level + progress bar. Toughness only appears once the
     // player has taken a hit (it isn't in `owned` until then), so guard on find().
