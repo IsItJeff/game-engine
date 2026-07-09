@@ -47,7 +47,9 @@ flowchart TD
   hun -->|yes| forage[forage: velocity toward the orb]
   hun -->|no| arm{unarmed AND<br/>weapon in range?}
   arm -->|yes| seek[arm up: velocity toward the weapon]
-  arm -->|no| drift[drift: leave velocity alone]
+  arm -->|no| rally{renowned hero<br/>in range?}
+  rally -->|yes| gather[rally: velocity toward the hero]
+  rally -->|no| drift[drift: leave velocity alone]
 ```
 
 The first matching want wins and the NPC commits to it that tick (a `continue`), so a
@@ -160,6 +162,16 @@ onlooker's own might — is a later ring), and a threshold set at *Suspect* so a
 visibly turn the colony against you. A hero or an unproven player reads as no threat at all, so the
 pre-cruelty world is bit-identical.
 
+The **hero twin** completes the mirror: standing reads *both* ways now. At the very *bottom* of the
+ladder — reached only by a colonist with nothing to flee, rescue, forage, drink, or arm toward — an
+**idle** colonist drifts *toward* a player whose deeds have earned **`standing ≥ +kKnownAt`** (the
+*Known* line, the exact positive mirror of the *Suspect* villain it flees at the top). The colony
+**gathers around its champion**. It is deliberately the **lowest** priority (fear is the highest): a
+hungry or endangered colonist ignores the hero, so rallying never overrides a real need — it only
+fills the idle moments a colonist would otherwise spend drifting. Same guards as fear: player-only,
+and below the *Known* line (a neutral or villain player) it pulls nobody, so that world stays
+bit-identical too. Villainy **repels**, heroism **attracts** — the two faces of one scalar.
+
 !!! info "Greedy and memoryless — on purpose"
     It flees the *single nearest* threat, with no memory. An NPC can dodge one
     mote straight into another. That is fine: real steering behaviours (Reynolds)
@@ -196,10 +208,10 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, the first gameplay reader of morality); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, and a bottom-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — the two gameplay readers of morality); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
 - `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` + `greed` + `compassion` + `industry` axes); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
-- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), and the villain-fear reader (a colonist flees a Suspect+ player, ignores a hero or unproven one, and a downed villain is skipped).
+- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player, a downed villain is skipped), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled).
 
 ## Go deeper
 

@@ -77,6 +77,11 @@ void steer_npcs(entt::registry& reg) {
   constexpr float kThirstSeekFraction = 0.6f;
   constexpr float kWaterSeekRadius = 260.0f;
   constexpr float kWaterSeekSpeed = 80.0f;
+  // Rally: an IDLE colonist drifts toward a nearby renowned-enough hero (the inverted twin of the
+  // top-priority villain flee). A gentle gather — lower speed than a flee or a forage, since it's
+  // the lowest-urgency want. Knobs.
+  constexpr float kRallyRadius = 220.0f;
+  constexpr float kRallySpeed = 70.0f;
 
   // Nested loops: every NPC against every hazard / orb / fallen ally / weapon — O(n*m), fine
   // for a handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts
@@ -264,7 +269,8 @@ void steer_npcs(entt::registry& reg) {
 
     // Priority 4 — arm up: an UNARMED colonist (no rescue to make, not hungry, or no food in
     // range) walks to the nearest dropped weapon. npc_equip wields it on reach. An armed NPC
-    // skips this (one slot). Last acting rung — no match just leaves velocity alone (drift).
+    // skips this. A match now `continue`s so the rally rung below is reached only by a truly idle
+    // colonist (armed, or with no blade in range).
     if (gear == nullptr) {
       // INDUSTRY (the fourth axis) scales the arm-up seek RADIUS — the LAST unpersonalized rung, so
       // now every want in the ladder bends to who the colonist is. Reuses bravery's radius SHAPE
@@ -286,7 +292,34 @@ void steer_npcs(entt::registry& reg) {
         const Vec2 toward = weapons.get<Transform>(blade).position - pos;
         const float len = glm::length(toward);
         if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kWeaponSeekSpeed;
+        continue;  // heading for a weapon — an idle colonist would have fallen through to rally
       }
+    }
+
+    // Priority 5 — RALLY: the hero twin of the villain-fear at the top of the ladder. Reached only
+    // by a truly IDLE colonist (nothing to flee, rescue, forage, drink, or arm toward), it drifts
+    // toward a nearby renowned-enough hero — a player whose deeds have earned standing at or above
+    // the "Known" line (+kKnownAt), the exact mirror of the -kKnownAt villain it flees at the top.
+    // The colony gathers around its champion. INVERTED from fear (toward, not away) and LOWEST
+    // priority (never overrides a real need — a hungry or endangered colonist ignores the hero).
+    // Player-only (only a player earns standing today); no ledger or standing < kKnownAt -> no
+    // pull, so a neutral/villain player draws nobody and the pre-hero world is bit-identical.
+    entt::entity champion = entt::null;
+    float nearest_hero = kRallyRadius;
+    auto heroes = reg.view<PlayerControlled, Transform>();
+    for (const entt::entity h : heroes) {
+      const BehaviorLedger* led = reg.try_get<BehaviorLedger>(h);
+      if (led == nullptr || standing(*led) < kKnownAt) continue;  // not a hero worth rallying to
+      const float d = glm::distance(pos, heroes.get<Transform>(h).position);
+      if (d < nearest_hero) {
+        nearest_hero = d;
+        champion = h;
+      }
+    }
+    if (champion != entt::null) {
+      const Vec2 toward = heroes.get<Transform>(champion).position - pos;
+      const float len = glm::length(toward);
+      if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
     }
   }
 }
