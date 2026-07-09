@@ -361,6 +361,50 @@ TEST_CASE("bravery shapes how far an NPC will commit to a rescue", "[sim]") {
   REQUIRE(reg.get<eng::sim::Velocity>(coward).value.y == Approx(0.0f));
 }
 
+TEST_CASE("greed shapes how hungry an NPC must get before it forages", "[sim]") {
+  // Personality's SECOND axis, reading a differently-shaped knob than bravery (a NEED THRESHOLD,
+  // not a radius). Each personality sits at a hunger that DISTINGUISHES it from the base 0.6:
+  //  - GROW: a greedy NPC (+100 -> 0.9) at 75% full forages, where the base (0.6) would NOT;
+  //  - SHRINK: at 45% full a neutral forages, but a selfless one (-100 -> 0.3) does NOT.
+  // The neutral-at-45 forager is the control proving the base reaches 45 — so the selfless NPC
+  // staying put is genuinely the shrink, not a distance both thresholds fail.
+  entt::registry reg;
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb, eng::Vec2{100.0f, 0.0f});
+  reg.emplace<eng::sim::Pickup>(orb);  // in forage range (260)
+
+  const entt::entity greedy = reg.create();
+  reg.emplace<eng::sim::Transform>(greedy, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(greedy);
+  reg.emplace<eng::sim::Npc>(greedy);
+  reg.emplace<eng::sim::Stats>(greedy).hunger.current =
+      75.0f;  // 75% full: the base wouldn't forage
+  reg.emplace<eng::sim::Personality>(greedy, eng::sim::Personality{0, 100});  // greed +100 -> 0.9
+
+  const entt::entity neutral = reg.create();
+  reg.emplace<eng::sim::Transform>(neutral, eng::Vec2{0.0f, 50.0f});
+  reg.emplace<eng::sim::Velocity>(neutral);
+  reg.emplace<eng::sim::Npc>(neutral);
+  reg.emplace<eng::sim::Stats>(neutral).hunger.current = 45.0f;  // 45%, NO Personality -> base 0.6
+
+  const entt::entity selfless = reg.create();
+  reg.emplace<eng::sim::Transform>(selfless, eng::Vec2{0.0f, -50.0f});
+  reg.emplace<eng::sim::Velocity>(selfless);
+  reg.emplace<eng::sim::Npc>(selfless);
+  reg.emplace<eng::sim::Stats>(selfless).hunger.current = 45.0f;  // same 45%...
+  reg.emplace<eng::sim::Personality>(selfless,
+                                     eng::sim::Personality{0, -100});  // ...but greed -100 -> 0.3
+
+  eng::sim::steer_npcs(reg);
+
+  REQUIRE(reg.get<eng::sim::Velocity>(greedy).value.x > 0.0f);   // greedy hoards at 75% (grow)...
+  REQUIRE(reg.get<eng::sim::Velocity>(neutral).value.x > 0.0f);  // ...the base forages at 45%...
+  REQUIRE(reg.get<eng::sim::Velocity>(selfless).value.x ==
+          Approx(0.0f));  // ...but the selfless won't
+  REQUIRE(reg.get<eng::sim::Velocity>(selfless).value.y ==
+          Approx(0.0f));  // (shrink: it leaves the orb)
+}
+
 TEST_CASE("an unarmed colonist steers toward a dropped weapon to arm up", "[sim]") {
   entt::registry reg;
   const entt::entity npc = reg.create();
