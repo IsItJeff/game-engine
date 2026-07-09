@@ -405,6 +405,45 @@ TEST_CASE("greed shapes how hungry an NPC must get before it forages", "[sim]") 
           Approx(0.0f));  // (shrink: it leaves the orb)
 }
 
+TEST_CASE("compassion shapes how fast an NPC rushes to a rescue", "[sim]") {
+  // The third axis, reading a THIRD knob-shape: rescue SPEED (bravery sets the rescue RADIUS,
+  // greed a need threshold). A compassionate colonist SPRINTS to a fallen ally; a neutral one
+  // trudges at the base rescue speed. Both commit (well inside the base radius, outside revive
+  // range) — only the speed differs, which is what a distance both reach cannot show alone.
+  entt::registry reg;
+  const entt::entity fallen = reg.create();
+  reg.emplace<eng::sim::Transform>(fallen, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Downed>(fallen);  // a helpless ally to rush
+
+  const entt::entity kind = reg.create();
+  reg.emplace<eng::sim::Transform>(kind, eng::Vec2{200.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(kind);
+  reg.emplace<eng::sim::Npc>(kind);
+  reg.emplace<eng::sim::Personality>(kind, eng::sim::Personality{0, 0, 100});  // compassion +100
+
+  const entt::entity plain = reg.create();
+  reg.emplace<eng::sim::Transform>(plain, eng::Vec2{150.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(plain);
+  reg.emplace<eng::sim::Npc>(plain);  // NO Personality -> base rescue speed (unchanged)
+
+  const entt::entity cold = reg.create();
+  reg.emplace<eng::sim::Transform>(cold, eng::Vec2{100.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(cold);
+  reg.emplace<eng::sim::Npc>(cold);
+  reg.emplace<eng::sim::Personality>(cold, eng::sim::Personality{0, 0, -100});  // compassion -100
+
+  eng::sim::steer_npcs(reg);
+
+  // All three commit and steer toward the ally (leftward, -x); only the SPEED differs, ranked by
+  // compassion (more negative x = faster). Speed is independent of their distance.
+  REQUIRE(reg.get<eng::sim::Velocity>(plain).value.x < 0.0f);  // the neutral one is on its way...
+  REQUIRE(reg.get<eng::sim::Velocity>(kind).value.x <
+          reg.get<eng::sim::Velocity>(plain).value.x);  // ...the compassionate one rushes faster...
+  REQUIRE(reg.get<eng::sim::Velocity>(cold).value.x >
+          reg.get<eng::sim::Velocity>(plain).value.x);  // ...and the callous one trudges slower...
+  REQUIRE(reg.get<eng::sim::Velocity>(cold).value.x < 0.0f);  // (but is still, grudgingly, going)
+}
+
 TEST_CASE("an unarmed colonist steers toward a dropped weapon to arm up", "[sim]") {
   entt::registry reg;
   const entt::entity npc = reg.create();
