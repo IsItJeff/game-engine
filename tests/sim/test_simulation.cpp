@@ -861,6 +861,100 @@ TEST_CASE("a living ally revives a downed player in place", "[sim]") {
   REQUIRE(reg.get<eng::sim::Transform>(player).position.y == Approx(100.0f));
 }
 
+TEST_CASE("record_deed accrues on the ledger and standing weighs the dimensions", "[sim]") {
+  // The morality write-point and the derived standing scalar, in isolation. A brand-new entity has
+  // NO ledger (lazy — it earns one only on its first deed); one Charity deed lifts standing, and an
+  // oppositely-signed Cruelty deed sinks it, pinning both the accumulate and the SIGNED formula.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(e) == nullptr);  // no deed yet -> no component
+
+  eng::sim::record_deed(reg, e, eng::sim::Deed::Charity, 1);
+  REQUIRE(eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(e)) == 4);  // Charity ×4
+
+  eng::sim::record_deed(reg, e, eng::sim::Deed::Cruelty, 1);
+  REQUIRE(eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(e)) == -2);  // 4 - Cruelty ×6
+}
+
+TEST_CASE("standing weights each deed dimension by the design's signed factors", "[sim]") {
+  // The full ×5 formula ships now though only Charity is fed by a deed yet, so pin EVERY term's
+  // weight and SIGN — a wrong factor on an as-yet-unfed dimension would otherwise ship silently and
+  // corrupt the first deed that comes to feed it. One deed of magnitude 1 per kind isolates its
+  // weight.
+  const auto standing_of = [](eng::sim::Deed k) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    eng::sim::record_deed(reg, e, k, 1);
+    return eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(e));
+  };
+  REQUIRE(standing_of(eng::sim::Deed::Charity) == 4);    // .8 ×5
+  REQUIRE(standing_of(eng::sim::Deed::Valor) == 5);      // 1.0 ×5
+  REQUIRE(standing_of(eng::sim::Deed::Honesty) == 3);    // .6 ×5
+  REQUIRE(standing_of(eng::sim::Deed::Loyalty) == 3);    // .6 ×5
+  REQUIRE(standing_of(eng::sim::Deed::Cruelty) == -6);   // -1.2 ×5
+  REQUIRE(standing_of(eng::sim::Deed::Violence) == -4);  // -.8 ×5
+}
+
+TEST_CASE("rescuing a downed ally records a Charity deed on the rescuer", "[sim]") {
+  // The first deed wired to a live event: completing a rescue in handle_deaths credits the RESCUER
+  // (not the rescued) with Charity. It fires identically whether the rescuer is an NPC or a player,
+  // because the allies view spans both — morality gets player==NPC parity for free.
+  const auto rescue_then_standing = [](bool rescuer_is_player) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{100.0f, 100.0f});
+    reg.emplace<eng::sim::PlayerControlled>(player);
+    reg.emplace<eng::sim::Velocity>(player);
+    reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // down
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally, eng::Vec2{110.0f, 100.0f});  // within revive reach
+    reg.emplace<eng::sim::Velocity>(ally);
+    reg.emplace<eng::sim::Stats>(ally);  // full health -> alive
+    if (rescuer_is_player)
+      reg.emplace<eng::sim::PlayerControlled>(ally);
+    else
+      reg.emplace<eng::sim::Npc>(ally);
+
+    const eng::Vec2 centre{640.0f, 360.0f};
+    eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // player goes Downed
+    eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // ally in reach -> revive + deed
+
+    REQUIRE_FALSE(reg.all_of<eng::sim::Downed>(player));  // the rescue happened...
+    REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(player) ==
+            nullptr);  // ...the RESCUED earns nothing
+    return eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(ally));  // the RESCUER's credit
+  };
+
+  const auto npc_credit = rescue_then_standing(false);
+  const auto player_credit = rescue_then_standing(true);
+  REQUIRE(npc_credit == 4);              // one Charity deed -> standing +4...
+  REQUIRE(player_credit == npc_credit);  // ...identical for a player rescuer (parity)
+}
+
+TEST_CASE("no rescue means no ledger: the deed path stays lazy", "[sim]") {
+  // The absent-ledger path must be bit-identical to before morality existed: an entity that never
+  // completes a deed never gets a BehaviorLedger. Neither a far-off bystander nor the unrescued
+  // timer-expiry respawn records anything.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Velocity>(player);
+  reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // down
+  const entt::entity bystander = reg.create();
+  reg.emplace<eng::sim::Transform>(bystander, eng::Vec2{900.0f, 900.0f});  // far out of reach
+  reg.emplace<eng::sim::Npc>(bystander);
+  reg.emplace<eng::sim::Stats>(bystander);
+
+  const eng::Vec2 centre{640.0f, 360.0f};
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // goes Downed (no ally near)
+  eng::sim::handle_deaths(reg, centre, 6.0f);          // timer expires -> respawn, still no rescue
+
+  REQUIRE_FALSE(reg.all_of<eng::sim::Downed>(player));                   // respawned...
+  REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(player) == nullptr);     // ...but recorded no deed
+  REQUIRE(reg.try_get<eng::sim::BehaviorLedger>(bystander) == nullptr);  // bystander untouched
+}
+
 TEST_CASE("a downed player does not eat an orb it fell on", "[sim]") {
   // Helpless means helpless: a downed player must not heal off a loot orb they happen to be
   // lying on (mirrors regenerate_vitals excluding Downed) — only a rescue or respawn revives.

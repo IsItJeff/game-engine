@@ -1,10 +1,12 @@
 #pragma once
 
+#include <cstdint>
 #include <random>
 
 #include <entt/entity/registry.hpp>
 
 #include "engine/core/math.hpp"
+#include "engine/sim/components.hpp"
 
 // Systems: the BEHAVIOUR of the simulation.
 //
@@ -145,6 +147,14 @@ void advance_progression(entt::registry& reg);
 // MUST run before regenerate_vitals, or a just-killed entity gets healed back above 0 the
 // same tick and never dies (a downed player is also excluded from regen for the same reason).
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt);
+
+// Record one moral DEED on an actor's BehaviorLedger — the SINGLE write-point the whole morality
+// system funnels through (the design's one `record_deed`). Lazily emplaces the ledger (an actor
+// earns one on its first deed, so a never-acting entity stays ledger-free and bit-identical), then
+// adds `mag` to the `kind` dimension. Pure and deterministic (no RNG); it takes a bare entity with
+// no player/NPC branch, so morality has player==NPC parity for free. Every future deed kind is a
+// new CALLER of this function, never new state.
+void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_t mag);
 
 // Spawn a Weapon on the ground at `pos` — the one canonical grounded-weapon entity, shared by
 // a slain brute's drop (handle_deaths) and the player's Drop command so both look and behave

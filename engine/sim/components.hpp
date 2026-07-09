@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -80,6 +82,40 @@ struct Personality {
                                // to ARM itself (the steer ladder's last rung): the industrious
                                // cross the field to loot a weapon, the idle grab one underfoot.
 };
+
+// The KINDS of moral deed a character can accrue — the design's six behaviour-ledger dimensions.
+// Charity and Valor are the hero signals; Cruelty and (unjust) Violence the villain signals;
+// Honesty and Loyalty round them out. `Count` is a sentinel that SIZES the ledger array below and
+// MUST stay last — adding a real dimension before it automatically grows the array, so the two can
+// never desync. Every deed the sim records is one of these, funnelled through record_deed
+// (systems.hpp).
+enum class Deed : std::uint8_t { Violence, Honesty, Loyalty, Charity, Cruelty, Valor, Count };
+
+// A character's EARNED moral history: how much of each Deed kind they have accumulated over a life.
+// The mutable counterpart of the innate, fixed Personality — opposite in nature and lifetime, so it
+// is a SEPARATE component. It is added LAZILY: an entity earns a ledger only on its FIRST deed
+// (record_deed does the get_or_emplace), so anyone who never acts has none and replays exactly as
+// before this existed (bit-identical). int32 (not Personality's int8) because deeds ACCUMULATE over
+// a life and must clear the design's hero gate (standing > +500), well past int8's ±127; an int32
+// array element also lets `dims[i] += mag` add without a cast under -Wconversion.
+struct BehaviorLedger {
+  std::array<std::int32_t, static_cast<std::size_t>(Deed::Count)> dims{};
+};
+
+// The one derived scalar the whole morality system collapses to: positive = heroic repute,
+// negative = villainous. A PURE function of the ledger (reads no sim state), so it is unit-testable
+// and recomputed on demand rather than stored — the design's "multi-dimension ledger -> one derived
+// standing". Weights are the design's exact .8/1.0/.6/.6/-1.2/-.8 scaled ×5 — the smallest scale
+// that makes every one an integer (each is a multiple of 0.2) — so NO float enters the sim and
+// replay stays bit-identical; the unit is thus "fifths of a design-point". Charity/Valor lift you,
+// Cruelty/Violence sink you. Only Charity is fed by a deed so far, so the other terms are 0 for
+// now, but the SIGNED formula is locked here so each future deed is a one-line add, never a
+// reshape.
+inline std::int32_t standing(const BehaviorLedger& led) {
+  const auto d = [&](Deed k) { return led.dims[static_cast<std::size_t>(k)]; };
+  return d(Deed::Charity) * 4 + d(Deed::Valor) * 5 + d(Deed::Honesty) * 3 + d(Deed::Loyalty) * 3 -
+         d(Deed::Cruelty) * 6 - d(Deed::Violence) * 4;
+}
 
 // Marks an entity as a non-player character. Empty for now — its whole job is to
 // answer "is this a person the world runs, rather than the player?" so systems
