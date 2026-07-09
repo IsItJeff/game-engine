@@ -120,6 +120,11 @@ swarm on the retreat.
   out-healing it. Refreshed on each fresh bite, reaped when it wears off, and cleared by a revive
   (no lethal status survives being hauled up). Any victim, player or NPC (parity); brutes/sentinels
   leave it `0`.
+- **Enrage** — worn below `kEnrageThreshold` (30%) of its *own* HP, a creature's blows hit
+  `kEnrageDamage` (1.75×) harder: a cornered beast lashes out, so leaving a foe half-dead is
+  dangerous and finishing it fast is the safe play. Pure sim (it reads the creature's own health),
+  no new state. It mostly bites on the tanky brute/sentinel you wear down — a swarmer usually dies
+  before it enrages.
 - Motes are excluded from creatures (`entt::exclude<Enemy>` in `resolve_contacts`), so
   ambient hazards can't cheaply kill one and bypass its VIT.
 

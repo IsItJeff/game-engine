@@ -1311,8 +1311,10 @@ void resolve_contacts(entt::registry& reg) {
 
 void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng) {
   constexpr float kContactDistance = 15.0f;
-  constexpr float kAttackInterval = 0.8f;              // seconds between a creature's swings
-  constexpr float kPoisonDuration = 3.0f;              // how long a venomous bite lingers (a knob)
+  constexpr float kAttackInterval = 0.8f;   // seconds between a creature's swings
+  constexpr float kPoisonDuration = 3.0f;   // how long a venomous bite lingers (a knob)
+  constexpr float kEnrageThreshold = 0.3f;  // below this fraction of its HP, a creature enrages...
+  constexpr float kEnrageDamage = 1.75f;    // ...and its blows hit this much harder (knobs)
   const Fixed kEvasionPerSwing = Fixed::from_int(10);  // XP for facing a swing, dodged or not
   std::uniform_real_distribution<float> unit(0.0f, 1.0f);
 
@@ -1349,7 +1351,17 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       const float chance = dodge_chance(attrs != nullptr ? attrs->dexterity.level : 1);
       if (chance > 0.0f && unit(rng) < chance) continue;  // slipped it — no damage taken
 
-      const float applied = mitigate(enemy.attack_damage, defence_of(reg, p));
+      // ENRAGE: a creature worn below kEnrageThreshold of its own HP lashes out HARDER
+      // (kEnrageDamage×) — a cornered-beast wrinkle that makes leaving a foe half-dead dangerous,
+      // so you commit to finishing it. Reads the creature's OWN health (Stats — every creature
+      // carries one), pure sim, no RNG. Mostly bites on the tanky brute/sentinel you wear down; a
+      // swarmer usually dies before it enrages. Knobs.
+      float attack_dmg = enemy.attack_damage;
+      if (const Stats* c_stats = reg.try_get<Stats>(c);
+          c_stats != nullptr && c_stats->health.current < c_stats->health.max * kEnrageThreshold) {
+        attack_dmg *= kEnrageDamage;
+      }
+      const float applied = mitigate(attack_dmg, defence_of(reg, p));
       Vital& health = prey.get<Stats>(p).health;
       health.current -= applied;
       if (health.current < 0.0f) health.current = 0.0f;
