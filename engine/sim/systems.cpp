@@ -299,9 +299,15 @@ void update_stamina(entt::registry& reg, float dt) {
       // Resting: recover, faster the tougher you are. A no-Attributes entity just
       // uses the base rate (boost 1.0).
       const Attributes* attrs = reg.try_get<Attributes>(e);
-      const float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
-                                                        kRecoveryPerEndurance
-                                           : 1.0f;
+      float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
+                                                  kRecoveryPerEndurance
+                                     : 1.0f;
+      // Worn armour's BANE: plate slows your second wind. A fraction of recovery is lost while
+      // armoured. ponytail/BALANCE: this bites only while RESTING (combat is spent moving), so
+      // armour can feel near-free in a straight fight — a tuning knob; if it plays as pure
+      // upside, move the bane onto the drain-while-moving side instead. No/empty armour = 0.
+      const Equipped* eq = reg.try_get<Equipped>(e);
+      if (eq != nullptr) boost *= 1.0f - eq->stamina_regen_penalty;
       stamina.current += stamina.regen_per_second * boost * dt;
       if (stamina.current > stamina.max) stamina.current = stamina.max;  // never past the cap
     }
@@ -558,7 +564,13 @@ float mitigate(float raw, float def) {
 float defence_of(const entt::registry& reg, entt::entity e) {
   constexpr float kDefencePerVit = 3.0f;  // each Endurance level past 1 adds this much
   const Attributes* a = reg.try_get<Attributes>(e);
-  return a != nullptr ? static_cast<float>(a->endurance.level - 1) * kDefencePerVit : 0.0f;
+  const float from_vit =
+      a != nullptr ? static_cast<float>(a->endurance.level - 1) * kDefencePerVit : 0.0f;
+  // Worn armour adds flat defence on top of VIT — the same number, so it feeds mitigate at
+  // BOTH damage sites (perform_attack, resolve_creature_contacts) with no extra plumbing. No
+  // Equipped (or an empty armour slot) contributes 0, so an unarmoured world is unchanged.
+  const Equipped* eq = reg.try_get<Equipped>(e);
+  return from_vit + (eq != nullptr ? eq->defence_bonus : 0.0f);
 }
 
 // Chance in [0, kCap] that a blow is dodged entirely, from the victim's DEX. Level 1
@@ -735,44 +747,70 @@ void npc_attack(entt::registry& reg, std::mt19937& rng) {
   }
 }
 
-entt::entity equip_nearest_weapon(entt::registry& reg, entt::entity wearer) {
-  // Wield the nearest dropped Weapon within reach of `wearer`: fold its mods into an Equipped
-  // cache (one slot — a new weapon overwrites the old) and RETURN the item for the caller to
-  // destroy (collect-then-destroy, so no view is invalidated mid-iteration). entt::null if
-  // none in reach. THE one place equipment mods are folded, shared by the player's Equip
-  // command and the npc_equip system — so a player and an NPC can never gear up differently.
+entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
+  // Wear the nearest dropped GEAR within reach of `wearer` — a Weapon OR a piece of Armour,
+  // whichever is closer — folding its mods into the matching SLOT of an Equipped cache and
+  // RETURNing the item for the caller to destroy (collect-then-destroy, so no view is
+  // invalidated mid-iteration). entt::null if none in reach. THE one place gear mods are
+  // folded, shared by the player's Equip command and the npc_equip system, so a player and an
+  // NPC can never gear up differently. The fold is NON-CLOBBERING: get_or_emplace keeps the
+  // existing cache and each branch writes ONLY its own slot's pair, so grabbing armour leaves a
+  // wielded weapon intact and vice-versa (two independent slots).
   constexpr float kEquipReach = 30.0f;  // a bit past contact — step near and grab it
   const Vec2 pos = reg.get<Transform>(wearer).position;
   entt::entity nearest = entt::null;
-  float best = kEquipReach;
+  bool nearest_is_weapon = false;
+  float best = kEquipReach;  // ONE shared best, so the nearer of a weapon vs an armour wins
   auto weapons = reg.view<Weapon, Transform>();
   for (const entt::entity w : weapons) {
     const float d = glm::distance(pos, weapons.get<Transform>(w).position);
     if (d < best) {
       best = d;
       nearest = w;
+      nearest_is_weapon = true;
+    }
+  }
+  auto armours = reg.view<Armour, Transform>();
+  for (const entt::entity a : armours) {
+    const float d = glm::distance(pos, armours.get<Transform>(a).position);
+    if (d < best) {
+      best = d;
+      nearest = a;
+      nearest_is_weapon = false;
     }
   }
   if (nearest == entt::null) return entt::null;
-  const Weapon& wpn = weapons.get<Weapon>(nearest);
-  reg.emplace_or_replace<Equipped>(wearer, Equipped{wpn.strength_bonus, wpn.move_penalty});
+
+  Equipped& eq = reg.get_or_emplace<Equipped>(wearer);  // keep the other slot; write only this one
+  if (nearest_is_weapon) {
+    const Weapon& wpn = weapons.get<Weapon>(nearest);
+    eq.strength_bonus = wpn.strength_bonus;
+    eq.move_penalty = wpn.move_penalty;
+  } else {
+    const Armour& arm = armours.get<Armour>(nearest);
+    eq.defence_bonus = arm.defence_bonus;
+    eq.stamina_regen_penalty = arm.stamina_regen_penalty;
+  }
   return nearest;
 }
 
 void npc_equip(entt::registry& reg) {
-  // Colonists arm themselves from the battlefield: an UNARMED NPC within reach of a dropped
-  // weapon wields it — the auto-equip-on-reach mirror of collect_pickups eating an orb, and
-  // the parity twin of the player's Equip command (both fold through equip_nearest_weapon).
-  // steer_npcs walks the unarmed ones toward the nearest blade; this is where they grab it.
-  // One slot: an already-armed NPC is skipped (no swap). Emplacing Equipped is safe here —
-  // it isn't part of the view<Npc, Transform> being iterated. Collect-then-destroy.
-  // ponytail: two NPCs reaching one weapon the same tick both arm from it (the item is
-  // consumed once) — a rare harmless dupe, the same shape collect_pickups tolerates.
+  // Colonists gear up from the battlefield: an UNGEARED NPC within reach of dropped gear (a
+  // weapon or a piece of armour) grabs it — the auto-equip-on-reach mirror of collect_pickups
+  // eating an orb, and the parity twin of the player's Equip command (both fold through
+  // equip_nearest_gear). steer_npcs walks the unarmed ones toward the nearest blade; this is
+  // where they grab whatever gear they've reached. Emplacing Equipped is safe here — it isn't
+  // part of the view<Npc, Transform> being iterated. Collect-then-destroy.
+  // ponytail: the guard skips an NPC that has ANY Equipped, so an NPC grabs the FIRST gear it
+  // reaches and stops — it won't hunt down the second slot (NPC gear-depth is a later
+  // increment; the shared fold already gives player==NPC parity for whatever they do grab).
+  // Two NPCs reaching one item the same tick both grab from it (consumed once) — a rare
+  // harmless dupe, the same shape collect_pickups tolerates.
   std::vector<entt::entity> taken;
   auto npcs = reg.view<Npc, Transform>();
   for (const entt::entity n : npcs) {
-    if (reg.all_of<Equipped>(n)) continue;  // already armed — one slot, don't swap
-    const entt::entity w = equip_nearest_weapon(reg, n);
+    if (reg.all_of<Equipped>(n)) continue;  // already geared — grabs one piece then stops
+    const entt::entity w = equip_nearest_gear(reg, n);
     if (w != entt::null) taken.push_back(w);
   }
   for (const entt::entity w : taken) {
@@ -807,6 +845,17 @@ void spawn_weapon(entt::registry& reg, Vec2 pos) {
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<RenderDot>(e, Vec3{0.75f, 0.78f, 0.85f}, 6.0f);  // steel grey, a touch bigger
   reg.emplace<Weapon>(e);
+}
+
+// Spawn a piece of Armour on the ground at `pos` — the canonical grounded-armour entity, the
+// defensive counterpart of spawn_weapon. A distinct render colour (dull bronze) so you can
+// tell armour from a weapon on the field at a glance. Step near and press E to don it.
+void spawn_armour(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.72f, 0.52f, 0.24f}, 6.0f);  // dull bronze, distinct from steel
+  reg.emplace<Armour>(e);
 }
 
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {

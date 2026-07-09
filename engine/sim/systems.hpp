@@ -114,16 +114,18 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
 // resolve_contacts (so a struck mote can't also land its hit).
 void npc_attack(entt::registry& reg, std::mt19937& rng);
 
-// Wield the nearest dropped Weapon within reach of `wearer`: fold its mods into an Equipped
-// cache (one slot) and RETURN the item to destroy, or entt::null if none in reach. THE one
-// place equipment mods are folded — shared by the player's Equip command and npc_equip, so
-// a player and an NPC gear up identically (the player==NPC parity guardrail).
-entt::entity equip_nearest_weapon(entt::registry& reg, entt::entity wearer);
+// Wear the nearest dropped GEAR within reach of `wearer` — a Weapon or a piece of Armour,
+// whichever is closer — folding its mods into the matching SLOT of an Equipped cache and
+// RETURNing the item to destroy, or entt::null if none in reach. Non-clobbering: each slot's
+// pair is written independently, so grabbing armour keeps a wielded weapon and vice-versa. THE
+// one place gear mods are folded — shared by the player's Equip command and npc_equip, so a
+// player and an NPC gear up identically (the player==NPC parity guardrail).
+entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer);
 
-// NPCs arm themselves: every UNARMED NPC within reach of a dropped weapon wields it (via
-// equip_nearest_weapon) — the parity twin of the player's Equip command, so the +Strength
-// buff perform_attack already reads for any attacker is actually earned by NPCs too. MUST
-// run after integrate_motion (positions current). steer_npcs walks them to the weapon first.
+// NPCs gear up: every UNGEARED NPC within reach of dropped gear grabs it (via
+// equip_nearest_gear) — the parity twin of the player's Equip command, so the mods
+// perform_attack/defence_of read for any entity are actually earned by NPCs too. MUST run
+// after integrate_motion (positions current). steer_npcs walks the unarmed ones to a blade first.
 void npc_equip(entt::registry& reg);
 
 // Advance progression, the whole "learn by doing" chain in one pass over every
@@ -148,6 +150,10 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt);
 // a slain brute's drop (handle_deaths) and the player's Drop command so both look and behave
 // identically. Draws no RNG.
 void spawn_weapon(entt::registry& reg, Vec2 pos);
+
+// Spawn a piece of Armour on the ground at `pos` — the defensive counterpart of spawn_weapon
+// (distinct render colour). Used to seed wearable armour into the opening scene. Draws no RNG.
+void spawn_armour(entt::registry& reg, Vec2 pos);
 
 // Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
 // player overlaps restores its `heal` health (capped) AND permanently raises max HP by

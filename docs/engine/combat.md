@@ -19,7 +19,7 @@ The moving parts, in one place:
 | **`dodge_chance`** | a DEX-driven roll to slip a blow entirely (trains Evasion) |
 | **the spawners** | `spawn_creature_if_due` keeps creatures coming; `spawn_npc_if_due` refills the colony |
 | **`Pickup`** | a health orb a slain swarmer drops — loot that keeps you fighting |
-| **`Weapon` / `Equipped`** | a brute's dropped weapon; wield (E) / drop (Q) for +Strength at a speed cost |
+| **`Weapon` / `Armour` / `Equipped`** | dropped gear worn in two slots: a weapon (E: +Strength, −speed) or armour (E: +defence, −stamina regen); drop the weapon with Q |
 | **`handle_deaths`** | permadeath for creatures/NPCs, respawn for the player |
 
 ## Why it matters
@@ -212,12 +212,25 @@ blows, ditch to sprint clear of a swarm, then circle back and re-grab it (or let
 beat you to it). Equip↔Drop is a closed loop: the heft bane is a decision you can un-make, not
 a trap you're stuck in. A downed or bare-handed player can't drop (nothing to shed).
 
-!!! note "The minimal first slice of P5"
-    One implicit slot (a new weapon overwrites the old; the swapped-out one just vanishes),
-    one hardcoded weapon def, `+Attribute` + one bane. The rest of the design's Equipment —
-    multi-slot `Equipment`, `Item{def, quality, durability, traits[]}`, the `+skill/+aspect`
-    bonuses (which ride the [SkillDef](progression.md) seam), and wear/repair — layer on top
-    without reworking this plumbing. (NPC gear-seeking, once listed here, now ships.)
+**A second slot — armour.** Gear is now a real offense-vs-defense *choice*, not just a weapon
+on/off. A dull-bronze **`Armour`** piece wears in its own slot alongside the weapon: it adds
+flat **defence** (folded into `defence_of`, so it softens *every* blow at both damage sites for
+free) but carries a **distinct bane** — plate tires you, slowing your **stamina recovery** (a
+weaker second wind, not the weapon's move-heft; banes must differ, never clone). So you can be a
+fast glass fighter (weapon), a slow tank (armour), or grind to carry both. The two slots are
+**independent**: `Equipped` is a flat pair-of-pairs and `equip_nearest_gear` writes only the
+grabbed slot, so donning armour never disturbs a wielded weapon. `Drop` (`Q`) is the symmetric
+twin — it sheds only the *weapon* pair and leaves your armour on (a blanket removal would strip
+it); with only armour worn, `Q` is a no-op. NPCs grab armour through the same shared fold
+(parity), though they only take the first piece they reach for now.
+
+!!! note "The minimal slice of P5, growing"
+    Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), two hardcoded
+    defs (a weapon, an armour), `+Attribute`/`+defence` + one distinct bane each. The rest of
+    the design's Equipment — armour as *creature loot* (an `armour_drops` mirror of the brute's
+    `weapon_drops`), NPC armour-*seeking*, `Item{def, quality, durability, traits[]}`, the
+    `+skill/+aspect` bonuses (which ride the [SkillDef](progression.md) seam), and wear/repair —
+    layer on top without reworking this plumbing.
 
 ### Dying — `handle_deaths` (Downed, then rescue or respawn)
 
@@ -307,7 +320,7 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).
-- `engine/sim/components.hpp` — `Weapon` (dropped gear) and `Equipped` (the wielded mods cache).
+- `engine/sim/components.hpp` — `Weapon` and `Armour` (dropped gear) and `Equipped` (the two-slot mods cache); `engine/sim/systems.cpp` `equip_nearest_gear` (the non-clobbering fold), `spawn_armour`, and the `defence_of` / `update_stamina` hooks.
 - `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, LCK crits + Scavenging training, creature spawn/cap, loot drop + collect + fade, weapon drop/wield/reach/damage/heft.
 
 ## Go deeper

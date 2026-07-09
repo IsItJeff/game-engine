@@ -170,13 +170,27 @@ struct Weapon {
   float move_penalty = 0.25f;  // the BANE: fraction of move speed lost while wielding (heft)
 };
 
-// The cached bonuses of whatever a character is currently wielding — the design's EquipMods,
-// folded ONCE on equip (not recomputed per tick). Absent = bare-handed. One implicit slot
-// for now: equipping a new weapon overwrites this (ponytail: the swapped-out weapon just
-// vanishes; re-drop it when a real inventory/multi-slot Equipment lands).
+// A dropped piece of ARMOUR — the first defensive item, the offense/defence counterpart of
+// Weapon. Worn in a SECOND slot (see Equipped), so a character can carry a weapon, armour, or
+// both. Like every item it has a BANE, but a DISTINCT one from the weapon's move-heft: plate
+// tires you, so it slows STAMINA recovery (a weaker second wind between fights).
+struct Armour {
+  float defence_bonus = 6.0f;  // + physical defence (softens blows via defence_of/mitigate)
+  float stamina_regen_penalty = 0.30f;  // the BANE: fraction of stamina recovery lost while worn
+};
+
+// The cached bonuses of everything a character is wearing — the design's EquipMods, folded ONCE
+// on equip (not recomputed per tick). Absent = bare. TWO conceptual SLOTS, kept as flat
+// field-pairs (weapon: strength_bonus/move_penalty; armour: defence_bonus/stamina_regen_penalty)
+// rather than a slots array — there are exactly two, so naming the fields is simpler than any
+// Slot abstraction (add one only when a third slot with its own rules actually arrives). Each
+// equip overwrites ONLY its own pair, so grabbing armour never disturbs a wielded weapon and
+// vice-versa; a zero pair means that slot is empty.
 struct Equipped {
   int strength_bonus = 0;
   float move_penalty = 0.0f;
+  float defence_bonus = 0.0f;
+  float stamina_regen_penalty = 0.0f;
 };
 
 // --- Stats system ---
