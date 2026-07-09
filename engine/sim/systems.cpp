@@ -21,6 +21,11 @@ constexpr float kReviveDistance = 20.0f;
 // (magnitude is a tuning knob; JSON-authored weights are a later milestone). standing weights
 // Charity ×4, so one save reads as +4 standing.
 constexpr std::int32_t kRescueCharity = 1;
+
+// Landing the killing blow on a HOSTILE is a Valor deed of this size on the attacker — one atomic
+// deed unit, the offensive twin of a rescue's Charity. standing weights Valor ×5, so a slain
+// monster reads as +5 standing.
+constexpr std::int32_t kValorKill = 1;
 }  // namespace
 
 void snapshot_previous(entt::registry& reg) {
@@ -763,9 +768,19 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   const float applied =
       (crit > 0.0f && unit(rng) < crit) ? base_damage * kCritMultiplier : base_damage;
   if (Stats* st = reg.try_get<Stats>(target); st != nullptr) {
+    const bool was_alive = st->health.current > 0.0f;
     st->health.current -= applied;
     if (st->health.current < 0.0f) st->health.current = 0.0f;
     stamp_flash(reg, target);  // the struck target blinks white
+    // The killing blow on a HOSTILE is a Valor deed for the attacker — the SECOND deed through the
+    // morality write-point (after a rescue's Charity), proving it generalises across dimensions.
+    // Credited only on the alive->dead TRANSITION, so a second swing landing on the same foe this
+    // tick (before handle_deaths reaps it) can't double-claim the kill. Motes (Hazard) returned
+    // earlier and peaceful NPCs are never targeted here, so only slaying a monster counts — and
+    // NPCs earn it too (npc_attack shares this perform_attack): a colonist who fells a creature is
+    // brave.
+    if (was_alive && st->health.current <= 0.0f)
+      record_deed(reg, attacker, Deed::Valor, kValorKill);
   }
   return entt::null;
 }

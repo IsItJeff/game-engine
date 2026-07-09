@@ -13,8 +13,10 @@ have *done* (earned, mutable). It starts as one component and one recorded deed:
 - **`standing(ledger)`** — one derived scalar the six dimensions collapse to:
   positive is heroic repute, negative is villainous.
 
-So far exactly **one** deed is wired: completing a **rescue** credits the rescuer
-with **Charity**. The other five dimensions exist but wait for their deeds.
+So far **two** deeds are wired — the two hero signals, both from events the game
+already has: completing a **rescue** credits the rescuer with **Charity**, and landing
+the **killing blow on a hostile** credits the attacker with **Valor**. The other four
+dimensions exist but wait for their deeds.
 
 ## Why it matters
 
@@ -61,23 +63,28 @@ Those are the design's exact weights (`.8 / 1.0 / .6 / .6 / −1.2 / −.8`) sca
 sim** and replay stays bit-identical. The unit is "fifths of a design-point"; a single
 rescue is `+4` standing.
 
-The one wired deed lives in `handle_deaths`: the rescue loop already finds the ally
-who reaches a downed player — it now keeps that **entity** (not just a yes/no) and,
-after hauling them up, credits it `Deed::Charity`. The rescued player earns nothing;
-the *rescuer* does.
+Two deeds are wired. The first lives in `handle_deaths`: the rescue loop already finds
+the ally who reaches a downed player — it now keeps that **entity** (not just a yes/no)
+and, after hauling them up, credits it `Deed::Charity`. The rescued player earns
+nothing; the *rescuer* does. The second lives in `perform_attack`: the blow that takes
+a hostile creature's HP across zero credits the **attacker** with `Deed::Valor` — scored
+on the alive→dead *transition*, so only the one fatal strike counts, never a second
+swing on the already-dead foe.
 
-!!! info "One deed, on purpose"
-    Only rescue → Charity is wired. Killing a hostile (Valor) and cutting down a
-    peaceful colonist (Cruelty / unjust Violence) are the obvious next deeds — each is
-    **one more `record_deed` call** into the same write-point and an already-defined
-    dimension. Shipping the seam and the full schema first is what makes them one-liners.
+!!! info "Two deeds, both heroic"
+    Rescue → Charity and hostile-kill → Valor are the two things a hero *does*, and each
+    is **one `record_deed` call** at an event the game already had — exactly what shipping
+    the seam and the full schema first bought. The villain signals wait on their events:
+    cutting down a *peaceful* colonist (Cruelty / unjust Violence) needs both a reason to
+    harm an ally and the "justness" rule, both deferred.
 
 ## What to expect
 
 Nothing visible yet — `standing` has no reader in the sim (the social layer that will
 *react* to it is a later ring). Today it is exercised by tests: a rescuer's ledger
-gains Charity; a bystander and an unrescued timer-expiry respawn record nothing. This
-is groundwork you feel later, when NPCs start treating a hero and a butcher differently.
+gains Charity, a monster-slayer's gains Valor; a bystander, an unrescued timer-expiry
+respawn, and a chip that doesn't kill all record nothing. This is groundwork you feel
+later, when NPCs start treating a hero and a butcher differently.
 
 ## The tradeoffs
 
@@ -92,9 +99,9 @@ is groundwork you feel later, when NPCs start treating a hero and a butcher diff
 
 ## Where it goes next
 
-The write-point is the whole point: more deeds (Valor, Cruelty, Violence, Honesty,
-Loyalty) each become one `record_deed` call at their event. Then `standing` grows a
-**reader** — the social `perceive` layer that turns a character's *believed* standing
+The write-point is the whole point: more deeds (Cruelty, Violence, Honesty, Loyalty)
+each become one `record_deed` call at their event, exactly as Valor just did. Then
+`standing` grows a **reader** — the social `perceive` layer that turns a character's *believed* standing
 into how others treat them (befriend, protect, fear, exploit). On top of that sit
 **titles** ("the Butcher", "Dragonslayer") and hero/villain labels: derived queries
 over the same ledger, never stored slots. A **leaky decay** (redemption and corruption
@@ -105,7 +112,8 @@ for free) lands when deeds start to matter over long play.
 - `engine/sim/components.hpp` — `Deed` (the six dimensions), `BehaviorLedger` (the
   earned counterpart of `Personality`), and the pure `standing` function.
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point);
-  the Charity credit in `handle_deaths`' rescue branch.
+  the Charity credit in `handle_deaths`' rescue branch, and the Valor credit in
+  `perform_attack`'s killing-blow branch.
 - `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired rescue deed
   with player==NPC parity, and the lazy no-deed-no-ledger path.
 

@@ -1287,6 +1287,66 @@ TEST_CASE("attacking a creature whittles its HP by Strength vs its VIT", "[sim]"
   REQUIRE(strong_hit > weak_hit);  // Strength matters: the stronger swing deals more
 }
 
+TEST_CASE("landing the killing blow on a hostile earns the attacker Valor", "[sim]") {
+  // The morality write-point's SECOND deed (after rescue -> Charity), proving it generalises across
+  // dimensions: slaying a monster is Valor. Only the FATAL blow credits — a chip that leaves the
+  // foe standing records nothing — and NPCs earn it too (they share perform_attack), so a colonist
+  // who fells a creature is valorous the same as the player.
+  // Asserts INSIDE the lambda, while `reg` is still alive — the ledger lives in the registry's
+  // storage, so a pointer to it must not outlive the local registry.
+  const auto expect_valor = [](float foe_hp, bool expect_kill) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).strength.level = 20;  // hits hard enough to one-shot
+    reg.emplace<eng::sim::Skills>(atk);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});  // inside reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{foe_hp, foe_hp, 0.0f});
+    reg.emplace<eng::sim::Attributes>(foe).endurance.level = 1;  // low VIT; DEX 1 -> never dodges
+    reg.emplace<eng::sim::Enemy>(foe);
+
+    std::mt19937 rng{1234};  // foe DEX 1 never dodges, atk LCK 1 never crits -> no RNG drawn
+    eng::sim::perform_attack(reg, atk, rng);
+
+    const eng::sim::BehaviorLedger* led = reg.try_get<eng::sim::BehaviorLedger>(atk);
+    if (expect_kill) {
+      REQUIRE(led != nullptr);                 // the kill was credited...
+      REQUIRE(eng::sim::standing(*led) == 5);  // ...as Valor ×5
+    } else {
+      REQUIRE(led == nullptr);  // a mere chip records no deed at all
+    }
+  };
+
+  expect_valor(2.0f, true);        // a frail foe dies to the strong swing -> Valor
+  expect_valor(100000.0f, false);  // a foe that survives the swing -> no deed
+}
+
+TEST_CASE("an NPC that fells a creature via npc_attack earns Valor (parity)", "[sim]") {
+  // The parity claim through the NPC combat SYSTEM (not perform_attack directly): npc_attack
+  // iterates the NPC view and, when a colonist's swing kills an adjacent hostile, credits it Valor
+  // the same as the player. This also drives the lazy get_or_emplace<BehaviorLedger> WHILE the NPC
+  // view is being iterated — safe because the ledger is in none of that view's pools.
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(npc).strength.level = 20;  // one-shots the frail foe
+  reg.emplace<eng::sim::Skills>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});  // inside reach
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{2.0f, 2.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe).endurance.level = 1;  // DEX 1 -> never dodges
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  std::mt19937 rng{1234};
+  eng::sim::npc_attack(reg, rng);
+
+  const eng::sim::BehaviorLedger* led = reg.try_get<eng::sim::BehaviorLedger>(npc);
+  REQUIRE(led != nullptr);
+  REQUIRE(eng::sim::standing(*led) == 5);  // a colonist's kill is Valor, same as the player's
+}
+
 TEST_CASE("a veteran attacker hits harder than a fresh one at equal Strength", "[sim]") {
   // The Character Level is a global "veteran" multiplier. It already scaled the earned HP
   // pool; now it scales the earned Strength delta on a swing's damage too (POWER(level - 1)),
