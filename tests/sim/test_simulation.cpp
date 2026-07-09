@@ -319,6 +319,48 @@ TEST_CASE("bravery shapes how close a hazard gets before an NPC flees", "[sim]")
   REQUIRE(reg.get<eng::sim::Velocity>(coward).value.x < 0.0f);   // and the coward fled early too
 }
 
+TEST_CASE("bravery shapes how far an NPC will commit to a rescue", "[sim]") {
+  // Bravery's SECOND read, exercising BOTH directions against the base rescue radius (300):
+  //  - GROW: a brave NPC (+100 -> radius 450) at 350 rescues, where a NEUTRAL one (300) could not;
+  //  - SHRINK: at 250 a neutral NPC rescues (250 < 300) but a coward (-100 -> radius 150) does NOT.
+  // So each personality is tested at a distance that DISTINGUISHES it from neutral — the coward
+  // stays put precisely because the shrink pulled its radius below 250. Sign is opposite the flee
+  // radius: brave COMMITS further here, but HOLDS (shorter flee radius) against a hazard.
+  entt::registry reg;
+  const entt::entity fallen = reg.create();
+  reg.emplace<eng::sim::Transform>(fallen, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Downed>(fallen);  // a helpless ally to be rescued
+
+  const entt::entity brave = reg.create();
+  reg.emplace<eng::sim::Transform>(brave, eng::Vec2{350.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(brave);  // starts at rest
+  reg.emplace<eng::sim::Npc>(brave);
+  reg.emplace<eng::sim::Personality>(brave,
+                                     eng::sim::Personality{100});  // radius 450 > 350 -> goes
+
+  const entt::entity neutral = reg.create();
+  reg.emplace<eng::sim::Transform>(neutral, eng::Vec2{0.0f, 250.0f});
+  reg.emplace<eng::sim::Velocity>(neutral);
+  reg.emplace<eng::sim::Npc>(neutral);  // NO Personality -> base radius 300 > 250 -> goes
+
+  const entt::entity coward = reg.create();
+  reg.emplace<eng::sim::Transform>(coward, eng::Vec2{0.0f, -250.0f});
+  reg.emplace<eng::sim::Velocity>(coward);
+  reg.emplace<eng::sim::Npc>(coward);
+  reg.emplace<eng::sim::Personality>(coward,
+                                     eng::sim::Personality{-100});  // radius 150 < 250 -> won't
+
+  eng::sim::steer_npcs(reg);
+
+  REQUIRE(reg.get<eng::sim::Velocity>(brave).value.x <
+          0.0f);  // brave crosses to the ally (west)...
+  REQUIRE(reg.get<eng::sim::Velocity>(neutral).value.y <
+          0.0f);  // ...neutral reaches it too (base)...
+  REQUIRE(reg.get<eng::sim::Velocity>(coward).value.x ==
+          Approx(0.0f));  // ...but the coward won't go
+  REQUIRE(reg.get<eng::sim::Velocity>(coward).value.y == Approx(0.0f));
+}
+
 TEST_CASE("an unarmed colonist steers toward a dropped weapon to arm up", "[sim]") {
   entt::registry reg;
   const entt::entity npc = reg.create();
