@@ -118,20 +118,27 @@ of repute — a presentation-only reader (the renderer, never the sim, so determ
 the HUD prints the player's `standing` *number* and `standing_title`, so a **fall** reads
 too: strike your own colonists and the number goes negative and the title flips *Known →
 Suspect → Notorious*. (The dot doesn't yet *shrink* below neutral — a negative-renown visual
-is the villain twin of the growth cue, still to come.) The *deeper* reader — NPCs that **act**
-on a character's standing (befriend, protect, fear) — is a later ring. Under the hood it is
-pinned by tests: a rescuer's ledger gains Charity, a monster-slayer's gains Valor, a player
-who cuts down a colonist gains Cruelty and goes negative; a bystander, an unrescued
-timer-expiry respawn, a chip that doesn't kill, and a colonist shielded by a nearby hostile
-all record nothing.
+is the villain twin of the growth cue, still to come.)
+
+And now standing **acts**, not just shows: the first *gameplay* reader has landed. A player who
+crosses the *Suspect* line becomes a **threat colonists flee** — `steer_npcs` folds a villain
+into its danger rung, so turn on the colony and it recoils from you exactly as it flees a hazard
+(see [NPC behaviour](npc-behaviour.md)). The *richer* readers — NPCs that befriend a hero or
+protect the weak from a villain — are a later ring, but the "believed standing changes behaviour"
+seam is now real. Under the hood it is pinned by tests: a rescuer's ledger gains Charity, a
+monster-slayer's gains Valor, a player who cuts down a colonist gains Cruelty and goes negative
+(and colonists then flee that player, but not a hero or an unproven one); a bystander, an unrescued
+timer-expiry respawn, a chip that doesn't kill, and a colonist shielded by a nearby hostile all
+record nothing.
 
 ## The tradeoffs
 
-- **`standing` has no *gameplay* reader yet** — only presentation ones (the renderer
-  sizes the dot by positive standing; the HUD prints the number and title, which now runs
-  negative). NPCs don't yet *act* on it. The signed formula shipped in full before it was
-  needed, so wiring Cruelty was a one-line, purely-additive change — exactly the payoff of
-  locking the schema early.
+- **`standing`'s gameplay reader is still thin.** It has ONE: colonists flee a villain
+  (`steer_npcs`). That's a binary flee at a single threshold — the design's graded *perceive*
+  (wariness scaling to flight by standing *and* the onlooker's own bravery/might, plus the hero
+  side: befriend, rally, protect) is a later ring. The signed formula shipped in full before any
+  of this was needed, so both wiring Cruelty and wiring the fear read were one-line additions —
+  the payoff of locking the schema early.
 - **Cruelty is player-only.** An NPC can't yet turn on the colony — `perform_attack` gates
   the cruel branch on `PlayerControlled`, because it is shared with `npc_attack` and a
   generic "hit a neighbour when no enemy is near" would make colonists brawl constantly. The
@@ -151,11 +158,12 @@ when villain deeds land), shown in the HUD beside your `standing` number. That i
 *Dragonslayer* — from build and gear as well as deeds) hang off the same idea.
 
 The write-point is the whole point: the remaining deeds (unjust Violence, Honesty, Loyalty)
-each become one `record_deed` call at their event, exactly as Cruelty just did. Then
-`standing` grows a **gameplay** reader — the social `perceive` layer that turns a character's
-*believed* standing into how others treat them (befriend, protect, fear, exploit); a Notorious
-player should *feel* the colony's fear. A **leaky decay** (redemption and corruption for free,
-so a villain can climb back) lands when deeds start to matter over long play.
+each become one `record_deed` call at their event, exactly as Cruelty just did. `standing`'s
+first **gameplay** reader has already landed — colonists flee a villain — and it grows from there
+into the full social `perceive` layer that turns a character's *believed* standing into how others
+treat them (befriend, protect, exploit, not just fear), graded by the onlooker's own nerve rather
+than a single threshold. A **leaky decay** (redemption and corruption for free, so a villain can
+climb back) lands when deeds start to matter over long play.
 
 ## Key files
 

@@ -119,6 +119,30 @@ void steer_npcs(entt::registry& reg) {
       }
     }
 
+    // A VILLAIN is a hazard too. This is the FIRST gameplay reader of `standing`: a player whose
+    // deeds have marked them a wrong'un (standing at or below the "Suspect" line, -kKnownAt) is
+    // fled from exactly like a physical threat — the colony recoiling from someone it has cause to
+    // fear, the design's "a Notorious player should feel the colony's fear" in miniature. It reuses
+    // the SAME bravery-modulated `nearest` radius, so it competes with hazards for the nearest
+    // danger and a brave colonist lets the villain get closer before bolting. A downed villain is
+    // no threat (excluded); a hero, an Unproven, or a player with no ledger has standing >
+    // -kKnownAt and is skipped, so a non-villain world is bit-identical to before. ponytail:
+    // player-only for now (Cruelty is player-gated, so only a player can turn villain) and a BINARY
+    // flee — the design's graded perceive (wariness scaling to flight by standing + the NPC's own
+    // might) is a later ring.
+    auto villains = reg.view<PlayerControlled, Transform>(entt::exclude<Downed>);
+    for (const entt::entity v : villains) {
+      const BehaviorLedger* led = reg.try_get<BehaviorLedger>(v);
+      if (led == nullptr || standing(*led) > -kKnownAt) continue;  // not (yet) a marked villain
+      const Vec2 v_pos = villains.get<Transform>(v).position;
+      const float d = glm::distance(pos, v_pos);
+      if (d < nearest) {
+        nearest = d;
+        threat = v_pos;
+        sees_threat = true;
+      }
+    }
+
     // Fear beats everything: flee straight away from a threat, ignoring ally and food alike.
     if (sees_threat) {
       const Vec2 away = pos - threat;
