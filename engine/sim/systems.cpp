@@ -175,8 +175,15 @@ void steer_npcs(entt::registry& reg) {
     // range) walks to the nearest dropped weapon. npc_equip wields it on reach. An armed NPC
     // skips this (one slot). Last acting rung — no match just leaves velocity alone (drift).
     if (gear == nullptr) {
+      // INDUSTRY (the fourth axis) scales the arm-up seek RADIUS — the LAST unpersonalized rung, so
+      // now every want in the ladder bends to who the colonist is. Reuses bravery's radius SHAPE
+      // (not a new mechanism) on a new want: the industrious range across the field to loot a
+      // weapon and better their kit; the idle only grab one practically underfoot. Neutral 0 ->
+      // kWeaponSeekRadius exactly (bit-identical). Reuses the `pers` already fetched; cast to float
+      // before the divide (-Wconversion).
+      const float industry = pers != nullptr ? static_cast<float>(pers->industry) : 0.0f;
       entt::entity blade = entt::null;
-      float nearest_blade = kWeaponSeekRadius;
+      float nearest_blade = kWeaponSeekRadius * (1.0f + industry / 200.0f);
       for (const entt::entity w : weapons) {
         const float d = glm::distance(pos, weapons.get<Transform>(w).position);
         if (d < nearest_blade) {
