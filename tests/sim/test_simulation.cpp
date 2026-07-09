@@ -1408,21 +1408,54 @@ TEST_CASE("a wielded weapon slows the player (the heft bane)", "[sim]") {
   REQUIRE(armed < bare);  // heft: you trade speed for power
 }
 
-TEST_CASE("a slain brute drops a weapon, a swarmer a health orb", "[sim]") {
+TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
+  // The symmetric loot economy: a brute yields OFFENCE (a weapon), a swarmer SUSTAIN (a health
+  // orb), a sentinel DEFENCE (armour) — each keyed on DropKind, resolving independently.
   entt::registry reg;
   const entt::entity brute = reg.create();
   reg.emplace<eng::sim::Transform>(brute, eng::Vec2{100.0f, 100.0f});
   reg.emplace<eng::sim::Stats>(brute, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // dead
-  reg.emplace<eng::sim::Enemy>(brute).drops_weapon = true;
+  reg.emplace<eng::sim::Enemy>(brute).drop = eng::sim::DropKind::Weapon;
   const entt::entity swarmer = reg.create();
   reg.emplace<eng::sim::Transform>(swarmer, eng::Vec2{200.0f, 200.0f});
   reg.emplace<eng::sim::Stats>(swarmer, eng::sim::Vital{0.0f, 15.0f, 0.0f});  // dead
-  reg.emplace<eng::sim::Enemy>(swarmer);  // drops_weapon defaults false
+  reg.emplace<eng::sim::Enemy>(swarmer);  // drop defaults to HealthOrb
+  const eng::Vec2 sentinel_pos{300.0f, 300.0f};
+  const entt::entity sentinel = reg.create();
+  reg.emplace<eng::sim::Transform>(sentinel, sentinel_pos);
+  reg.emplace<eng::sim::Stats>(sentinel, eng::sim::Vital{0.0f, 60.0f, 0.0f});  // dead
+  reg.emplace<eng::sim::Enemy>(sentinel).drop = eng::sim::DropKind::Armour;
 
   eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f);
 
   REQUIRE(reg.storage<eng::sim::Weapon>().size() == 1);  // the brute yields gear...
-  REQUIRE(reg.storage<eng::sim::Pickup>().size() == 1);  // ...the swarmer, sustain
+  REQUIRE(reg.storage<eng::sim::Pickup>().size() == 1);  // ...the swarmer, sustain...
+  REQUIRE(reg.storage<eng::sim::Armour>().size() == 1);  // ...the sentinel, armour
+  // ...and the armour lies where the sentinel fell.
+  const entt::entity dropped = *reg.view<eng::sim::Armour>().begin();
+  REQUIRE(reg.get<eng::sim::Transform>(dropped).position.x == Approx(sentinel_pos.x));
+  REQUIRE(reg.get<eng::sim::Transform>(dropped).position.y == Approx(sentinel_pos.y));
+}
+
+TEST_CASE("a sentinel's dropped armour is a real acquisition path: pick it up and wear it",
+          "[sim]") {
+  // Prove the loot seam is genuinely wearable, not just a spawn: a bare wearer standing on the
+  // dropped armour dons it (equip_nearest_gear folds its defence into the Equipped cache).
+  entt::registry reg;
+  const eng::Vec2 pos{50.0f, 50.0f};
+  const entt::entity sentinel = reg.create();
+  reg.emplace<eng::sim::Transform>(sentinel, pos);
+  reg.emplace<eng::sim::Stats>(sentinel, eng::sim::Vital{0.0f, 60.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(sentinel).drop = eng::sim::DropKind::Armour;
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f);
+
+  const entt::entity wearer = reg.create();
+  reg.emplace<eng::sim::Transform>(wearer, pos);  // standing on the dropped armour
+  const entt::entity grabbed = eng::sim::equip_nearest_gear(reg, wearer);
+
+  REQUIRE(reg.valid(grabbed));  // grabbed the grounded armour (entt::null would be invalid)...
+  REQUIRE(reg.get<eng::sim::Equipped>(wearer).defence_bonus ==
+          Approx(6.0f));  // ...and wears its defence
 }
 
 TEST_CASE("the Equip command wields the nearest weapon in reach", "[sim]") {

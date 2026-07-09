@@ -172,7 +172,7 @@ creature timer, so the world stays net-hostile — reinforcements, not safety.
     cap *does* change the creature sequence; the point is the spawner's placement/timing rolls
     don't.) Determinism holds regardless: a given seed always replays bit-identically.
 
-### Winning pays — loot (and the two archetypes drop differently)
+### Winning pays — loot (each archetype drops its own reward)
 
 A slain **swarmer** drops a **`Pickup`** (a cyan health orb) where it fell. Walk over it
 (`collect_pickups`) to restore health, permanently raise your max HP a little, **and train
@@ -181,10 +181,21 @@ hardens you for good, *and* makes you deadlier, and *skill* keeps you alive, not
 respawning. An uncollected orb **fades after 20 s** so drops from far-off kills don't pile
 up.
 
-A slain **brute** drops a **`Weapon`** instead (a steel-grey dot) — the harder kill pays out
-*gear*, not sustain. Which enemy you choose to kill is now a loot decision. The split is
-keyed on the archetype (`Enemy::drops_weapon`, set in `make_brute`), so it's deterministic —
-no roll on the seeded stream.
+The loot economy is **symmetric across three drops** — sustain, offence, and defence:
+
+- a **swarmer** yields a **`Pickup`** (sustain, above);
+- a **brute** yields a **`Weapon`** (a steel-grey dot) — the harder kill pays out *offence*;
+- a **sentinel** — the slow, heavily-plated slate-blue tank — yields a piece of **`Armour`**
+  (a bronze dot) — *defence*. This is armour's **renewable battlefield source**: before, armour
+  only appeared as two static pieces in the opening scene, so it left the run once grabbed.
+
+Which enemy you kill is a loot decision (offence vs defence vs sustain), and every drop feeds
+the same equip loop — you or a foraging colonist ([`npc_equip`](npc-behaviour.md)) can wear it.
+The split is keyed on the archetype (`Enemy::drop`, a `DropKind` enum set in
+`make_brute`/`make_sentinel`), so it's deterministic — no roll on the seeded stream — and the
+exhaustive `switch` in `handle_deaths` (no `default`) makes a fourth drop kind a compile error
+until it's handled. The spawner mixes the three from one seeded draw (a rare sentinel, the
+occasional brute, mostly swarmers).
 
 ### Gear — the first weapon (equip, with a bane)
 
