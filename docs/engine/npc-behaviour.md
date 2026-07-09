@@ -116,24 +116,33 @@ weapon-seek radius exactly the way bravery scales the flee/rescue radii — `kWe
 industry/200)` — so an **industrious** colonist crosses the field to loot a dropped weapon and
 better its kit, while an **idle** one only grabs a blade practically underfoot. It deliberately
 *reuses* the radius mechanism rather than inventing a fourth one: the payoff isn't a novel knob but
-the coherence it completes — **every acting rung of the steer ladder now reads a trait** (flee &
-rescue-radius = bravery, rescue-speed = compassion, forage-threshold = greed, arm-up-radius =
-industry). Neutral 0 is the base radius exactly (bit-identical). The opening four NPCs get a fixed
-bravery/greed/compassion/industry spread (each a distinct four-axis combo), so the personalities
-read from frame one.
+the coherence it completes — every acting rung *then* read a trait (flee & rescue-radius = bravery,
+rescue-speed = compassion, forage-threshold = greed, arm-up-radius = industry). Neutral 0 is the base
+radius exactly (bit-identical).
+
+A **fifth axis, `sociability`**, keeps that invariant true when the ladder grows. The morality
+**rally** rung (see the Morality section below) added a *new* lowest-priority want — gather round a
+renowned hero — that was at first trait-blind; sociability now scales *its* radius the same way,
+`kRallyRadius × (1 + sociability/200)`, so a **sociable** colonist
+crosses the field to join the throng while a **loner** stays put unless the champion is nearly
+underfoot. So the rule holds again: **every acting rung of the steer ladder reads a trait**. The
+opening four NPCs get a fixed bravery/greed/compassion/industry/sociability spread — with sociability
+the *inverse* of industry, so the openers read as idle-socialites then keen-loners — each a distinct
+five-axis combo, so the personalities read from frame one.
 
 Ongoing **reinforcements** don't get that hand-authored spread — they follow the design's *"NPCs
 roll an **archetype** + jitter"*. Each arriving colonist picks one of a handful of coherent presets
 (a dependable **Stalwart**, a self-serving **Rogue**, a caring **Kindler**, a tireless **Drudge**)
 and wobbles each axis a little, so the colony stays as varied as the openers — and *coherent* (a
 recognizable character), not a random stat-blob — instead of drifting toward neutral as the first
-four die. The roll is deterministic (the spawner's own isolated RNG stream, draws sequenced). The
-design's other archetypes (Schemer, Zealot, Loner, Firebrand) join once loyalty and sociability are
-wired to tell them apart.
+four die. The roll is deterministic (the spawner's own isolated RNG stream, draws sequenced) and now
+spans all five wired axes (a **Rogue** is a greedy loner, a **Kindler** a sociable carer). The
+design's other archetypes (Schemer, Zealot, Loner, Firebrand) join once loyalty is wired to tell the
+last of them apart.
 
 This is the smallest honest seed of the master plan's **personality/morality** layer: axes that
-real behaviours *read* and that change visible motion. The remaining two (loyalty, sociability)
-append to the same struct as more behaviours grow to read them.
+real behaviours *read* and that change visible motion. The one remaining axis, **loyalty**, appends
+to the same struct once relationships give a behaviour to read it.
 
 And you can now *see* it: the renderer tints each colonist's dot by its **bravery** — the brave
 warm toward yellow, the cowardly cool toward teal, green left untouched so a tinted NPC stays
@@ -208,10 +217,10 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, and a bottom-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — the two gameplay readers of morality); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
-- `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` + `greed` + `compassion` + `industry` axes); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up / rally ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, and a bottom-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — the two gameplay readers of morality); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` + `greed` + `compassion` + `industry` + `sociability` axes, only `loyalty` unwired); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
-- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player, a downed villain is skipped), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled).
+- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player, a downed villain is skipped), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally.
 
 ## Go deeper
 

@@ -66,22 +66,26 @@ struct PlayerControlled {
 // A character's PERSONALITY — innate leanings that BEHAVIOURS read to make decisions (the P7 seed),
 // and that the character's own DEEDS slowly reshape (record_deed drifts the matching axis — "you
 // are what you do"; see morality). The design's model has six int8 axes in [-100, +100]: bravery,
-// compassion, industry, loyalty, greed, sociability. `bravery`, `greed`, `compassion`, and
-// `industry` are wired so far; the remaining two append here as behaviours grow to read them.
-// Neutral 0 = "no leaning", so an entity with all-zero axes — or no Personality at all — behaves
-// exactly as it did before this existed (bit-identical).
+// compassion, industry, loyalty, greed, sociability. Five are wired so far (bravery, greed,
+// compassion, industry, sociability); only `loyalty` waits, appending here once relationships give
+// a behaviour to read it. Neutral 0 = "no leaning", so an entity with all-zero axes — or no
+// Personality at all — behaves exactly as it did before this existed (bit-identical).
 struct Personality {
-  std::int8_t bravery = 0;     // [-100 coward .. +100 brave]; shapes how near a hazard gets before
-                               // an NPC flees (steer_npcs). A coward bolts early, the brave hold.
-  std::int8_t greed = 0;       // [-100 selfless .. +100 greedy]; shapes how hungry an NPC must get
-                               // before it forages (a NEED THRESHOLD, not bravery's radius — a
-                               // second, differently-shaped read). Greedy hoards while well-fed.
-  std::int8_t compassion = 0;  // [-100 callous .. +100 compassionate]; shapes rescue SPEED (a
-                               // third knob-shape) — the compassionate SPRINT to a fallen ally,
-                               // the callous trudge and may not beat the Downed timer at all.
-  std::int8_t industry = 0;    // [-100 idle .. +100 industrious]; shapes how far an NPC ranges
-                               // to ARM itself (the steer ladder's last rung): the industrious
-                               // cross the field to loot a weapon, the idle grab one underfoot.
+  std::int8_t bravery = 0;      // [-100 coward .. +100 brave]; shapes how near a hazard gets before
+                                // an NPC flees (steer_npcs). A coward bolts early, the brave hold.
+  std::int8_t greed = 0;        // [-100 selfless .. +100 greedy]; shapes how hungry an NPC must get
+                                // before it forages (a NEED THRESHOLD, not bravery's radius — a
+                                // second, differently-shaped read). Greedy hoards while well-fed.
+  std::int8_t compassion = 0;   // [-100 callous .. +100 compassionate]; shapes rescue SPEED (a
+                                // third knob-shape) — the compassionate SPRINT to a fallen ally,
+                                // the callous trudge and may not beat the Downed timer at all.
+  std::int8_t industry = 0;     // [-100 idle .. +100 industrious]; shapes how far an NPC ranges
+                                // to ARM itself: the industrious cross the field to loot a weapon,
+                                // the idle grab one underfoot.
+  std::int8_t sociability = 0;  // [-100 loner .. +100 sociable]; shapes how far an idle NPC ranges
+                                // to RALLY to a hero (the steer ladder's last rung): the sociable
+                                // cross the field to gather round a champion, the loner keep to
+                                // themselves. Reuses industry's radius SHAPE on a social want.
 };
 
 // The KINDS of moral deed a character can accrue — the design's six behaviour-ledger dimensions.

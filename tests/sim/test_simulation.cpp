@@ -623,6 +623,41 @@ TEST_CASE("rally needs a real hero: below the Known line, an idle colonist stays
           Approx(0.0f));  // +10 standing, below Known (15) -> still no pull
 }
 
+TEST_CASE("sociability shapes how far an idle colonist travels to rally to a hero", "[sim]") {
+  // The fifth personality axis, read by the rally rung's radius exactly as industry reads the
+  // arm-up radius (so every acting steer rung now reads a trait). Base rally radius is 220; a hero
+  // sits 150 away. A SOCIABLE colonist (+100 -> radius 330) crosses to gather round the champion; a
+  // LONER
+  // (-100 -> radius 110) stays put — same distance, opposite pulls.
+  entt::registry reg;
+  const entt::entity hero = reg.create();
+  reg.emplace<eng::sim::Transform>(hero, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(hero);
+  eng::sim::record_deed(reg, hero, eng::sim::Deed::Valor, 5);  // +25 standing -> clearly Known+
+
+  const entt::entity sociable = reg.create();
+  reg.emplace<eng::sim::Transform>(sociable, eng::Vec2{150.0f, 0.0f});  // 150 from the hero
+  reg.emplace<eng::sim::Velocity>(sociable);
+  reg.emplace<eng::sim::Npc>(sociable);
+  reg.emplace<eng::sim::Personality>(sociable,
+                                     eng::sim::Personality{0, 0, 0, 0, 100});  // sociable -> 330
+
+  const entt::entity loner = reg.create();
+  reg.emplace<eng::sim::Transform>(loner, eng::Vec2{0.0f, 150.0f});  // also 150 from the hero
+  reg.emplace<eng::sim::Velocity>(loner);
+  reg.emplace<eng::sim::Npc>(loner);
+  reg.emplace<eng::sim::Personality>(loner,
+                                     eng::sim::Personality{0, 0, 0, 0, -100});  // loner -> 110
+
+  eng::sim::steer_npcs(reg);
+
+  // The sociable one steers toward the hero (-x, toward the origin)...
+  REQUIRE(reg.get<eng::sim::Velocity>(sociable).value.x < 0.0f);
+  // ...the loner, out of its shrunk radius, stays put.
+  REQUIRE(reg.get<eng::sim::Velocity>(loner).value.x == Approx(0.0f));
+  REQUIRE(reg.get<eng::sim::Velocity>(loner).value.y == Approx(0.0f));
+}
+
 TEST_CASE("bravery shapes how far an NPC will commit to a rescue", "[sim]") {
   // Bravery's SECOND read, exercising BOTH directions against the base rescue radius (300):
   //  - GROW: a brave NPC (+100 -> radius 450) at 350 rescues, where a NEUTRAL one (300) could not;
