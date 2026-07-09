@@ -3,6 +3,7 @@
 
 #include <limits>
 #include <random>
+#include <string>
 
 #include "engine/net/loopback.hpp"
 #include "engine/net/server.hpp"
@@ -1794,6 +1795,24 @@ TEST_CASE("renown_scale grows a dot with positive standing and caps", "[sim]") {
   const float mid = eng::sim::renown_scale(eng::sim::kRenownFullAt / 2);
   REQUIRE(mid > 1.0f);
   REQUIRE(mid < 1.0f + eng::sim::kRenownMaxScale);
+}
+
+TEST_CASE("standing_title names each band, symmetric about neutral", "[sim]") {
+  // Derived recognition: a pure query over standing, always in sync with the deeds behind it. Pin
+  // each band edge — neutral is "Unproven", the hero bands rise, the villain bands mirror them
+  // (ready though no villain deed exists yet). The upper band reuses kRenownFullAt, so the title
+  // flips to "Renowned" exactly when the renown dot-size caps.
+  const auto title = [](std::int32_t s) { return std::string(eng::sim::standing_title(s)); };
+  REQUIRE(title(0) == "Unproven");
+  REQUIRE(title(eng::sim::kKnownAt - 1) == "Unproven");    // just shy of the first band...
+  REQUIRE(title(eng::sim::kKnownAt) == "Known");           // ...and onto it
+  REQUIRE(title(eng::sim::kRenownFullAt - 1) == "Known");  // still Known just below the cap...
+  REQUIRE(title(eng::sim::kRenownFullAt) == "Renowned");   // ...Renowned exactly at it
+  REQUIRE(title(-eng::sim::kKnownAt + 1) == "Unproven");   // just shy of Suspect...
+  REQUIRE(title(-eng::sim::kKnownAt) == "Suspect");  // ...and onto it (villain side mirrors —
+  REQUIRE(title(-eng::sim::kRenownFullAt + 1) ==
+          "Suspect");                                       // unreachable today, but the bands are
+  REQUIRE(title(-eng::sim::kRenownFullAt) == "Notorious");  // ready and symmetric)
 }
 
 TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it lands", "[sim]") {
