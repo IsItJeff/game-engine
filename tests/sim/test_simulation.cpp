@@ -479,6 +479,80 @@ TEST_CASE("bravery shapes how close a hazard gets before an NPC flees", "[sim]")
   REQUIRE(reg.get<eng::sim::Velocity>(coward).value.x < 0.0f);   // and the coward fled early too
 }
 
+TEST_CASE("a colonist flees a villain player: standing's first gameplay reader", "[sim]") {
+  // Cruelty finally BITES the world, not just the HUD: once a player's deeds mark them a villain
+  // (standing at or below the -15 "Suspect" line), a nearby colonist flees them exactly like a
+  // hazard. This is the first time `standing` changes the SIM — the colony recoiling from someone
+  // it has cause to fear.
+  entt::registry reg;
+  const entt::entity villain = reg.create();
+  reg.emplace<eng::sim::Transform>(villain, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(villain);
+  eng::sim::record_deed(reg, villain, eng::sim::Deed::Cruelty,
+                        3);  // 3 cruel strikes -> standing -18
+  REQUIRE(eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(villain)) <= -eng::sim::kKnownAt);
+
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist,
+                                   eng::Vec2{50.0f, 0.0f});  // inside the base sense radius
+  reg.emplace<eng::sim::Velocity>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+
+  eng::sim::steer_npcs(reg);
+
+  // Flees RIGHT — straight away from the villain at the origin (pos - threat points +x).
+  REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x > 0.0f);
+}
+
+TEST_CASE("only villainy drives the colony off: a hero or unproven player is not feared", "[sim]") {
+  // The bit-identical guard: fear fires ONLY at/below the Suspect line, so the pre-cruelty world is
+  // unchanged. A celebrated hero (positive standing) and an unproven player (no ledger at all) both
+  // leave a nearby colonist at rest — standing reads as a threat only when it's villainous.
+  const auto colonist_speed_near_player = [](bool make_hero) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(player);
+    if (make_hero) {
+      eng::sim::record_deed(reg, player, eng::sim::Deed::Valor, 10);  // standing +50, a clear hero
+    }
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{50.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    eng::sim::steer_npcs(reg);
+    const eng::Vec2 v = reg.get<eng::sim::Velocity>(colonist).value;
+    return v.x * v.x + v.y * v.y;  // squared speed — zero iff the colonist never moved
+  };
+  REQUIRE(colonist_speed_near_player(true) == Approx(0.0f));   // a hero -> the colonist stays put
+  REQUIRE(colonist_speed_near_player(false) == Approx(0.0f));  // an unproven player -> likewise
+}
+
+TEST_CASE("a downed villain is no threat: fear yields, and the colony moves to help", "[sim]") {
+  // The Downed exclusion on the fear view, pinned by PRIORITY. Fear beats rescue (it's checked
+  // first and bolts straight away), so if a downed villain still read as a threat the colonist
+  // would flee it (+x, away). Instead the colonist runs TOWARD the fallen body (-x) to rescue it —
+  // which it can only do because the villain was dropped from the fear view. (Whether colonists
+  // SHOULD save a villain is a separate, standing-blind rescue rung — a later refinement, not this
+  // reader's job.)
+  entt::registry reg;
+  const entt::entity villain = reg.create();
+  reg.emplace<eng::sim::Transform>(villain, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(villain);
+  reg.emplace<eng::sim::Downed>(villain);  // helpless -> excluded from fear
+  eng::sim::record_deed(reg, villain, eng::sim::Deed::Cruelty, 5);  // Notorious (-30), but down
+
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{50.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+
+  eng::sim::steer_npcs(reg);
+
+  // Toward the fallen villain (-x) to rescue, NOT fleeing away (+x): the fear reader skipped it.
+  REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x < 0.0f);
+}
+
 TEST_CASE("bravery shapes how far an NPC will commit to a rescue", "[sim]") {
   // Bravery's SECOND read, exercising BOTH directions against the base rescue radius (300):
   //  - GROW: a brave NPC (+100 -> radius 450) at 350 rescues, where a NEUTRAL one (300) could not;

@@ -39,7 +39,7 @@ Each tick, **before anything moves**, `steer_npcs` runs over every NPC:
 
 ```mermaid
 flowchart TD
-  npc[each NPC] --> haz{nearest Hazard<br/>in range?}
+  npc[each NPC] --> haz{nearest Hazard<br/>OR villain player<br/>in range?}
   haz -->|yes| flee[flee: velocity straight away]
   haz -->|no| dwn{nearest Downed<br/>ally in range?}
   dwn -->|yes| rescue[rescue: velocity toward them]
@@ -141,6 +141,25 @@ brave/coward spread `build_scene` seeds reads at a glance. (The warm/cool palett
 knob, eyeballed in the live renderer; greed is left untinted for now — a second-axis cue wants a
 channel this one doesn't already use.)
 
+### Morality: the colony fears a villain (standing's first gameplay reader)
+
+The danger rung reads more than physical hazards now. A **player whose deeds have marked them a
+villain** — `standing` at or below the *Suspect* line (`-kKnownAt`) — is folded into the same flee
+check as a hazard, so colonists **run from a wrong'un** exactly as they run from a mote. This is the
+first time `standing` changes the **simulation** rather than just the HUD: [morality](morality.md)
+could raise or sink your repute, but until now nothing in the world *acted* on it. Cruelty finally
+bites.
+
+It reuses the machinery already there: the villain competes with hazards for the *nearest* threat,
+and the same **bravery**-scaled radius applies — a brave colonist lets a villain get closer before
+bolting. A downed villain is excluded (a helpless body is no threat — and, standing-blind for now,
+the colony will even move to *rescue* it). Three deliberate limits keep it honest, all noted in the
+code: it is **player-only** (only a player can turn villain today, since Cruelty is player-gated), a
+**binary** flee (the design's graded *perceive* — wariness scaling to flight by standing *and* the
+onlooker's own might — is a later ring), and a threshold set at *Suspect* so a few cruel strikes
+visibly turn the colony against you. A hero or an unproven player reads as no threat at all, so the
+pre-cruelty world is bit-identical.
+
 !!! info "Greedy and memoryless — on purpose"
     It flees the *single nearest* threat, with no memory. An NPC can dodge one
     mote straight into another. That is fine: real steering behaviours (Reynolds)
@@ -177,13 +196,14 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, the first gameplay reader of morality); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
 - `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` + `greed` + `compassion` + `industry` axes); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
-- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, and steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity).
+- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), and the villain-fear reader (a colonist flees a Suspect+ player, ignores a hero or unproven one, and a downed villain is skipped).
 
 ## Go deeper
 
 - [The tick and the systems](skeleton/tick-and-systems.md) — how `steer_npcs` is scheduled and why order matters.
 - [Entities and components](skeleton/ecs.md) — why an NPC is a component set, and how the view targets them.
 - [The stats system](stats-system.md) — the permadeath that fleeing tries to postpone.
+- [Morality](morality.md) — `standing` and the Cruelty deed that turns a player into the villain this flee rung now reads.
