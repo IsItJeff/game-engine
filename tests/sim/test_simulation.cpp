@@ -1982,6 +1982,31 @@ TEST_CASE("poison suppresses healing, so venom nets health strictly down", "[sim
   REQUIRE(reg.get<eng::sim::Stats>(e).health.current < before);  // strictly down despite high regen
 }
 
+TEST_CASE("a worn-down creature enrages and hits harder", "[sim]") {
+  // Below the enrage threshold of its OWN HP, a creature's blows hit harder — so leaving a foe
+  // half-dead is dangerous, and finishing it fast is the safe play. Compare one blow from a full-HP
+  // vs a wounded creature of the same archetype.
+  const auto hit_damage = [](float creature_hp_fraction) {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);  // no Attributes -> DEX 1 (never dodges), defence 0
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});  // in contact
+    reg.emplace<eng::sim::Enemy>(foe);                             // default attack_damage
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f * creature_hp_fraction, 100.0f, 0.0f});
+
+    std::mt19937 rng{1234};
+    const float before = reg.get<eng::sim::Stats>(victim).health.current;
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return before - reg.get<eng::sim::Stats>(victim).health.current;
+  };
+  const float healthy_hit = hit_damage(1.0f);  // full HP -> its normal blow
+  const float wounded_hit = hit_damage(0.2f);  // below the enrage threshold -> harder
+  REQUIRE(healthy_hit > 0.0f);                 // it connected...
+  REQUIRE(wounded_hit > healthy_hit);          // ...and the cornered beast hit harder
+}
+
 TEST_CASE("a high-Dexterity player dodges some blows but not all", "[sim]") {
   // Evasion softens the incoming stream but never negates it (capped at 50%): over many
   // swings a trained dodger slips some and eats others. Deterministic from the seed.
