@@ -409,7 +409,17 @@ void World::apply_command(const Command& cmd) {
         if (const Equipped* gear = registry_.try_get<Equipped>(e); gear != nullptr) {
           speed *= 1.0f - gear->move_penalty;
         }
+        // A raised GUARD roots you (the block's cost) and marks you Blocking so
+        // resolve_creature_contacts softens the blows you take. Set/cleared every tick from the
+        // held key, so the stance lasts exactly as long as you hold guard. Blocking isn't in this
+        // view, so emplacing/removing it mid-iteration is safe.
+        if (cmd.guard) speed *= kGuardMoveScale;
         view.get<Velocity>(e).value = dir * speed;
+        if (cmd.guard) {
+          registry_.emplace_or_replace<Blocking>(e);
+        } else {
+          registry_.remove<Blocking>(e);
+        }
       }
       break;
     }

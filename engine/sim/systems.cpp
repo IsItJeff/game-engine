@@ -1130,6 +1130,7 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
       // Just fell: crumple WHERE you are, helpless. NO heal, NO teleport — that free
       // escape-to-safety was the old anti-climax; now you have to survive the window.
       reg.emplace<Downed>(e);
+      reg.remove<Blocking>(e);  // a crumpled body isn't guarding — drop the stance (inert body)
       players.get<Velocity>(e).value = Vec2{0.0f, 0.0f};
       continue;
     }
@@ -1361,6 +1362,9 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
           c_stats != nullptr && c_stats->health.current < c_stats->health.max * kEnrageThreshold) {
         attack_dmg *= kEnrageDamage;
       }
+      // A raised GUARD softens the blow (before VIT mitigates it too) — the active-defence trade
+      // for the mobility it costs. Applies to anyone Blocking; only the player guards today.
+      if (reg.all_of<Blocking>(p)) attack_dmg *= kBlockDamageFactor;
       const float applied = mitigate(attack_dmg, defence_of(reg, p));
       Vital& health = prey.get<Stats>(p).health;
       health.current -= applied;

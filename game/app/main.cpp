@@ -135,6 +135,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.4f, 1.0f}, "DOWNED — %.1fs (an ally can revive you)",
                        static_cast<double>(down->timer));
   }
+  if (world.registry().all_of<eng::sim::Blocking>(player)) {
+    ImGui::TextColored(ImVec4{0.6f, 0.8f, 1.0f, 1.0f},
+                       "GUARDING (blows softened, movement slowed)");
+  }
   if (const eng::sim::Stats* stats = world.registry().try_get<eng::sim::Stats>(player)) {
     const eng::sim::Vital& h = stats->health;
     ImGui::Text("health: %.0f / %.0f", static_cast<double>(h.current), static_cast<double>(h.max));
@@ -235,7 +239,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "brute takes several, fewer as your Strength climbs (it hits harder), while "
       "your VIT softens its blows — and standing to trade blows slowly trains Dexterity, "
-      "so before long some hits are dodged outright. Careful of ORANGE swarmers: they're "
+      "so before long some hits are dodged outright. HOLD K to raise a GUARD: blows land far "
+      "softer, but you move at a crawl (plant and tank, or move and dodge — not both). A "
+      "worn-down creature ENRAGES and hits harder, so finish it fast (or guard through it). "
+      "Careful of ORANGE swarmers: they're "
       "slippery and dodge some of YOUR strikes too. Hitting back trains Striking → Strength "
       "(even a whiff a swarmer dodges). A "
       "slain "
@@ -351,11 +358,16 @@ int main(int /*argc*/, char* /*argv*/[]) {
     }
     drop_was_down = drop_raw;
 
+    // K, HELD (not edge-triggered), raises a GUARD: incoming creature blows are softened but you
+    // move slower. A held stance rather than a one-shot action, so it rides the per-tick MovePlayer
+    // command (below) rather than an edge event — it lasts exactly as long as the key is down.
+    const bool guard = !imgui_wants_keys && keys[SDL_SCANCODE_K];
+
     // --- advance the simulation in fixed steps ---
     const int steps = paused ? 0 : timestep.advance(frame_seconds);
     for (int i = 0; i < steps; ++i) {
       // One input Command per tick — the client's only way to affect the world.
-      transport.send(eng::net::Message{eng::sim::move_player(eng::sim::kLocalPlayer, dir)});
+      transport.send(eng::net::Message{eng::sim::move_player(eng::sim::kLocalPlayer, dir, guard)});
       server.tick();
     }
 
