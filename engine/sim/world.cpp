@@ -190,6 +190,12 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // wear their HP down; a stronger Strength kills faster. The spawner keeps a mix coming.
   make_brute(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
   make_swarmer(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
+
+  // A couple of armour pieces on the field (dull-bronze dots) — walk onto one and press E to
+  // don it for +defence at the cost of a slower second wind, the defensive twin of a weapon.
+  // A colonist may beat you to one (npc_equip), the same as with weapons.
+  spawn_armour(reg, Vec2{center.x + 90.0f, center.y - 40.0f});
+  spawn_armour(reg, Vec2{kFieldWidth * 0.6f, kFieldHeight * 0.35f});
   return player;
 }
 
@@ -320,16 +326,16 @@ void World::apply_command(const Command& cmd) {
       break;
     }
     case CommandKind::Equip: {
-      // Wield the nearest dropped Weapon in reach — the target is computed server-side via
-      // the shared equip_nearest_weapon (the same fold NPCs use, so gear can't diverge). Match
-      // the commanding player, skip a downed one, and collect-then-destroy so a co-op pair
-      // can't invalidate the view mid-loop.
+      // Wear the nearest dropped gear in reach (weapon or armour) — the target is computed
+      // server-side via the shared equip_nearest_gear (the same fold NPCs use, so gear can't
+      // diverge). Match the commanding player, skip a downed one, and collect-then-destroy so a
+      // co-op pair can't invalidate the view mid-loop.
       std::vector<entt::entity> consumed;
       auto players = registry_.view<PlayerControlled, Transform>();
       for (const entt::entity p : players) {
         if (players.get<PlayerControlled>(p).player != cmd.player) continue;
         if (registry_.all_of<Downed>(p)) continue;  // helpless — can't equip
-        const entt::entity w = equip_nearest_weapon(registry_, p);
+        const entt::entity w = equip_nearest_gear(registry_, p);
         if (w != entt::null) consumed.push_back(w);
       }
       for (const entt::entity w : consumed) {
@@ -338,21 +344,33 @@ void World::apply_command(const Command& cmd) {
       break;
     }
     case CommandKind::Drop: {
-      // Ditch the wielded weapon at your feet — the inverse of Equip, turning the heft bane
-      // you took on into a choice you can undo (drop to sprint clear of a swarm, re-grab later).
-      // The <..., Equipped> view means a bare-handed player simply isn't matched (no-op). Skip a
-      // downed player. Collect-then-act: spawn_weapon creates a new entity (emplacing Transform),
-      // which could reallocate the Transform pool this view is walking, so spawn + remove AFTER.
+      // Ditch the wielded WEAPON at your feet — the inverse of Equip, turning the heft bane you
+      // took on into a choice you can undo (drop to sprint clear of a swarm, re-grab later). It
+      // is SLOT-AWARE, the symmetric twin of the non-clobbering equip: it drops only the weapon
+      // and zeroes only the weapon field-pair, leaving any worn armour untouched — a blanket
+      // remove<Equipped> here would silently strip your armour. A player with no weapon (armour
+      // only, or bare) is a no-op: no phantom weapon appears. Skip a downed player. Collect-
+      // then-act: spawn_weapon creates a new entity (emplacing Transform), which could realloc
+      // the Transform pool this view walks, so spawn + mutate AFTER the walk.
       std::vector<entt::entity> droppers;
       auto players = registry_.view<PlayerControlled, Transform, Equipped>();
       for (const entt::entity p : players) {
         if (players.get<PlayerControlled>(p).player != cmd.player) continue;
         if (registry_.all_of<Downed>(p)) continue;  // helpless — can't drop
+        Equipped& eq = players.get<Equipped>(p);
+        if (eq.strength_bonus == 0 && eq.move_penalty == 0.0f) continue;  // no weapon to shed
         droppers.push_back(p);
       }
       for (const entt::entity p : droppers) {
         spawn_weapon(registry_, registry_.get<Transform>(p).position);  // a weapon where you stand
-        registry_.remove<Equipped>(p);                                  // ...and the heft is shed
+        Equipped& eq = registry_.get<Equipped>(p);
+        eq.strength_bonus = 0;  // clear ONLY the weapon slot; the heft is shed...
+        eq.move_penalty = 0.0f;
+        // ...and if nothing's left worn (no armour either), drop the now-empty cache entirely
+        // so the "wielding" HUD clears and MovePlayer/perform_attack see a bare character.
+        if (eq.defence_bonus == 0.0f && eq.stamina_regen_penalty == 0.0f) {
+          registry_.remove<Equipped>(p);
+        }
       }
       break;
     }

@@ -1507,6 +1507,123 @@ TEST_CASE("a downed player cannot drop its weapon", "[sim]") {
   REQUIRE(world.registry().view<eng::sim::Weapon>().size() == 0);  // nothing hit the ground
 }
 
+TEST_CASE("equipping a weapon then armour fills two independent slots", "[sim]") {
+  // The two-slot invariant: grabbing armour must NOT clobber a wielded weapon (or vice-versa).
+  // Both items sit on the player; the first Equip grabs the weapon (ties break to weapon), the
+  // second grabs the armour — and the cache ends up carrying BOTH.
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  const eng::Vec2 ppos = world.registry().get<eng::sim::Transform>(player).position;
+  const entt::entity w = world.registry().create();
+  world.registry().emplace<eng::sim::Transform>(w, ppos);
+  world.registry().emplace<eng::sim::Weapon>(w);  // default {+4 STR, -25% speed}
+  const entt::entity a = world.registry().create();
+  world.registry().emplace<eng::sim::Transform>(a, ppos);
+  world.registry().emplace<eng::sim::Armour>(a);  // default {+6 DEF, -30% stamina regen}
+
+  world.submit(eng::sim::equip(eng::sim::kLocalPlayer));  // grabs the weapon
+  world.step();
+  world.submit(eng::sim::equip(eng::sim::kLocalPlayer));  // grabs the armour
+  world.step();
+
+  const eng::sim::Equipped& eq = world.registry().get<eng::sim::Equipped>(player);
+  REQUIRE(eq.strength_bonus == 4);            // weapon slot filled...
+  REQUIRE(eq.defence_bonus == Approx(6.0f));  // ...AND armour slot filled — neither clobbered
+}
+
+TEST_CASE("worn armour softens a creature's blow", "[sim]") {
+  // Armour adds flat defence through defence_of, so it soaks part of a creature's hit — while
+  // an unarmoured, VIT-1 target takes the raw blow (the determinism baseline: no gear, no change).
+  entt::registry reg;
+  const entt::entity bare = reg.create();
+  reg.emplace<eng::sim::Transform>(bare, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(bare);
+  reg.emplace<eng::sim::Attributes>(bare);  // DEX 1 (never dodges), END 1 (no VIT defence)
+  const entt::entity foe1 = reg.create();
+  reg.emplace<eng::sim::Transform>(foe1, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe1);  // brute: attack_damage 15, ready to swing
+
+  const entt::entity armoured = reg.create();  // its own foe, far away so they don't cross
+  reg.emplace<eng::sim::Transform>(armoured, eng::Vec2{1000.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(armoured);
+  reg.emplace<eng::sim::Attributes>(armoured);
+  reg.emplace<eng::sim::Equipped>(armoured,
+                                  eng::sim::Equipped{0, 0.0f, 6.0f, 0.30f});  // armour only
+  const entt::entity foe2 = reg.create();
+  reg.emplace<eng::sim::Transform>(foe2, eng::Vec2{1000.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe2);
+
+  const float bare_before = reg.get<eng::sim::Stats>(bare).health.current;
+  const float arm_before = reg.get<eng::sim::Stats>(armoured).health.current;
+  std::mt19937 rng{1234};
+  eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+  const float bare_dmg = bare_before - reg.get<eng::sim::Stats>(bare).health.current;
+  const float arm_dmg = arm_before - reg.get<eng::sim::Stats>(armoured).health.current;
+
+  REQUIRE(bare_dmg == Approx(15.0f));  // no gear, no VIT -> the full raw blow (unchanged baseline)
+  REQUIRE(arm_dmg < bare_dmg);         // armour soaked part of it
+  REQUIRE(arm_dmg > 0.0f);             // ...but never negates (mitigate's floor still lands a hit)
+}
+
+TEST_CASE("worn armour slows stamina recovery (its bane)", "[sim]") {
+  // The armour bane: plate gives a weaker second wind. Two idle (resting) entities differing
+  // only in armour; the armoured one recovers strictly less stamina over the same rest.
+  entt::registry reg;
+  const entt::entity bare = reg.create();
+  reg.emplace<eng::sim::Stats>(bare).stamina =
+      eng::sim::Vital{50.0f, 100.0f, 20.0f};  // recovers 20/s
+  reg.emplace<eng::sim::Velocity>(bare);      // zero velocity -> resting
+  const entt::entity armoured = reg.create();
+  reg.emplace<eng::sim::Stats>(armoured).stamina = eng::sim::Vital{50.0f, 100.0f, 20.0f};
+  reg.emplace<eng::sim::Velocity>(armoured);
+  reg.emplace<eng::sim::Equipped>(armoured,
+                                  eng::sim::Equipped{0, 0.0f, 6.0f, 0.30f});  // -30% regen
+
+  const float dt = 1.0f / 60.0f;
+  for (int i = 0; i < 30; ++i) eng::sim::update_stamina(reg, dt);  // half a second resting
+
+  const float bare_sta = reg.get<eng::sim::Stats>(bare).stamina.current;
+  const float arm_sta = reg.get<eng::sim::Stats>(armoured).stamina.current;
+  REQUIRE(bare_sta > 50.0f);  // both recovered from resting...
+  REQUIRE(arm_sta > 50.0f);
+  REQUIRE(arm_sta < bare_sta);  // ...but the armour's bane held the armoured one back
+}
+
+TEST_CASE("dropping a weapon keeps your armour (slot-aware Drop)", "[sim]") {
+  // Drop is slot-aware: it sheds only the weapon, leaving worn armour on — a blanket
+  // remove<Equipped> would silently strip the armour.
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  world.registry().emplace<eng::sim::Equipped>(player,
+                                               eng::sim::Equipped{4, 0.25f, 6.0f, 0.30f});  // both
+
+  world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
+  world.step();
+
+  const eng::sim::Equipped* eq = world.registry().try_get<eng::sim::Equipped>(player);
+  REQUIRE(eq != nullptr);            // still wearing something (the armour)...
+  REQUIRE(eq->strength_bonus == 0);  // ...the weapon slot was shed...
+  REQUIRE(eq->move_penalty == Approx(0.0f));
+  REQUIRE(eq->defence_bonus == Approx(6.0f));  // ...but the armour slot survived intact
+  REQUIRE(world.registry().view<eng::sim::Weapon>().size() == 1);  // and a weapon hit the ground
+}
+
+TEST_CASE("dropping with only armour worn is a no-op", "[sim]") {
+  // No weapon to shed -> Drop does nothing (no phantom weapon, armour untouched).
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  world.registry().emplace<eng::sim::Equipped>(
+      player, eng::sim::Equipped{0, 0.0f, 6.0f, 0.30f});  // armour only
+
+  world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
+  world.step();
+
+  const eng::sim::Equipped* eq = world.registry().try_get<eng::sim::Equipped>(player);
+  REQUIRE(eq != nullptr);  // armour untouched...
+  REQUIRE(eq->defence_bonus == Approx(6.0f));
+  REQUIRE(world.registry().view<eng::sim::Weapon>().size() == 0);  // ...and no phantom weapon
+}
+
 TEST_CASE("a player collects a pickup: heals and grows max HP", "[sim]") {
   entt::registry reg;
   const entt::entity p = reg.create();

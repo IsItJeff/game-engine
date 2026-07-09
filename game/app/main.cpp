@@ -137,11 +137,20 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::Text("strength: %d",
                 attr->strength.level - 1);  // from attacking; longer reach + harder hits
   }
-  // Wielding: a dropped weapon folds into Equipped, adding effective Strength at the cost of
-  // move speed. Called out so the tradeoff is legible.
+  // Gear: a wielded weapon and/or worn armour fold into Equipped, each with its own bane.
+  // Show only the slots that are actually filled so the tradeoffs are legible (and an
+  // armour-only wearer doesn't read as "+0 STR").
   if (const eng::sim::Equipped* eq = world.registry().try_get<eng::sim::Equipped>(player)) {
-    ImGui::TextColored(ImVec4{0.8f, 0.85f, 1.0f, 1.0f}, "wielding: +%d STR, -%.0f%% speed",
-                       eq->strength_bonus, static_cast<double>(eq->move_penalty * 100.0f));
+    if (eq->strength_bonus != 0 || eq->move_penalty != 0.0f) {
+      ImGui::TextColored(ImVec4{0.8f, 0.85f, 1.0f, 1.0f}, "wielding: +%d STR, -%.0f%% speed",
+                         eq->strength_bonus, static_cast<double>(eq->move_penalty * 100.0f));
+    }
+    if (eq->defence_bonus != 0.0f || eq->stamina_regen_penalty != 0.0f) {
+      ImGui::TextColored(ImVec4{0.9f, 0.7f, 0.4f, 1.0f},
+                         "armoured: +%.0f DEF, -%.0f%% stamina regen",
+                         static_cast<double>(eq->defence_bonus),
+                         static_cast<double>(eq->stamina_regen_penalty * 100.0f));
+    }
   }
   if (const eng::sim::CharacterLevel* cl =
           world.registry().try_get<eng::sim::CharacterLevel>(player)) {
@@ -187,8 +196,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "them skirmish (and sometimes an NPC fall). Fresh creatures keep arriving — and "
       "fresh colonists wander in over time to replace the fallen, so the war sustains "
       "itself. "
-      "Space: spawn a mote. H: take 15 damage. E: wield the nearest dropped weapon; "
-      "Q: drop it again to shed the heft and move free. "
+      "Space: spawn a mote. H: take 15 damage. E: wear the nearest dropped gear — a steel "
+      "weapon (harder hits, slower) or bronze armour (more defence, slower stamina regen), "
+      "each its own slot; Q: drop the weapon again to shed the heft and move free. "
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "brute takes several, fewer as your Strength climbs (it hits harder), while "
       "your VIT softens its blows — and standing to trade blows slowly trains Dexterity, "
