@@ -63,10 +63,10 @@ struct PlayerControlled {
 
 // A character's PERSONALITY — fixed innate leanings that BEHAVIOURS read to make decisions
 // (the P7 seed). The design's model has six int8 axes in [-100, +100]: bravery, compassion,
-// industry, loyalty, greed, sociability. `bravery`, `greed`, and `compassion` are wired so far;
-// the remaining three append here as behaviours grow to read them. Neutral 0 = "no leaning", so an
-// entity with all-zero axes — or no Personality at all — behaves exactly as it did before this
-// existed (bit-identical).
+// industry, loyalty, greed, sociability. `bravery`, `greed`, `compassion`, and `industry` are wired
+// so far; the remaining two append here as behaviours grow to read them. Neutral 0 = "no leaning",
+// so an entity with all-zero axes — or no Personality at all — behaves exactly as it did before
+// this existed (bit-identical).
 struct Personality {
   std::int8_t bravery = 0;     // [-100 coward .. +100 brave]; shapes how near a hazard gets before
                                // an NPC flees (steer_npcs). A coward bolts early, the brave hold.
@@ -76,6 +76,9 @@ struct Personality {
   std::int8_t compassion = 0;  // [-100 callous .. +100 compassionate]; shapes rescue SPEED (a
                                // third knob-shape) — the compassionate SPRINT to a fallen ally,
                                // the callous trudge and may not beat the Downed timer at all.
+  std::int8_t industry = 0;    // [-100 idle .. +100 industrious]; shapes how far an NPC ranges
+                               // to ARM itself (the steer ladder's last rung): the industrious
+                               // cross the field to loot a weapon, the idle grab one underfoot.
 };
 
 // Marks an entity as a non-player character. Empty for now — its whole job is to

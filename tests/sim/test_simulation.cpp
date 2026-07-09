@@ -444,6 +444,53 @@ TEST_CASE("compassion shapes how fast an NPC rushes to a rescue", "[sim]") {
   REQUIRE(reg.get<eng::sim::Velocity>(cold).value.x < 0.0f);  // (but is still, grudgingly, going)
 }
 
+TEST_CASE("industry shapes how far an NPC ranges to arm itself", "[sim]") {
+  // The fourth axis, on the LAST unpersonalized rung (arm-up), so now EVERY want in the steer
+  // ladder reads personality. It reuses bravery's RADIUS shape on a new want: the industrious range
+  // across the field to loot a weapon, the idle only grab one underfoot. Distances straddle the
+  // base seek radius (260), so each assertion pins the industry bonus rather than the baseline.
+  entt::registry reg;
+  const entt::entity weapon = reg.create();
+  reg.emplace<eng::sim::Transform>(weapon, eng::Vec2{0.0f, 0.0f});  // the loot, at the origin
+  reg.emplace<eng::sim::Weapon>(weapon);
+
+  // Industrious, FAR out at 320 — beyond the base radius (260), so only a GROWN radius reaches it.
+  const entt::entity keen = reg.create();
+  reg.emplace<eng::sim::Transform>(keen, eng::Vec2{320.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(keen);
+  reg.emplace<eng::sim::Npc>(keen);
+  reg.emplace<eng::sim::Stats>(keen);  // full hunger -> not foraging, falls through to arming
+  reg.emplace<eng::sim::Personality>(keen, eng::sim::Personality{0, 0, 0, 100});  // industry +100
+
+  // Neutral, at 200 — inside the base radius, so the baseline DOES seek (the positive control).
+  const entt::entity plain = reg.create();
+  reg.emplace<eng::sim::Transform>(plain, eng::Vec2{200.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(plain);
+  reg.emplace<eng::sim::Npc>(plain);
+  reg.emplace<eng::sim::Stats>(plain);  // NO Personality -> base seek radius (unchanged)
+
+  // Idle, also at 200 — where the neutral one sets off, but its SHRUNK radius no longer reaches.
+  const entt::entity idle = reg.create();
+  reg.emplace<eng::sim::Transform>(idle, eng::Vec2{200.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(idle);
+  reg.emplace<eng::sim::Npc>(idle);
+  reg.emplace<eng::sim::Stats>(idle);
+  reg.emplace<eng::sim::Personality>(idle, eng::sim::Personality{0, 0, 0, -100});  // industry -100
+
+  eng::sim::steer_npcs(reg);
+
+  // GROW: the industrious one steers toward the blade (-x) from 320 — past where the base radius
+  // reaches, so the bonus, not the baseline, brought it in range.
+  REQUIRE(reg.get<eng::sim::Velocity>(keen).value.x < 0.0f);
+  // Baseline: the neutral one, inside the base radius, sets off.
+  REQUIRE(reg.get<eng::sim::Velocity>(plain).value.x < 0.0f);
+  // SHRINK: the idle one, at the SAME 200 the neutral seeks from, holds still — its radius shrank
+  // below the distance, so its velocity is untouched from its zero start.
+  const eng::Vec2 idle_v = reg.get<eng::sim::Velocity>(idle).value;
+  REQUIRE(idle_v.x == 0.0f);
+  REQUIRE(idle_v.y == 0.0f);
+}
+
 TEST_CASE("an unarmed colonist steers toward a dropped weapon to arm up", "[sim]") {
   entt::registry reg;
   const entt::entity npc = reg.create();

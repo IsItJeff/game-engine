@@ -25,7 +25,7 @@ entt::entity make_mote(entt::registry& reg, Vec2 pos, Vec2 vel, Vec3 color) {
 // destroys it on death rather than respawning it — permadeath). It is otherwise a
 // drifting dot, like a mote, but it is a *person* the world owns, not a hazard.
 entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel, int bravery = 0, int greed = 0,
-                      int compassion = 0) {
+                      int compassion = 0, int industry = 0) {
   const entt::entity e = reg.create();
   reg.emplace<Transform>(e, pos);
   reg.emplace<PrevTransform>(e, pos);
@@ -41,7 +41,7 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel, int bravery = 0, 
   // int8 field explicitly (the caller passes a plain int for convenience).
   reg.emplace<Personality>(
       e, Personality{static_cast<std::int8_t>(bravery), static_cast<std::int8_t>(greed),
-                     static_cast<std::int8_t>(compassion)});
+                     static_cast<std::int8_t>(compassion), static_cast<std::int8_t>(industry)});
   return e;
 }
 
@@ -212,14 +212,14 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
     const Vec2 pos{static_cast<float>((i + 1) * 200 % static_cast<int>(kFieldWidth)),
                    static_cast<float>((i + 1) * 140 % static_cast<int>(kFieldHeight))};
     // A fixed personality spread so the demo shows the range from the first frame: bravery
-    // -90/-30/+30/+90, greed REVERSED (+90/+30/-30/-90), and compassion ALTERNATING (-75/+75/
-    // -75/+75), so each colonist is a distinct three-axis combo (a cowardly-greedy-callous one,
-    // a brave-selfless-compassionate one, ...), not four clones on one dial. Pure index
-    // expressions, NO rng draw, so the seeded streams stay bit-aligned. ponytail: reinforcements
-    // jitter only bravery (spawn_npc_if_due); greed/compassion default 0 — jittering them is a
-    // follow-up.
+    // -90/-30/+30/+90, greed REVERSED (+90/+30/-30/-90), compassion ALTERNATING (-75/+75/-75/+75),
+    // and industry GROUPED (-80/-80/+80/+80, the first pair idle, the second keen), so each
+    // colonist is a distinct FOUR-axis combo (a cowardly-greedy-callous-idle one, a brave-selfless-
+    // compassionate-keen one, ...), not four clones on one dial. Pure index expressions, NO rng
+    // draw, so the seeded streams stay bit-aligned. ponytail: reinforcements jitter only bravery
+    // (spawn_npc_if_due); greed/compassion/industry default 0 — jittering them is a follow-up.
     make_npc(reg, pos, Vec2{vel(rng), vel(rng)}, (i * 2 - 3) * 30, (3 - i * 2) * 30,
-             ((i % 2) * 2 - 1) * 75);
+             ((i % 2) * 2 - 1) * 75, ((i / 2) * 2 - 1) * 80);
   }
 
   // Two hostile creatures at opposite corners that hunt the nearest person (you or an
