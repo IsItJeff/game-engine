@@ -10,7 +10,7 @@ engine skeleton's ECS. It is the worked example of
 
 - **`Vital`** — a reusable "bar" stat: `current`, `max`, `regen_per_second`.
 - **`Stats`** — one component per entity that holds its vitals (its character sheet).
-- **`regenerate_vitals`** — a system that recovers each *passive* vital (health) toward its cap.
+- **`regenerate_vitals`** — a system that recovers each *passive* vital (health) toward its cap, faster the higher your Endurance (VIT), and **not at all while starving**.
 - **`update_stamina`** — a system that spends stamina while moving and restores it while still.
 - **`drain_hunger`** — a system that lowers the hunger Need over time (the first survival need); at empty it starves health.
 - **`DamagePlayer`** — a command that subtracts from a player's health, applied
@@ -80,6 +80,17 @@ runs **before** `regenerate_vitals` in `step()` on purpose (and a Downed player 
 *excluded* from regen): the other order would let the same tick's regen nudge a 0-health
 entity back above zero, and it would never die or stay down. The order of the system calls
 in `step()` is the definition of the tick — here it is load-bearing.
+
+There is a second load-bearing ordering, for the same reason. Endurance now *speeds* health
+regen (VIT governs a resource's capacity **and** its regen — the design's Toughness+Recovery
+pairing), which raises a subtle hazard: a hardy character's boosted regen could out-pace
+starvation and make it un-lethal. The fix is structural, not a number: `regenerate_vitals`
+**skips healing entirely while `hunger <= 0`**. Because `drain_hunger` runs first, hunger is
+already this tick's value when the gate reads it — so a starving character *never* heals, and
+starvation nets their health strictly downward at **any** regen rate. "You can't mend on an
+empty stomach" replaces the old fragile "starvation-per-second must stay above the fastest
+self-heal". (It does make starvation bite harder — a wounded starver no longer claws back the
+regen — which is the intended, more honest survival pressure.)
 
 Health also drops from *gameplay*, and that shows the other half of the rule.
 Touching a `Hazard` (a drifting mote) hurts whoever overlaps it — the player or an
