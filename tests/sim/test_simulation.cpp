@@ -1794,6 +1794,42 @@ TEST_CASE("the colony refills its NPCs after they're lost, up to a cap", "[sim]"
   REQUIRE(static_cast<int>(reg.storage<eng::sim::Npc>().size()) == eng::sim::kMaxNpcs);
 }
 
+TEST_CASE("reinforcement colonists roll varied archetypes, not just bravery", "[sim]") {
+  // Before archetypes, reinforcements varied ONLY bravery — greed/compassion/industry defaulted to
+  // 0 — so the colony drifted toward neutral as the hand-authored opening four died. Now each rolls
+  // a coherent archetype + jitter, so the ongoing population stays varied on all four wired axes.
+  eng::sim::World world;
+  entt::registry& reg = world.registry();
+
+  // Wipe the opening four (their spread is hand-authored) so ONLY reinforcements remain to inspect.
+  std::vector<entt::entity> openers;
+  for (const entt::entity e : reg.view<eng::sim::Npc>()) openers.push_back(e);
+  for (const entt::entity e : openers) reg.destroy(e);
+
+  // Refill: clear threats each tick so nothing culls the recovering colony (as the cap test does).
+  for (int i = 0; i < 90 * eng::sim::kTicksPerSecond; ++i) {
+    std::vector<entt::entity> threats;
+    for (const entt::entity e : reg.view<eng::sim::Enemy>()) threats.push_back(e);
+    for (const entt::entity e : reg.view<eng::sim::Hazard>()) threats.push_back(e);
+    for (const entt::entity e : threats) reg.destroy(e);
+    world.step();
+  }
+  REQUIRE(static_cast<int>(reg.storage<eng::sim::Npc>().size()) == eng::sim::kMaxNpcs);
+
+  // The refilled colonists vary on the axes that used to be flat zero — proof they roll archetypes,
+  // not the old bravery-only roll. (Would fail before: greed/compassion/industry were all 0.)
+  bool any_greed = false, any_compassion = false, any_industry = false;
+  for (const entt::entity e : reg.view<eng::sim::Npc, eng::sim::Personality>()) {
+    const eng::sim::Personality& p = reg.get<eng::sim::Personality>(e);
+    if (p.greed != 0) any_greed = true;
+    if (p.compassion != 0) any_compassion = true;
+    if (p.industry != 0) any_industry = true;
+  }
+  REQUIRE(any_greed);       // greed no longer defaults to 0...
+  REQUIRE(any_compassion);  // ...nor compassion...
+  REQUIRE(any_industry);    // ...nor industry — the archetype roll fills all four axes
+}
+
 TEST_CASE("a slain creature drops a health pickup", "[sim]") {
   entt::registry reg;
   const entt::entity foe = reg.create();

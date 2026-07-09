@@ -116,8 +116,16 @@ the coherence it completes — **every acting rung of the steer ladder now reads
 rescue-radius = bravery, rescue-speed = compassion, forage-threshold = greed, arm-up-radius =
 industry). Neutral 0 is the base radius exactly (bit-identical). The opening four NPCs get a fixed
 bravery/greed/compassion/industry spread (each a distinct four-axis combo), so the personalities
-read from frame one. (Reinforcements jitter bravery only for now; greed/compassion/industry jitters
-are a follow-up.)
+read from frame one.
+
+Ongoing **reinforcements** don't get that hand-authored spread — they follow the design's *"NPCs
+roll an **archetype** + jitter"*. Each arriving colonist picks one of a handful of coherent presets
+(a dependable **Stalwart**, a self-serving **Rogue**, a caring **Kindler**, a tireless **Drudge**)
+and wobbles each axis a little, so the colony stays as varied as the openers — and *coherent* (a
+recognizable character), not a random stat-blob — instead of drifting toward neutral as the first
+four die. The roll is deterministic (the spawner's own isolated RNG stream, draws sequenced). The
+design's other archetypes (Schemer, Zealot, Loner, Firebrand) join once loyalty and sociability are
+wired to tell them apart.
 
 This is the smallest honest seed of the master plan's **personality/morality** layer: axes that
 real behaviours *read* and that change visible motion. The remaining two (loyalty, sociability)
@@ -168,7 +176,7 @@ then act, is what stays.
 ## Key files
 
 - `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
-- `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` + `greed` + `compassion` + `industry` axes); `engine/sim/world.cpp` — `make_npc` sets it (fixed spread in `build_scene`, bravery jittered for reinforcements).
+- `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` + `greed` + `compassion` + `industry` axes); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
 - `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, and steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity).
 

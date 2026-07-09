@@ -137,6 +137,50 @@ void spawn_creature_if_due(entt::registry& reg, float& timer, std::mt19937& rng,
   }
 }
 
+// The design's "NPCs roll an ARCHETYPE + jitter": a reinforcement colonist picks one of these
+// coherent personality presets rather than independent random axes, so each is a recognizable
+// character (a dependable Stalwart, a self-serving Rogue) instead of a random stat-blob. Values
+// span the four WIRED axes (bravery, greed, compassion, industry) in [-100,100]; the design's other
+// archetypes (Schemer, Zealot, Loner, Firebrand) append here once loyalty/sociability are wired to
+// tell them apart. The opening four keep their hand-authored showcase spread (build_scene) — this
+// is only for the ongoing reinforcements. ponytail: the numbers are tuning knobs.
+constexpr std::array<Personality, 4> kArchetypes{{
+    {70, -40, 50, 60},  // Stalwart: brave, generous, kind, industrious — the dependable backbone
+    {-50, 80, -50, -30},  // Rogue: cowardly, greedy, callous, idle — out for itself
+    {30, -60, 85, 20},    // Kindler: brave-ish, very generous, deeply compassionate — the carer
+    {-10, 20, -15, 80},  // Drudge: timid and a touch selfish, but tireless — the heads-down worker
+}};
+
+// How far each axis wobbles off its archetype so two colonists of the same kind aren't clones —
+// small enough that the archetype stays recognizable. A tuning knob.
+constexpr int kArchetypeJitter = 15;
+
+// Nudge one axis by ±kArchetypeJitter, clamped to the [-100, 100] axis range. Draws once from the
+// spawner's own stream via the shared `unit` distribution.
+int jitter(std::int8_t base, std::mt19937& rng, std::uniform_real_distribution<float>& unit) {
+  const int delta =
+      static_cast<int>(unit(rng) * static_cast<float>(2 * kArchetypeJitter + 1)) - kArchetypeJitter;
+  int v = static_cast<int>(base) + delta;
+  if (v > 100) v = 100;
+  if (v < -100) v = -100;
+  return v;
+}
+
+// Roll a reinforcement's personality: pick an archetype, then jitter each axis. Draws are SEQUENCED
+// (the index first, then the four jitters in field order) so the result is deterministic same-build
+// — the same discipline the bravery draw used. Uses the spawner's OWN stream via `unit`/`rng`.
+Personality roll_archetype(std::mt19937& rng, std::uniform_real_distribution<float>& unit) {
+  const std::size_t which =
+      static_cast<std::size_t>(unit(rng) * static_cast<float>(kArchetypes.size()));
+  const Personality base = kArchetypes[which < kArchetypes.size() ? which : kArchetypes.size() - 1];
+  const int b = jitter(base.bravery, rng, unit);
+  const int g = jitter(base.greed, rng, unit);
+  const int c = jitter(base.compassion, rng, unit);
+  const int in = jitter(base.industry, rng, unit);
+  return Personality{static_cast<std::int8_t>(b), static_cast<std::int8_t>(g),
+                     static_cast<std::int8_t>(c), static_cast<std::int8_t>(in)};
+}
+
 // Keep the colony alive: on its own (slower) timer, wander a fresh colonist in from a
 // field edge when we're under the cap, so the NPCs creatures pick off (permadeath) are
 // replaced and the field doesn't slowly empty of the very people whose skirmishes make
@@ -169,15 +213,16 @@ void spawn_npc_if_due(entt::registry& reg, float& timer, std::mt19937& rng, floa
       pos = {kFieldWidth, along * kFieldHeight};
       break;  // right
   }
-  // A random bravery so reinforcement colonists keep varying past the opening four — drawn from
-  // this spawner's OWN isolated stream, never the combat/creature rng. SEQUENCE the draws into
-  // named locals before the call: the Vec2 braced-init fixes the two vel draws left-to-right, and
-  // this separate statement fixes the bravery draw AFTER them. Passing brave(rng) as a bare
-  // function argument would leave its order vs the vel draws unspecified — a cross-compiler
-  // determinism hole. Reuses `unit` (0..1) scaled to [-60, 60] rather than a new distribution.
+  // Each reinforcement rolls a coherent ARCHETYPE + jitter (the design's model), so the ongoing
+  // colony stays as varied as the opening four instead of drifting toward neutral as they die.
+  // Drawn from this spawner's OWN isolated stream, never the combat/creature rng. SEQUENCE the
+  // draws into named locals before the call: the Vec2 braced-init fixes the two vel draws
+  // left-to-right, then roll_archetype's draws follow in a separate statement. Passing draws as
+  // bare function arguments would leave their order vs the vel draws unspecified — a cross-compiler
+  // determinism hole.
   const Vec2 wander{vel(rng), vel(rng)};
-  const int bravery = static_cast<int>(unit(rng) * 121.0f) - 60;
-  make_npc(reg, pos, wander, bravery);
+  const Personality p = roll_archetype(rng, unit);
+  make_npc(reg, pos, wander, p.bravery, p.greed, p.compassion, p.industry);
 }
 
 // Build the opening scene: a controllable player in the centre, a few wandering
@@ -216,8 +261,8 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
     // and industry GROUPED (-80/-80/+80/+80, the first pair idle, the second keen), so each
     // colonist is a distinct FOUR-axis combo (a cowardly-greedy-callous-idle one, a brave-selfless-
     // compassionate-keen one, ...), not four clones on one dial. Pure index expressions, NO rng
-    // draw, so the seeded streams stay bit-aligned. ponytail: reinforcements jitter only bravery
-    // (spawn_npc_if_due); greed/compassion/industry default 0 — jittering them is a follow-up.
+    // draw, so the seeded streams stay bit-aligned. This hand-authored spread is the OPENING
+    // showcase; ongoing reinforcements instead roll a coherent archetype + jitter (roll_archetype).
     make_npc(reg, pos, Vec2{vel(rng), vel(rng)}, (i * 2 - 3) * 30, (3 - i * 2) * 30,
              ((i % 2) * 2 - 1) * 75, ((i / 2) * 2 - 1) * 80);
   }
