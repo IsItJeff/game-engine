@@ -284,6 +284,41 @@ TEST_CASE("fear beats hunger: a threatened NPC flees rather than forage", "[sim]
   REQUIRE(reg.get<eng::sim::Velocity>(npc).value.x < 0.0f);
 }
 
+TEST_CASE("bravery shapes how close a hazard gets before an NPC flees", "[sim]") {
+  // The first personality axis, read by steer_npcs' flee radius. Three NPCs all 100 units from
+  // one hazard (base sense radius is 120): a brave one (+100 -> radius 60) HOLDS (100 > 60), a
+  // neutral one (no Personality -> base 120) flees (100 < 120), a coward (-100 -> radius 180)
+  // flees too. Same distance, opposite reactions — and bravery 0/absent is the unchanged base.
+  entt::registry reg;
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Hazard>(hazard);
+
+  const entt::entity brave = reg.create();
+  reg.emplace<eng::sim::Transform>(brave, eng::Vec2{100.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(brave);  // starts at rest
+  reg.emplace<eng::sim::Npc>(brave);
+  reg.emplace<eng::sim::Personality>(brave, eng::sim::Personality{100});  // brave -> radius 60
+
+  const entt::entity neutral = reg.create();
+  reg.emplace<eng::sim::Transform>(neutral, eng::Vec2{0.0f, 100.0f});
+  reg.emplace<eng::sim::Velocity>(neutral);
+  reg.emplace<eng::sim::Npc>(neutral);  // NO Personality -> base radius 120
+
+  const entt::entity coward = reg.create();
+  reg.emplace<eng::sim::Transform>(coward, eng::Vec2{-100.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(coward);
+  reg.emplace<eng::sim::Npc>(coward);
+  reg.emplace<eng::sim::Personality>(coward, eng::sim::Personality{-100});  // coward -> radius 180
+
+  eng::sim::steer_npcs(reg);
+
+  REQUIRE(reg.get<eng::sim::Velocity>(brave).value.x == Approx(0.0f));  // never sensed it...
+  REQUIRE(reg.get<eng::sim::Velocity>(brave).value.y == Approx(0.0f));  // ...still at rest
+  REQUIRE(reg.get<eng::sim::Velocity>(neutral).value.y > 0.0f);  // neutral fled (base radius), away
+  REQUIRE(reg.get<eng::sim::Velocity>(coward).value.x < 0.0f);   // and the coward fled early too
+}
+
 TEST_CASE("an unarmed colonist steers toward a dropped weapon to arm up", "[sim]") {
   entt::registry reg;
   const entt::entity npc = reg.create();
