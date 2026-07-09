@@ -1646,6 +1646,24 @@ TEST_CASE("personality_tint warms the brave and cools the coward, neutral untint
   REQUIRE(brave.b == Approx(coward.r));
 }
 
+TEST_CASE("renown_scale grows a dot with positive standing and caps", "[sim]") {
+  // Pure presentation helper: renown (positive standing) swells a dot's size so you can watch a
+  // colonist earn repute. Neutral AND villainous standing draw at the authored size; renown rises
+  // to a capped maximum, so a hero looms but nobody balloons without bound.
+  REQUIRE(eng::sim::renown_scale(0) == 1.0f);  // neutral -> authored size EXACTLY (identity)
+  REQUIRE(eng::sim::renown_scale(-40) ==
+          1.0f);  // villainous -> also authored size (its cue is TODO)
+  REQUIRE(eng::sim::renown_scale(eng::sim::kRenownFullAt) ==
+          Approx(1.0f + eng::sim::kRenownMaxScale));  // full renown -> the max bump
+  REQUIRE(eng::sim::renown_scale(eng::sim::kRenownFullAt * 10) ==
+          Approx(1.0f + eng::sim::kRenownMaxScale));  // beyond full -> capped, no runaway
+
+  // Monotonic in between: a mid renown sits strictly between the neutral and capped ends.
+  const float mid = eng::sim::renown_scale(eng::sim::kRenownFullAt / 2);
+  REQUIRE(mid > 1.0f);
+  REQUIRE(mid < 1.0f + eng::sim::kRenownMaxScale);
+}
+
 TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it lands", "[sim]") {
   // The bootstrap: at Dexterity 1 you can't dodge yet, so the blow lands — but facing
   // it still trains Evasion and its Dexterity, which is what eventually lets you dodge.

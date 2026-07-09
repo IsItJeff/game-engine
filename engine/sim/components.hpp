@@ -196,6 +196,28 @@ inline Vec3 personality_tint(std::int8_t bravery) {
   return Vec3{1.0f + t * kPersonalityTintStrength, 1.0f, 1.0f - t * kPersonalityTintStrength};
 }
 
+// How much bigger a fully-renowned dot draws, and the standing it takes to get there — presentation
+// KNOBS. Renown (positive `standing`) is shown as PRESENCE (size), the channel the bravery tint
+// (colour) and wounded dimming (brightness) leave free, so the three cues never fight. ~10 kills or
+// ~13 rescues reaches the cap.
+inline constexpr float kRenownMaxScale = 0.3f;     // +30% radius at full renown
+inline constexpr std::int32_t kRenownFullAt = 50;  // standing at which the size bump caps
+
+// Presentation-only, the morality twin of personality_tint: how much to scale a dot's radius for a
+// character's RENOWN (its derived `standing`). Returns a >= 1.0 multiplier — 1.0 at neutral OR
+// villainous standing (<= 0), rising linearly to 1 + kRenownMaxScale at kRenownFullAt and CAPPING
+// there, so a celebrated colonist visibly looms while nobody balloons without bound. A pure
+// function of the scalar (the renderer computes standing() and passes it in), so it's unit-testable
+// and the sim never reads it. Villainy (negative standing) is left at authored size for now — its
+// own cue lands when villain deeds do.
+inline float renown_scale(std::int32_t standing_value) {
+  if (standing_value <= 0) return 1.0f;
+  const float t = standing_value >= kRenownFullAt
+                      ? 1.0f
+                      : static_cast<float>(standing_value) / static_cast<float>(kRenownFullAt);
+  return 1.0f + t * kRenownMaxScale;
+}
+
 // Marks an entity as dangerous to touch. An entity with a Hazard deals `damage`
 // to any player it overlaps and is then consumed — destroyed (see the
 // resolve_contacts system). The drifting motes have this: touch one, take a hit,
