@@ -104,6 +104,13 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
 // it).
 void tick_poison(entt::registry& reg, float dt);
 
+// Fly every in-flight Projectile toward its homing target and, on arrival, apply its carried damage
+// (crediting the owner Valor on a killing hit) and despawn. A shot whose target has died mid-flight
+// is despawned unhit (a wasted throw). The delayed-impact half of a throw (perform_throw launches
+// it). MUST run after integrate_motion (positions current) and before handle_deaths (a killed
+// target reaps the same tick). Draws no RNG.
+void advance_projectiles(entt::registry& reg, float dt);
+
 // Age every entity's HitFlash and remove the ones that have burned out. Pure
 // presentation upkeep — HitFlash is stamped at the damage sites so the renderer can
 // blink a struck dot white, and this fades it over kHitFlashSeconds. No rule reads it.

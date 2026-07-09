@@ -1060,13 +1060,15 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   // chipping an approaching swarm before it closes. Two things set it apart from a melee swing:
   //   - it draws NO RNG (no dodge, no crit, no execute) — a plain, reliable, MODEST hit, so ranged
   //     trades melee's burst potential for range and certainty; and
-  //   - it COSTS STAMINA, so you can soften a wave but not kite forever — spend the bar and you
-  //   drop
-  //     to the same exhausted crawl a sprint causes (update_stamina's gate). That cost is the whole
-  //     balance: without it, range with no downside would dominate melee.
-  // Player-only for now: there is no npc_throw system, so NPCs still only melee (a creature-ranged
-  // AI is a later ring). ponytail: instant hitscan — the target just blinks (stamp_flash); a
-  // visible projectile that travels is a presentation follow-up, not a mechanic change.
+  //   - it COSTS STAMINA. A standing character out-regenerates a slow plink, but throwing fast, or
+  //   on
+  //     the move (kiting drains far more than regen), empties the bar and drops you to the same
+  //     exhausted crawl a sprint causes (update_stamina's gate). So the cost keeps range honest:
+  //     you can soften an approach but can't burst a swarm down or kite one forever for free.
+  // The hit isn't dealt HERE — this LAUNCHES a homing Projectile that advance_projectiles flies to
+  // the target and lands on arrival (so a throw has a visible travel time, and is wasted if the
+  // target dies first). Player-only for now: there is no npc_throw, so NPCs still only melee (a
+  // creature-ranged AI, reusing the same Projectile, is a later ring).
   constexpr float kThrowRange = 350.0f;       // vastly longer than a melee swing's ~45 reach
   constexpr float kThrowStaminaCost = 15.0f;  // each connecting throw spends this
   constexpr float kBaseThrowDamage = 8.0f;  // raw before Dexterity (weaker than a melee swing's 12)
@@ -1111,16 +1113,54 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   const float raw =
       kBaseThrowDamage + static_cast<float>(attrs->dexterity.level - 1) * kDamagePerDexterity;
   const float applied = mitigate(raw, defence_of(reg, target));
-  if (Stats* st = reg.try_get<Stats>(target); st != nullptr) {
-    const bool was_alive = st->health.current > 0.0f;
-    st->health.current -= applied;
-    if (st->health.current < 0.0f) st->health.current = 0.0f;
-    stamp_flash(reg, target);
-    // A ranged kill is still a kill — credit Valor on the alive->dead transition, exactly as a
-    // melee killing blow does, so the morality ledger doesn't care which hand felled the foe.
-    if (was_alive && st->health.current <= 0.0f)
-      record_deed(reg, attacker, Deed::Valor, kValorKill);
+
+  // The hit isn't dealt here — instead we LAUNCH a homing Projectile carrying that (already
+  // mitigated) damage from the thrower toward the target. advance_projectiles flies it there and
+  // applies the blow (and the Valor credit) on arrival, so a throw now has a visible travel time
+  // and is wasted if the target dies first. The projectile carries its own render dot, so the
+  // renderer draws it with no extra plumbing.
+  const entt::entity shot = reg.create();
+  reg.emplace<Transform>(shot, origin);
+  reg.emplace<PrevTransform>(shot, origin);
+  reg.emplace<RenderDot>(shot, Vec3{1.0f, 0.95f, 0.4f}, 4.0f);  // a small bright-yellow bolt
+  reg.emplace<Projectile>(shot, Projectile{target, attacker, applied, kProjectileSpeed});
+}
+
+void advance_projectiles(entt::registry& reg, float dt) {
+  // Fly each in-flight shot toward its homing target; on arrival apply its carried damage and reap
+  // the shot. Collect-then-destroy so no view is invalidated mid-iteration (and so an impact that
+  // spawns nothing still safely removes the projectile after the loop).
+  std::vector<entt::entity> spent;
+  auto shots = reg.view<Projectile, Transform>();
+  for (const entt::entity s : shots) {
+    const Projectile& p = shots.get<Projectile>(s);
+    // Target gone (reaped mid-flight, or never valid) -> the throw is wasted; drop the shot.
+    const Transform* tgt = reg.valid(p.target) ? reg.try_get<Transform>(p.target) : nullptr;
+    if (tgt == nullptr) {
+      spent.push_back(s);
+      continue;
+    }
+    Vec2& pos = shots.get<Transform>(s).position;
+    const Vec2 to = tgt->position - pos;
+    const float dist = glm::length(to);
+    const float step = p.speed * dt;
+    if (dist <= step || dist < kProjectileHitRadius) {
+      // IMPACT — apply the carried (pre-mitigated) damage, exactly as the melee/throw damage sites
+      // do: chip HP, blink the target, and credit the OWNER Valor on the alive->dead transition.
+      if (Stats* st = reg.try_get<Stats>(p.target); st != nullptr) {
+        const bool was_alive = st->health.current > 0.0f;
+        st->health.current -= p.damage;
+        if (st->health.current < 0.0f) st->health.current = 0.0f;
+        stamp_flash(reg, p.target);
+        if (was_alive && st->health.current <= 0.0f && reg.valid(p.owner))
+          record_deed(reg, p.owner, Deed::Valor, kValorKill);
+      }
+      spent.push_back(s);
+    } else {
+      pos += (to / dist) * step;  // home in (dist > 0 here, so the divide is safe)
+    }
   }
+  for (const entt::entity s : spent) reg.destroy(s);
 }
 
 void npc_attack(entt::registry& reg, std::mt19937& rng) {

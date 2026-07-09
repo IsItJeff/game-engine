@@ -367,6 +367,7 @@ void World::step() {
   resolve_contacts(registry_);                     // motes shatter on contact
   resolve_creature_contacts(registry_, dt, rng_);  // creatures swing; player may dodge (DEX)
   tick_poison(registry_, dt);                      // venom from a swarmer's bite chips health...
+  advance_projectiles(registry_, dt);              // thrown shots fly to their target and land
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f},
                 dt);               // ...then 0-HP reaped
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
