@@ -26,6 +26,12 @@ constexpr std::int32_t kRescueCharity = 1;
 // deed unit, the offensive twin of a rescue's Charity. standing weights Valor ×5, so a slain
 // monster reads as +5 standing.
 constexpr std::int32_t kValorKill = 1;
+
+// How far a single deed nudges the actor's matching PERSONALITY axis (deed-driven DRIFT). Small and
+// bounded on purpose — the design wants "the war changed him", not a wholly different person: at 2
+// per deed a full ±100 swing takes ~50 deeds, so a demo's handful gives a visible-but-partial
+// shift. A tuning knob.
+constexpr int kDeedDriftStep = 2;
 }  // namespace
 
 void snapshot_previous(entt::registry& reg) {
@@ -925,6 +931,30 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
   // absent-ledger world is bit-identical to before morality existed. Touches no registry view, so
   // it is safe to call mid-iteration (as handle_deaths does).
   reg.get_or_emplace<BehaviorLedger>(actor).dims[static_cast<std::size_t>(kind)] += mag;
+
+  // DRIFT: a deed also nudges the actor's matching PERSONALITY axis a bounded step — the design's
+  // "you are what you do" made concrete, the bridge between the two P7 halves (the earned ledger
+  // reshapes the innate leaning). Fighting monsters hardens you (Valor -> bravery); hauling up the
+  // fallen softens you (Charity -> compassion). And because bravery is both the TINTED axis and the
+  // one steer_npcs reads twice, a fighter visibly warms and holds its ground — a character arc from
+  // deeds alone. `try_get`, NEVER get_or_emplace: an entity with no Personality (the player, every
+  // creature) must STAY Personality-free, or the bit-identical absent-Personality world breaks.
+  // Only the two wired deeds drift; the other four wire themselves the day their deeds land. Pure
+  // integer math (no RNG), clamped in int before the int8 cast so a long career can't overflow.
+  if (Personality* p = reg.try_get<Personality>(actor)) {
+    std::int8_t* axis = nullptr;
+    if (kind == Deed::Valor) {
+      axis = &p->bravery;
+    } else if (kind == Deed::Charity) {
+      axis = &p->compassion;
+    }
+    if (axis != nullptr) {
+      int v = static_cast<int>(*axis) + kDeedDriftStep;
+      if (v > 100) v = 100;
+      if (v < -100) v = -100;  // symmetric clamp — drift is positive today, ready for future deeds
+      *axis = static_cast<std::int8_t>(v);
+    }
+  }
 }
 
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
