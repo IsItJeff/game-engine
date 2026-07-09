@@ -280,6 +280,73 @@ TEST_CASE("a thirsty NPC steers toward the nearest water source", "[sim]") {
   REQUIRE(reg.get<eng::sim::Velocity>(sated).value.x == 0.0f);   // ...the sated one ignores it
 }
 
+TEST_CASE("grazing a food plot refills hunger and depletes its stock", "[sim]") {
+  // A FoodSource is the food twin of the pond, but FINITE: a grazer within reach eats (hunger up)
+  // and the plot's stock falls. Someone outside the radius eats nothing.
+  entt::registry reg;
+  const entt::entity plot = reg.create();
+  reg.emplace<eng::sim::Transform>(plot, eng::Vec2{0.0f, 0.0f});
+  eng::sim::FoodSource fs{};
+  fs.regrow_per_second = 0.0f;  // freeze regrowth so we measure pure depletion
+  reg.emplace<eng::sim::FoodSource>(plot, fs);
+
+  const entt::entity grazer = reg.create();
+  reg.emplace<eng::sim::Transform>(grazer, eng::Vec2{20.0f, 0.0f});  // within the plot radius (60)
+  reg.emplace<eng::sim::Stats>(grazer).hunger.current = 10.0f;       // hungry
+  const entt::entity away = reg.create();
+  reg.emplace<eng::sim::Transform>(away, eng::Vec2{300.0f, 0.0f});  // well outside
+  reg.emplace<eng::sim::Stats>(away).hunger.current = 10.0f;
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::graze(reg, dt);  // 1 second
+
+  REQUIRE(reg.get<eng::sim::Stats>(grazer).hunger.current > 10.0f);  // the grazer ate...
+  REQUIRE(reg.get<eng::sim::FoodSource>(plot).stock < 100.0f);       // ...drawing the plot down...
+  REQUIRE(reg.get<eng::sim::Stats>(away).hunger.current == Approx(10.0f));  // ...the far one didn't
+}
+
+TEST_CASE("a food plot regrows its stock over time, capped at its yield", "[sim]") {
+  // Renewable but finite: a picked-bare plot recovers over time, and never past its max_stock.
+  entt::registry reg;
+  const entt::entity plot = reg.create();
+  reg.emplace<eng::sim::Transform>(plot, eng::Vec2{0.0f, 0.0f});
+  eng::sim::FoodSource fs{};
+  fs.stock = 0.0f;  // picked bare, no grazers present
+  reg.emplace<eng::sim::FoodSource>(plot, fs);
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 3 * eng::sim::kTicksPerSecond; ++i) eng::sim::graze(reg, dt);  // 3s
+  REQUIRE(reg.get<eng::sim::FoodSource>(plot).stock > 0.0f);  // it recovered some...
+
+  // Run long past full: it holds AT max, never overgrows.
+  for (int i = 0; i < 90 * eng::sim::kTicksPerSecond; ++i) eng::sim::graze(reg, dt);
+  const eng::sim::FoodSource& grown = reg.get<eng::sim::FoodSource>(plot);
+  REQUIRE(grown.stock == Approx(grown.max_stock));
+}
+
+TEST_CASE("a hungry NPC forages a stocked food plot but ignores a bare one", "[sim]") {
+  // The forage rung now seeks food PLOTS as well as loot orbs — closing the "quiet corner with no
+  // orbs" starvation gap. A stocked plot pulls a hungry NPC in; a bare one (stock 0) isn't a meal.
+  const auto npc_steer_x = [](float plot_stock) {
+    entt::registry reg;
+    const entt::entity plot = reg.create();
+    reg.emplace<eng::sim::Transform>(plot,
+                                     eng::Vec2{200.0f, 0.0f});  // +x, inside forage radius 260
+    eng::sim::FoodSource fs{};
+    fs.stock = plot_stock;
+    reg.emplace<eng::sim::FoodSource>(plot, fs);
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Stats>(npc).hunger.current = 10.0f;  // hungry; full water -> not thirsty
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(npc).value.x;
+  };
+  REQUIRE(npc_steer_x(100.0f) > 0.0f);  // a stocked plot pulls the hungry NPC toward it (+x)...
+  REQUIRE(npc_steer_x(0.0f) == 0.0f);   // ...a bare one doesn't (falls through to drift, no weapon)
+}
+
 TEST_CASE("health regen scales with Endurance (VIT) when fed", "[sim]") {
   // The other half: a FED tougher character heals faster — VIT now speeds HP regen, mirroring
   // how it already speeds stamina recovery. Two wounded, fed entities differing only in Endurance.

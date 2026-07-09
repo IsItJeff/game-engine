@@ -147,12 +147,13 @@ steers it toward the nearest food orb, and it eats on arrival through the same
 the first *want-driven* NPC motion (until now they only ever fled), and it turns the loot
 orbs into a shared resource the colony competes over.
 
-!!! note "A known ceiling"
-    The only food is still loot orbs — dropped by creature deaths, so finite and clustered
-    where the fighting is. A colonist getting hungry in a quiet corner with no orbs nearby
-    can still starve. The full fix is a real food economy — crops, farming, stored meals —
-    a later survival slice; this is its seed. (The drain is also kept gentle so the 12 s
-    colony spawner out-paces attrition regardless.)
+!!! note "Two food sources now"
+    Loot orbs — dropped by creature deaths — are the scattered, one-shot food, clustered where
+    the fighting is. The **first piece of a real food economy** now sits alongside them: a fixed,
+    regrowing `FoodSource` plot a hungry colonist walks to and grazes (see [Food plots](#food-plots-a-renewable-source)
+    below), so a quiet corner *near a garden* no longer means starvation. The richer economy —
+    planted crops, farming, stored meals — grows from this seed. (The drain is also kept gentle so
+    the 12 s colony spawner out-paces attrition regardless.)
 
 **Water** is the fourth vital and the **second** Need — hunger's twin, and proof the Need shape
 generalises. It is the *same* falling `Vital` (`drain_water` mirrors `drain_hunger`: gentle at rest,
@@ -169,6 +170,18 @@ is *not* consumed, so you return to it and many can share it). That is the desig
 parity. Because the source is a place rather than scattered orbs, a colonist is *less* likely to die
 of thirst in a quiet corner than of hunger; it is the seed of the water economy (wells now, irrigated
 crops later).
+
+### Food plots: a renewable source
+
+Water's fixed pond has a food counterpart, but with a twist that makes it the seed of a *production*
+chain rather than a buffet. A **`FoodSource`** — a berry patch / garden — is a place a hungry
+colonist walks to and **`graze`**s to refill hunger, and the **forage rung** now steers toward the
+nearest food *plot* as well as the nearest loot orb (whichever is closer). Unlike the pond, a plot is
+**finite**: its `stock` falls as colonists eat and **regrows** over time toward `max_stock`, so a
+well-fed crowd picks a patch bare and it must recover before it feeds again — the design's
+renewable-but-finite crop. It closes the "starve in a quiet corner with no orbs" gap (there is always
+a plot to walk to) while adding a real resource dynamic: a small garden can't feed a big colony at
+once. Full player==NPC parity, like every other Need.
 
 ## Extending it
 
@@ -206,8 +219,8 @@ here.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `WaterSource`, `Hazard`, and the `Npc` marker.
-- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
+- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `WaterSource`, `FoodSource`, `Hazard`, and the `Npc` marker.
+- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `graze` (the regrowing food plots), `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
 - `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the wandering NPCs, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
 - `game/app/main.cpp` — the health, stamina, hunger, and water bars and the "NPCs alive" counter in the debug panel; `world.cpp`'s `make_water_source` places the pond.
 - `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, hunger/starvation/eating, and permadeath tests.
