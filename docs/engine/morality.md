@@ -80,18 +80,24 @@ swing on the already-dead foe.
 
 ## What to expect
 
-Nothing visible yet — `standing` has no reader in the sim (the social layer that will
-*react* to it is a later ring). Today it is exercised by tests: a rescuer's ledger
-gains Charity, a monster-slayer's gains Valor; a bystander, an unrescued timer-expiry
-respawn, and a chip that doesn't kill all record nothing. This is groundwork you feel
-later, when NPCs start treating a hero and a butcher differently.
+You can now **see** it: a character's dot **grows** with its positive `standing`, so a
+colonist that keeps rescuing allies and felling monsters visibly swells into a figure
+of repute. That is the first *reader* of `standing` — a presentation-only one (the
+renderer, never the sim, so determinism holds). **Size** is the free channel: colour
+already carries bravery, brightness carries health. Renown only rises so far (both
+deeds are positive); negative standing gets its own cue when villain deeds land. The
+*deeper* reader — NPCs that **act** on a character's standing (befriend, protect, fear)
+— is a later ring. Under the hood it is pinned by tests: a rescuer's ledger gains
+Charity, a monster-slayer's gains Valor; a bystander, an unrescued timer-expiry
+respawn, and a chip that doesn't kill all record nothing.
 
 ## The tradeoffs
 
-- **`standing` has no gameplay reader this slice.** It ships anyway because it is the
-  design's load-bearing claim (ledger → one derived scalar) and locking the *signed*
-  formula now makes the next, oppositely-signed deed purely additive. It is not dead:
-  the tests read it, pinning the negative-weight arithmetic before any negative deed.
+- **`standing` has no *gameplay* reader yet** — only a presentation one (the renderer
+  sizes the dot by it). The signed formula still ships in full because it is the design's
+  load-bearing claim (ledger → one derived scalar) and locking it now makes the next,
+  oppositely-signed deed purely additive; the tests pin its negative-weight arithmetic
+  before any negative deed exists.
 - **Magnitudes are hardcoded.** `kRescueCharity` is a constant; JSON-authored deed
   weights are a modding-milestone job. A tuning knob, not a design gap.
 - **`int32`, not fixed-point.** The ×5 integer trick sidesteps the codebase-wide
@@ -110,12 +116,15 @@ for free) lands when deeds start to matter over long play.
 ## Key files
 
 - `engine/sim/components.hpp` — `Deed` (the six dimensions), `BehaviorLedger` (the
-  earned counterpart of `Personality`), and the pure `standing` function.
+  earned counterpart of `Personality`), the pure `standing` function, and `renown_scale`
+  (the presentation twin of `personality_tint`).
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point);
   the Charity credit in `handle_deaths`' rescue branch, and the Valor credit in
   `perform_attack`'s killing-blow branch.
-- `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired rescue deed
-  with player==NPC parity, and the lazy no-deed-no-ledger path.
+- `game/app/main.cpp` — `draw_entities` scales a dot's radius by
+  `renown_scale(standing(...))`, so renown reads on screen.
+- `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired deeds with
+  player==NPC parity, the lazy no-deed-no-ledger path, and `renown_scale`.
 
 ## Go deeper
 
