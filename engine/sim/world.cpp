@@ -24,7 +24,7 @@ entt::entity make_mote(entt::registry& reg, Vec2 pos, Vec2 vel, Vec3 color) {
 // contact damage and could regenerate) and the Npc marker (so handle_deaths
 // destroys it on death rather than respawning it — permadeath). It is otherwise a
 // drifting dot, like a mote, but it is a *person* the world owns, not a hazard.
-entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel) {
+entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel, int bravery = 0) {
   const entt::entity e = reg.create();
   reg.emplace<Transform>(e, pos);
   reg.emplace<PrevTransform>(e, pos);
@@ -36,6 +36,9 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel) {
   reg.emplace<Attributes>(e);
   reg.emplace<CharacterLevel>(e);
   reg.emplace<Npc>(e);
+  // Its personality (P7 seed) — steer_npcs reads bravery to shape when it flees. Cast to the
+  // int8 field explicitly (the caller passes a plain int for convenience).
+  reg.emplace<Personality>(e, Personality{static_cast<std::int8_t>(bravery)});
   return e;
 }
 
@@ -163,7 +166,15 @@ void spawn_npc_if_due(entt::registry& reg, float& timer, std::mt19937& rng, floa
       pos = {kFieldWidth, along * kFieldHeight};
       break;  // right
   }
-  make_npc(reg, pos, Vec2{vel(rng), vel(rng)});
+  // A random bravery so reinforcement colonists keep varying past the opening four — drawn from
+  // this spawner's OWN isolated stream, never the combat/creature rng. SEQUENCE the draws into
+  // named locals before the call: the Vec2 braced-init fixes the two vel draws left-to-right, and
+  // this separate statement fixes the bravery draw AFTER them. Passing brave(rng) as a bare
+  // function argument would leave its order vs the vel draws unspecified — a cross-compiler
+  // determinism hole. Reuses `unit` (0..1) scaled to [-60, 60] rather than a new distribution.
+  const Vec2 wander{vel(rng), vel(rng)};
+  const int bravery = static_cast<int>(unit(rng) * 121.0f) - 60;
+  make_npc(reg, pos, wander, bravery);
 }
 
 // Build the opening scene: a controllable player in the centre, a few wandering
@@ -197,7 +208,10 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   for (int i = 0; i < 4; ++i) {
     const Vec2 pos{static_cast<float>((i + 1) * 200 % static_cast<int>(kFieldWidth)),
                    static_cast<float>((i + 1) * 140 % static_cast<int>(kFieldHeight))};
-    make_npc(reg, pos, Vec2{vel(rng), vel(rng)});
+    // A fixed personality spread — two cowards, two brave (-90/-30/+30/+90) — so the demo shows
+    // the range from the first frame. A pure index expression, NO rng draw, so the seeded
+    // streams stay bit-aligned (bravery for reinforcements is jittered in spawn_npc_if_due).
+    make_npc(reg, pos, Vec2{vel(rng), vel(rng)}, (i * 2 - 3) * 30);
   }
 
   // Two hostile creatures at opposite corners that hunt the nearest person (you or an

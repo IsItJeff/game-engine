@@ -61,6 +61,16 @@ struct PlayerControlled {
   float move_speed = 300.0f;
 };
 
+// A character's PERSONALITY — fixed innate leanings that BEHAVIOURS read to make decisions
+// (the P7 seed). The design's model has six int8 axes in [-100, +100]: bravery, compassion,
+// industry, loyalty, greed, sociability. This is the FIRST; the others append here as
+// behaviours grow to read them. Neutral 0 = "no leaning", so an entity with bravery 0 — or no
+// Personality at all — behaves exactly as it did before this existed (bit-identical).
+struct Personality {
+  std::int8_t bravery = 0;  // [-100 coward .. +100 brave]; shapes how near a hazard gets before
+                            // an NPC flees (steer_npcs). A coward bolts early, the brave hold.
+};
+
 // Marks an entity as a non-player character. Empty for now — its whole job is to
 // answer "is this a person the world runs, rather than the player?" so systems
 // can treat the two differently (most importantly: an NPC that dies is destroyed,

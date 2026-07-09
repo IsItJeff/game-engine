@@ -71,6 +71,23 @@ order of the calls in `step()` is load-bearing.
 The ECS filter does the targeting for free: `view<Npc, Transform, Velocity>` skips
 the player (no `Npc`) and the motes (no `Npc`) without a single `if`.
 
+### Personality: bravery shapes the flee distance (the P7 seed)
+
+The flee rung no longer treats every colonist alike. A new **`Personality`** component
+carries the design's first **P7** axis — **`bravery`** (an `int8` in `[-100, +100]`) — and
+`steer_npcs` reads it to scale the danger sense radius: `kSenseRadius × (1 − bravery/200)`. A
+**coward** (−100) senses a hazard from 1.5× as far and **bolts early**; a **brave** colonist
+(+100) shrinks its radius to half and **holds** until the hazard is nearly on top of it.
+Neutral `0` — or no `Personality` at all — is the base radius exactly, so this is bit-identical
+for anyone without a leaning (the player has none, and stays neutral). The opening four NPCs get
+a fixed spread (two cowards, two brave) so you can watch the difference from the first frame;
+reinforcements roll a random bravery from the spawner's *own* isolated RNG stream.
+
+This is the smallest honest seed of the master plan's **personality/morality** layer: one axis
+that a real behaviour *reads* and that changes visible motion. The other five axes (compassion,
+industry, loyalty, greed, sociability) append to the same struct as more behaviours grow to read
+them — a natural second read is the rescue rung (a coward abandons a risky save).
+
 !!! info "Greedy and memoryless — on purpose"
     It flees the *single nearest* threat, with no memory. An NPC can dodge one
     mote straight into another. That is fine: real steering behaviours (Reynolds)
@@ -91,9 +108,10 @@ wants, one ladder, chosen fresh each tick.
 
 - **O(NPCs × hazards) per tick.** Fine for a handful; a crowd needs a spatial
   grid — the same upgrade `resolve_contacts` wants, done once for both.
-- **Constants, not components.** Sense radius and flee speed are `constexpr`. When
-  an NPC needs its own values — a scout that sees farther — they become fields on
-  a component, and not before.
+- **Mostly constants, not components.** Flee speed is still `constexpr`; the sense
+  radius has now taken the first step off that — it's personalised per-NPC by
+  `Personality::bravery` (see above), the pattern a scout-that-sees-farther would extend.
+  The rest stay constants until a behaviour actually needs to vary them.
 
 ## Where it goes next
 
@@ -106,7 +124,8 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_weapon` do the wield-on-reach.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane, flee radius scaled by `Personality::bravery`); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` axis); `engine/sim/world.cpp` — `make_npc` sets it (fixed spread in `build_scene`, jittered for reinforcements).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
 - `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, and steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity).
 

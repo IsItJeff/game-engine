@@ -69,8 +69,15 @@ void steer_npcs(entt::registry& reg) {
     const Equipped* gear = reg.try_get<Equipped>(n);
     const float move_scale = gear != nullptr ? 1.0f - gear->move_penalty : 1.0f;
 
-    // Perception, priority 1 — danger: the single nearest hazard within sense range.
-    float nearest = kSenseRadius;
+    // Perception, priority 1 — danger: the single nearest hazard within sense range. How near a
+    // hazard gets before this NPC senses (and so flees) it is shaped by its BRAVERY: a coward
+    // senses danger from further and bolts EARLY; a brave colonist lets a hazard get close before
+    // it runs. No Personality (or bravery 0) → the base radius exactly, so this is bit-identical
+    // for anyone without a leaning. ponytail: 200 is the sensitivity knob (bravery ±100 →
+    // radius 0.5×..1.5× kSenseRadius). Cast the int8 to float BEFORE the divide (-Wconversion).
+    const Personality* pers = reg.try_get<Personality>(n);
+    const float bravery = pers != nullptr ? static_cast<float>(pers->bravery) : 0.0f;
+    float nearest = kSenseRadius * (1.0f - bravery / 200.0f);
     Vec2 threat{0.0f, 0.0f};
     bool sees_threat = false;
     for (const entt::entity h : hazards) {
@@ -97,8 +104,9 @@ void steer_npcs(entt::registry& reg) {
     // rather than food or fear — the concrete seed of the design's PROTECT stance. Reuses the
     // same "nearest X in radius, steer toward" shape as foraging, and outranks it: you drop
     // what you're doing to save someone.
-    // ponytail: no self-preservation gate — a rescuer will cross a creature swarm to reach
-    // you and may die en route; a P7 bravery-axis check is the upgrade path.
+    // ponytail: no self-preservation gate — a rescuer will cross a creature swarm to reach you
+    // and may die en route. Bravery now exists (it scales the flee radius above); a natural
+    // SECOND read is here — a coward abandons a risky rescue — but that is a later increment.
     entt::entity fallen = entt::null;
     float nearest_fallen = kRescueRadius;
     for (const entt::entity f : downed) {
