@@ -165,6 +165,17 @@ replay dodges the same blows every time.
     only the damage is skipped. Creatures don't grow, so their DEX is a fixed archetype
     trait, not something they train.
 
+### Raising a guard — active block (K)
+
+Dodge and armour are *passive* (a roll, a stat); **guard is a choice you make in the moment.**
+Hold **K** and you're `Blocking`: incoming creature blows are cut to `kBlockDamageFactor` (40%),
+enough to *tank* a swarm or hold through an enraged brute. The catch — and the reason it isn't free
+upside — is that a raised guard **roots you** to `kGuardMoveScale` (35%) of your speed: you trade
+mobility for mitigation. **Plant and tank, or move and dodge — not both.** It rides the per-tick
+`MovePlayer` command (a held key, not an edge event), so the stance lasts exactly as long as you hold
+it, and the softening system reads `Blocking` on *any* entity — so an NPC-guard behaviour would fall
+out for free (today only the player, being input-driven, ever guards).
+
 ### Keeping the fight alive — the spawners
 
 Killing everything used to leave the world quiet. `spawn_creature_if_due` (end of
@@ -355,8 +366,8 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts` (which applies venom), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash).
+- `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Blocking` (the raised guard), `Pickup`; `Hazard`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command` (`game/app/main.cpp` holds `K`).
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).

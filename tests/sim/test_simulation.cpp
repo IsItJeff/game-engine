@@ -2007,6 +2007,46 @@ TEST_CASE("a worn-down creature enrages and hits harder", "[sim]") {
   REQUIRE(wounded_hit > healthy_hit);          // ...and the cornered beast hit harder
 }
 
+TEST_CASE("a raised guard softens a creature's blow", "[sim]") {
+  // A Blocking victim takes less damage — the reward that pays for the mobility a guard costs.
+  const auto hit_damage = [](bool guarding) {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);
+    if (guarding) reg.emplace<eng::sim::Blocking>(victim);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});  // in contact
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Stats>(foe,
+                                 eng::sim::Vital{100.0f, 100.0f, 0.0f});  // full HP -> not enraged
+
+    std::mt19937 rng{1234};
+    const float before = reg.get<eng::sim::Stats>(victim).health.current;
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return before - reg.get<eng::sim::Stats>(victim).health.current;
+  };
+  REQUIRE(hit_damage(false) > 0.0f);              // an open stance takes the full blow...
+  REQUIRE(hit_damage(true) < hit_damage(false));  // ...a raised guard softens it
+}
+
+TEST_CASE("guarding slows the player's movement: the block's trade-off", "[sim]") {
+  // The cost that keeps a guard from being free upside: a guarding player crawls. Driven through
+  // the real MovePlayer command's `guard` flag, so the whole funnel is exercised.
+  const auto move_speed_x = [](bool guarding) {
+    eng::sim::World world;
+    const entt::entity player = world.player();
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, eng::Vec2{1.0f, 0.0f}, guarding));
+    world.step();
+    return world.registry().get<eng::sim::Velocity>(player).value.x;
+  };
+  const float open = move_speed_x(false);
+  const float guarded = move_speed_x(true);
+  REQUIRE(open > 0.0f);
+  REQUIRE(guarded > 0.0f);  // still moving — a crawl, not rooted...
+  REQUIRE(guarded < open);  // ...but slower than moving with an open stance
+}
+
 TEST_CASE("a high-Dexterity player dodges some blows but not all", "[sim]") {
   // Evasion softens the incoming stream but never negates it (capped at 50%): over many
   // swings a trained dodger slips some and eats others. Deterministic from the seed.

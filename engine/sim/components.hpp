@@ -286,6 +286,18 @@ struct Poisoned {
   float damage_per_second = 0.0f;  // health chipped each second while it lasts
 };
 
+// Marks a character holding a GUARD (a raised block). While present, incoming creature blows are
+// softened to kBlockDamageFactor of their damage — but the guarded stance ROOTS you to
+// kGuardMoveScale of your speed, so it's a real trade (plant-and-tank vs move-and-dodge), not free
+// upside. Set/cleared each tick by the MovePlayer command's `guard` flag (a held key), so it lasts
+// exactly as long as you hold it. An ACTIVE, input-driven choice, so today only the player guards;
+// the softening system already applies to anyone Blocking, so an NPC-guard behaviour is a
+// follow-up.
+struct Blocking {};
+inline constexpr float kBlockDamageFactor =
+    0.4f;  // fraction of a blow that gets through a raised guard
+inline constexpr float kGuardMoveScale = 0.35f;  // how much a guard slows you — the block's cost
+
 // A collectible a slain creature leaves behind: walk over it (collect_pickups) to
 // restore `heal` health AND permanently raise your max HP by `bonus_max_hp`, then it's
 // consumed. The first loot — winning the fight patches you up now and hardens you a

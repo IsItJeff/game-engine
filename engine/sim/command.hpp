@@ -52,11 +52,16 @@ struct Command {
 
   // DamagePlayer: how much health to remove.
   float amount = 0.0f;
+
+  // MovePlayer: is the player holding GUARD this tick? A raised block softens incoming creature
+  // blows but slows you (see Blocking). Sent every tick alongside the move direction, so it lasts
+  // exactly as long as the key is held.
+  bool guard = false;
 };
 
 // Convenience constructors, so call sites read as intent, not struct-filling.
-inline Command move_player(PlayerId player, Vec2 dir) {
-  return Command{CommandKind::MovePlayer, player, dir, {}};
+inline Command move_player(PlayerId player, Vec2 dir, bool guard = false) {
+  return Command{CommandKind::MovePlayer, player, dir, {}, 0.0f, guard};
 }
 inline Command spawn_mote(Vec2 pos) {
   return Command{CommandKind::SpawnMote, kLocalPlayer, {}, pos};
