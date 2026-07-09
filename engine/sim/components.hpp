@@ -6,6 +6,8 @@
 #include <utility>
 #include <vector>
 
+#include <entt/entity/fwd.hpp>  // entt::entity (a component stores one — the projectile's target/owner)
+
 #include "engine/core/fixed.hpp"
 #include "engine/core/math.hpp"
 #include "engine/sim/types.hpp"
@@ -302,6 +304,22 @@ struct Blocking {};
 inline constexpr float kBlockDamageFactor =
     0.4f;  // fraction of a blow that gets through a raised guard
 inline constexpr float kGuardMoveScale = 0.35f;  // how much a guard slows you — the block's cost
+
+// A projectile in flight — a thrown attack (perform_throw) made VISIBLE and given a travel time. It
+// HOMES on its `target`: advance_projectiles steers it there each tick and, on arrival, applies the
+// (already VIT-mitigated) `damage`, crediting `owner` with Valor on a killing hit. Homing (not
+// straight-line) so it reliably catches an APPROACHING creature — a straight shot aimed at where
+// the foe was would overshoot as it closes. It carries its own render dot, so the renderer draws it
+// for free. If the target dies mid-flight the shot is wasted (despawned) — the one cost of the
+// travel delay. This is the reusable seed of every future ranged effect (arrows, spit, bolts).
+struct Projectile {
+  entt::entity target;   // the Enemy it homes on (despawns if this becomes invalid)
+  entt::entity owner;    // who threw it — credited Valor on a killing hit
+  float damage = 0.0f;   // pre-mitigated at launch (homing keeps the same target, so VIT is fixed)
+  float speed = 600.0f;  // world units/second — faster than any creature, so it always converges
+};
+inline constexpr float kProjectileHitRadius = 10.0f;  // how close counts as an impact
+inline constexpr float kProjectileSpeed = 600.0f;     // a thrown shot's travel speed
 
 // A collectible a slain creature leaves behind: walk over it (collect_pickups) to
 // restore `heal` health AND permanently raise your max HP by `bonus_max_hp`, then it's

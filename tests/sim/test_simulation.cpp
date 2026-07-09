@@ -1656,6 +1656,7 @@ TEST_CASE("a thrown attack chips a distant creature and spends stamina", "[sim]"
   reg.emplace<eng::sim::Enemy>(foe);
 
   eng::sim::perform_throw(reg, atk);
+  eng::sim::advance_projectiles(reg, 1.0f);  // fly the launched shot home (one big step)
 
   REQUIRE(reg.get<eng::sim::Stats>(foe).health.current < 40.0f);  // the throw connected at range...
   REQUIRE(reg.get<eng::sim::Stats>(atk).stamina.current < stamina_before);  // ...and cost stamina
@@ -1748,10 +1749,60 @@ TEST_CASE("a killing throw earns Valor, exactly like a melee kill", "[sim]") {
   reg.emplace<eng::sim::Enemy>(foe);
 
   eng::sim::perform_throw(reg, atk);
+  eng::sim::advance_projectiles(reg, 1.0f);  // the shot flies home and fells the frail foe
 
   const eng::sim::BehaviorLedger* led = reg.try_get<eng::sim::BehaviorLedger>(atk);
   REQUIRE(led != nullptr);
   REQUIRE(eng::sim::standing(*led) == 5);  // a ranged kill is Valor ×5, same as a melee kill
+}
+
+TEST_CASE("a thrown shot travels: it lands on the target only after it flies there", "[sim]") {
+  // The projectile has a travel time — perform_throw LAUNCHES a homing shot, it doesn't hit
+  // instantly. So right after the throw the foe is untouched and a shot is airborne; the hit lands
+  // only once advance_projectiles flies it home.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::Stats>(atk);
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::perform_throw(reg, atk);
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == 40.0f);  // in flight -> not hit yet
+  REQUIRE(reg.storage<eng::sim::Projectile>().size() == 1u);       // ...and a shot is airborne
+
+  eng::sim::advance_projectiles(reg, 1.0f);                       // fly it home (one big step)
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current < 40.0f);  // now it landed...
+  REQUIRE(reg.storage<eng::sim::Projectile>().size() == 0u);      // ...and the shot is spent
+}
+
+TEST_CASE("a thrown shot whose target dies mid-flight is wasted, not orphaned", "[sim]") {
+  // The homing target can vanish before the shot arrives (another blow fells it first). The shot
+  // then despawns cleanly rather than dereferencing a dead entity — ASan would catch a stale read.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::Stats>(atk);
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe,
+                                   eng::Vec2{300.0f, 0.0f});  // far enough to still be in flight
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::perform_throw(reg, atk);
+  REQUIRE(reg.storage<eng::sim::Projectile>().size() == 1u);
+  reg.destroy(foe);  // the target dies before the shot arrives
+
+  eng::sim::advance_projectiles(reg, 1.0f / 60.0f);  // a normal step: can't home on a corpse
+  REQUIRE(reg.storage<eng::sim::Projectile>().size() == 0u);  // the shot was dropped, no crash
 }
 
 TEST_CASE("attacking a creature whittles its HP by Strength vs its VIT", "[sim]") {

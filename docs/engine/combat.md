@@ -211,8 +211,15 @@ approaching swarm before it reaches you**, not to replace melee, and two rules k
 
 It targets `Enemy` creatures only — never a peaceful colonist (villainy stays a deliberate melee
 choice) nor a mote. Player-only for now: there is no `npc_throw`, so NPCs still only melee.
-*ponytail:* the throw is an instant hitscan — the target just blinks (`stamp_flash`); a visible
-projectile that travels the gap is a presentation follow-up, not a mechanic change.
+
+A throw doesn't hit *instantly* — it **launches a homing `Projectile`** (a small bright bolt) that
+flies to the target and applies the blow on arrival (`advance_projectiles`). So a throw now has a
+visible travel, and it's **wasted if the target dies first** (its shot despawns unhit) — the one
+cost of the delay. The shot *homes* rather than flying straight so it reliably catches an
+approaching creature (a straight bolt aimed at where the foe *was* would overshoot as it closes on
+you). The `Projectile` is the reusable seed of every later ranged effect — arrows, spit, bolts — so
+a ranged *enemy* would fall out of the same primitive. *ponytail:* it homes and can't miss its
+target; a straight-line shot you must *lead* is a gameplay refinement, not a plumbing change.
 
 ### Keeping the fight alive — the spawners
 
@@ -404,8 +411,8 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Blocking` (the raised guard), `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, and *executes* a worn-down foe for bonus damage), `perform_throw` (the stamina-costed ranged option), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), and guard (K) inputs come from `game/app/main.cpp`.
+- `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Blocking` (the raised guard), `Projectile` (a thrown bolt in flight), `Pickup`; `Hazard`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, and *executes* a worn-down foe for bonus damage), `perform_throw` (the stamina-costed ranged option — launches a `Projectile`), `advance_projectiles` (flies each bolt home and lands it), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), and guard (K) inputs come from `game/app/main.cpp`.
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).
