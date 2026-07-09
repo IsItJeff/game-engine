@@ -186,7 +186,11 @@ void chase_prey(entt::registry& reg) {
   // fleeing its nearest hazard. This is what makes the world feel alive rather than
   // player-centric: creatures and NPCs actually war, and an NPC caught in the open can be
   // run down and killed for good (permadeath), not just the player.
-  auto prey = reg.view<Stats, Transform>(entt::exclude<Enemy>);
+  // exclude<Downed> too: a crumpled body is NOT prey — a creature ignores it and hunts whoever
+  // is still standing, so the fight moves on rather than a creature pointlessly camping a corpse.
+  // This is the shared "a Downed body is inert" invariant (regenerate_vitals, collect_pickups,
+  // and handle_deaths' rescuers already hold it); the two combat-damage views below match.
+  auto prey = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
   auto creatures = reg.view<Enemy, Transform, Velocity>();
   for (const entt::entity c : creatures) {
     const Vec2 c_pos = creatures.get<Transform>(c).position;
@@ -1046,7 +1050,10 @@ void resolve_contacts(entt::registry& reg) {
   // real fight you wear down with strikes (STR-vs-VIT), so ambient motes drift right
   // through it — otherwise a mote's raw damage would sidestep its VIT and could kill
   // it before you engaged. Fine for a handful; a real crowd wants a spatial grid.
-  auto targets = reg.view<Stats, Transform>(entt::exclude<Enemy>);
+  // exclude<Downed> too (the shared "a Downed body is inert" invariant): a mote drifts THROUGH a
+  // crumpled body without hitting it — so it isn't consumed and, crucially, the helpless body
+  // earns no free Toughness from a hazard it can't react to. A person is a target only while up.
+  auto targets = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
   auto hazards = reg.view<Hazard, Transform>();
   for (const entt::entity h : hazards) {
     const Vec2 h_pos = hazards.get<Transform>(h).position;
@@ -1075,13 +1082,15 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
   const Fixed kEvasionPerSwing = Fixed::from_int(10);  // XP for facing a swing, dodged or not
   std::uniform_real_distribution<float> unit(0.0f, 1.0f);
 
-  // Creatures hit whoever they're hunting — the player OR an NPC (same prey set as
-  // chase_prey: everything with Stats that isn't a creature). This runs before
-  // handle_deaths, so a creature you kill this tick can still land a last "dying blow"
-  // while at 0 HP — an accepted quirk, not a bug (reorder ahead of handle_deaths if
-  // that's ever unwanted).
+  // Creatures hit whoever they're hunting — the player OR an NPC (same prey set as chase_prey:
+  // Stats, not a creature, and — the shared "inert body" invariant — not Downed). A crumpled
+  // body is not swung at, so a helpless victim earns no free Evasion/Toughness/CharacterLevel XP
+  // and draws no dodge roll off the shared stream (that was a risk-free grind: go down beside a
+  // creature and farm attributes). The "dying blow at 0 HP" quirk is untouched: handle_deaths
+  // emplaces Downed AFTER this system, so the tick a victim crosses 0 it is not yet Downed and
+  // still takes that last hit — the exclusion only bites from the next tick, which is consistent.
   auto creatures = reg.view<Enemy, Transform>();
-  auto prey = reg.view<Stats, Transform>(entt::exclude<Enemy>);  // players + NPCs
+  auto prey = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);  // standing players + NPCs
   for (const entt::entity c : creatures) {
     Enemy& enemy = creatures.get<Enemy>(c);
     if (enemy.attack_timer > 0.0f) enemy.attack_timer -= dt;  // cooling down between swings
