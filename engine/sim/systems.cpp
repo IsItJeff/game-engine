@@ -127,7 +127,14 @@ void steer_npcs(entt::registry& reg) {
       // Only steer while still OUTSIDE revive range: an NPC already close enough must HOLD, or
       // it could nudge itself back out of range before handle_deaths (later this tick) revives.
       if (len > kReviveDistance) {
-        npcs.get<Velocity>(n).value = (toward / len) * kRescueSpeed * move_scale;
+        // COMPASSION (the third axis) scales rescue SPEED — a THIRD knob-shape, distinct from
+        // bravery's rescue RADIUS above: bravery decides WHETHER to cross the field, compassion
+        // HOW URGENTLY once committed. The compassionate sprint to the fallen; the callous trudge
+        // and, at the low end, physically can't beat the ~5s Downed timer. Neutral 0 -> unchanged
+        // (bit-identical). Reuses the `pers` already fetched; int8 cast to float before the divide.
+        const float compassion = pers != nullptr ? static_cast<float>(pers->compassion) : 0.0f;
+        npcs.get<Velocity>(n).value =
+            (toward / len) * kRescueSpeed * move_scale * (1.0f + compassion / 200.0f);
       }
       continue;  // committed to the rescue — don't also forage
     }
