@@ -447,6 +447,7 @@ enum class SkillId : std::uint16_t {
   Recovery,      // trained by resting to recover spent stamina; main attribute Endurance
   Evasion,       // trained by facing a creature's swing; main attribute Dexterity (dodging)
   Scavenging,    // trained by collecting loot; main attribute Luck (fortune -> crit)
+  Throwing,      // trained by landing a ranged throw; main attribute Dexterity (aim), a little STR
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a

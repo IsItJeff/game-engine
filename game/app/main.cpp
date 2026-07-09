@@ -238,7 +238,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "each its own slot; Q: drop the weapon again to shed the heft and move free. "
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "brute takes several, fewer as your Strength climbs (it hits harder), while "
-      "your VIT softens its blows — and standing to trade blows slowly trains Dexterity, "
+      "your VIT softens its blows. F: THROW at the nearest creature far out of melee reach — a "
+      "modest but reliable chip that SPENDS STAMINA (soften an approaching swarm, but you can't "
+      "kite forever); it trains Throwing -> Dexterity. Standing to trade blows slowly trains "
+      "Dexterity too, "
       "so before long some hits are dodged outright. Swing J at a peaceful COLONIST with no "
       "enemy in reach and you'll cut them down instead — a CRUEL act that sinks your standing "
       "(watch it and your title turn in the HUD); cross into villainy and colonists FLEE you on "
@@ -296,6 +299,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool space_was_down = false;
   bool hurt_was_down = false;
   bool attack_was_down = false;
+  bool throw_was_down = false;
   bool equip_was_down = false;
   bool drop_was_down = false;
 
@@ -345,6 +349,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::attack(eng::sim::kLocalPlayer)});
     }
     attack_was_down = attack_raw;
+
+    // F, edge-triggered, HURLS at the nearest hostile at range (perform_throw) — the player's
+    // ranged option. Costs stamina, so it's for softening an approaching swarm, not a melee
+    // replacement.
+    const bool throw_raw = keys[SDL_SCANCODE_F];
+    if (throw_raw && !throw_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::hurl(eng::sim::kLocalPlayer)});
+    }
+    throw_was_down = throw_raw;
 
     // E, edge-triggered, wields the nearest dropped weapon in reach (the steel-grey dots a
     // slain brute leaves). The server folds its mods into an Equipped cache — same funnel.
