@@ -98,6 +98,12 @@ void resolve_contacts(entt::registry& reg);
 // not a command (collision is the sim's own rule).
 void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng);
 
+// Age every Poisoned entity: chip its `health` by the venom's damage-per-second (routing a lethal
+// dose through the normal handle_deaths death path), count the timer down, and reap the status when
+// it wears off. The lingering-damage half of a venomous blow (resolve_creature_contacts applies
+// it).
+void tick_poison(entt::registry& reg, float dt);
+
 // Age every entity's HitFlash and remove the ones that have burned out. Pure
 // presentation upkeep — HitFlash is stamped at the damage sites so the renderer can
 // blink a struck dot white, and this fades it over kHitFlashSeconds. No rule reads it.

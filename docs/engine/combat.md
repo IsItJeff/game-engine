@@ -95,10 +95,12 @@ give waves texture:
 | Kind | HP | Chase speed | Hit | Dodge | Feel |
 |---|---|---|---|---|---|
 | **Brute** (red) | 40 | 70 | 15 | 0% | slow, tanky, hits hard — wear it down, kite it |
-| **Swarmer** (orange) | 15 | 130 | 8 | ~21% | fast, fragile (~one strike), weak, and *slippery* — but corners you in numbers |
+| **Swarmer** (orange) | 15 | 130 | 8 | ~21% | fast, fragile (~one strike), weak, *slippery*, and **venomous** — corners you in numbers, and its bite lingers |
 
 The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips ~1 strike in
-5, its innate Dexterity) — two archetypes that are hard to kill for opposite reasons.
+5, its innate Dexterity) *and venomous* — its bite leaves a poison that keeps chipping you after
+you break away, so the two archetypes threaten you for opposite reasons: the brute up front, the
+swarm on the retreat.
 
 - **HP** (a `Stats` component) that strikes whittle down; **no regen**, so you can wear
   it down. **VIT** (an `Attributes` component) softens the blows it takes.
@@ -109,6 +111,15 @@ The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips 
   its `attack_damage` to whoever it caught, *softened by that victim's VIT* (same
   `mitigate`), and trains their Toughness (via `train_on_damage`). Unlike a mote it is
   **not consumed** — it keeps swinging.
+- **Venom (`Poisoned` + `tick_poison`)** — a landed blow from a venomous archetype (a swarmer's
+  `Enemy::poison_per_second > 0`, "procs as data") also applies a `Poisoned` status that keeps
+  chipping the victim's `health` for a few seconds *after* the attacker moves on — routed through
+  the same `handle_deaths` path, so it can be lethal. Venom **suppresses healing** while it lasts
+  (`regenerate_vitals` skips a poisoned entity), so the chip lands in full rather than being
+  cancelled by regen; a tougher character resists via its bigger HP **pool** (VIT), not by
+  out-healing it. Refreshed on each fresh bite, reaped when it wears off, and cleared by a revive
+  (no lethal status survives being hauled up). Any victim, player or NPC (parity); brutes/sentinels
+  leave it `0`.
 - Motes are excluded from creatures (`entt::exclude<Enemy>` in `resolve_contacts`), so
   ambient hazards can't cheaply kill one and bypass its VIT.
 
@@ -339,8 +350,8 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Enemy`, `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash).
+- `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Pickup`; `Hazard`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack`, `chase_prey`, `resolve_creature_contacts` (which applies venom), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash).
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).

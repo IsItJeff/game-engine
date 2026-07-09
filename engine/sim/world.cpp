@@ -121,6 +121,10 @@ entt::entity make_swarmer(entt::registry& reg, Vec2 pos) {
   // hard to pin down — brutes (default DEX 1) never dodge. A tuning knob; creatures don't
   // grow, so this DEX stays fixed at the archetype's spawn value.
   reg.get<Attributes>(e).dexterity.level = 8;
+  // And VENOMOUS: a swarmer's bite leaves a lingering poison (tick_poison), so the fast swarm
+  // punishes you even after you break away — the brute hits harder up front, the swarmer's threat
+  // trails you. A knob (health/sec of venom); brutes/sentinels leave it 0 (not venomous).
+  reg.get<Enemy>(e).poison_per_second = 9.0f;
   return e;
 }
 
@@ -356,7 +360,9 @@ void World::step() {
   // definition of the tick — collision before death before heal.
   resolve_contacts(registry_);                     // motes shatter on contact
   resolve_creature_contacts(registry_, dt, rng_);  // creatures swing; player may dodge (DEX)
-  handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt);
+  tick_poison(registry_, dt);                      // venom from a swarmer's bite chips health...
+  handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f},
+                dt);               // ...then 0-HP reaped
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
   drink(registry_, dt);            // anyone standing in a water source refills their canteen
   graze(registry_, dt);  // ...and in a food plot refills hunger (the plot regrows/depletes)
