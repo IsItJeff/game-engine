@@ -135,9 +135,17 @@ void steer_npcs(entt::registry& reg) {
     // Priority 3 — hunger: a safe but hungry colonist seeks the nearest orb (its FIRST
     // want-driven motion; until now NPCs only ever fled). A fed one, or one with nothing in
     // range, FALLS THROUGH to arming up. It eats when it arrives, in collect_pickups.
+    // GREED (the second personality axis) shifts the forage THRESHOLD — a differently-shaped
+    // read than bravery's radius. A greedy colonist (reusing the `pers` fetched above) treats a
+    // higher fraction as "hungry", so it breaks off to hoard an orb while still well-fed; a
+    // selfless one lowers the bar and only forages when genuinely hungry, leaving food for
+    // others. Neutral 0 -> kHungerSeekFraction exactly (bit-identical). Range [-100,+100] keeps
+    // the fraction in [0.3, 0.9] — always < 1, so even a greedy NPC at FULL hunger isn't hungry.
+    const float greed = pers != nullptr ? static_cast<float>(pers->greed) : 0.0f;
+    const float seek_fraction = kHungerSeekFraction * (1.0f + greed / 200.0f);
     const Stats* stats = reg.try_get<Stats>(n);
     const bool hungry =
-        stats != nullptr && stats->hunger.current < stats->hunger.max * kHungerSeekFraction;
+        stats != nullptr && stats->hunger.current < stats->hunger.max * seek_fraction;
     if (hungry) {
       entt::entity meal = entt::null;
       float nearest_food = kForageRadius;

@@ -92,10 +92,19 @@ ground) but *grows* the rescue radius (commits further) — so on both rungs "br
 courageous choice. That two-behaviour payoff is what makes `Personality` earn its keep on its
 second use, not a one-off.
 
-This is the smallest honest seed of the master plan's **personality/morality** layer: one axis
-that two real behaviours *read* and that changes visible motion. The other five axes (compassion,
-industry, loyalty, greed, sociability) append to the same struct as more behaviours grow to read
-them.
+A **second axis, `greed`**, proves `Personality` bends to more than one *shape* of decision. It
+reads the **forage** rung — not a radius but a **need threshold**: the effective "am I hungry?"
+fraction is `kHungerSeekFraction × (1 + greed/200)`, so a **greedy** colonist (+greed) breaks off
+to hoard an orb while still well-fed, and a **selfless** one (−greed) leaves food for others and
+only forages when genuinely hungry. Because it scales a threshold rather than a distance, it
+isn't a bravery reskin — it demonstrates the axes generalise across different mechanisms. The
+opening four NPCs get a fixed bravery/greed spread (each a distinct combo — a cowardly hoarder, a
+brave altruist), so the personalities read from frame one. (Reinforcements jitter bravery only
+for now; a greed jitter is a follow-up.)
+
+This is the smallest honest seed of the master plan's **personality/morality** layer: axes that
+real behaviours *read* and that change visible motion. The remaining four (compassion, industry,
+loyalty, sociability) append to the same struct as more behaviours grow to read them.
 
 !!! info "Greedy and memoryless — on purpose"
     It flees the *single nearest* threat, with no memory. An NPC can dodge one
@@ -133,8 +142,8 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane, flee AND rescue radii scaled by `Personality::bravery`); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
-- `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` axis); `engine/sim/world.cpp` — `make_npc` sets it (fixed spread in `build_scene`, jittered for reinforcements).
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `Personality::greed` scales the forage threshold); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` + `greed` axes); `engine/sim/world.cpp` — `make_npc` sets it (fixed spread in `build_scene`, bravery jittered for reinforcements).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
 - `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, and steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity).
 
