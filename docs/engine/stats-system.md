@@ -20,12 +20,13 @@ engine skeleton's ECS. It is the worked example of
   system that damages a player who touches one and then destroys it (the drifting
   motes are consumed on contact).
 
-Honest scope: `health`, `stamina`, and `hunger` exist. Health regenerates, drops from a
+Honest scope: `health`, `stamina`, `hunger`, and `water` exist. Health regenerates, drops from a
 debug key and from touching a hazard, and reaching zero puts the player *Downed* (rescued
 by an ally or respawned on a timer). Stamina is
 spent by moving and recovers by resting; running it dry slows the player to a
 crawl. Hunger only ever falls (you refill it by *eating*, not resting) and starves you at
-empty. Death is respawn for the player and permadeath — destruction — for NPCs.
+empty; **water** is its twin — it falls too, you refill it by *drinking* at a pond, and empty it
+dehydrates you. Death is respawn for the player and permadeath — destruction — for NPCs.
 
 ## Why it's built this way
 
@@ -73,9 +74,10 @@ When health reaches zero, the player doesn't die outright — `handle_deaths` pu
 **Downed** (a `Downed{timer}` marker): crumpled where they fell, helpless. A living ally
 who reaches them revives them in place; otherwise the timer expires and they respawn at
 the spawn point. Either way they come back *whole* — full health, and **refilled needs**
-(hunger and stamina reset to max). That last part matters: hunger doesn't self-recover, so
-reviving a *starved* player with hunger still empty would drop them straight back down in a
-re-death loop — the revive clears all lethal state, not just the zero HP. `handle_deaths`
+(hunger, water, and stamina reset to max). That last part matters: neither hunger nor water
+self-recovers, so reviving a *starved* or *dehydrated* player with that need still empty would
+drop them straight back down in a re-death loop — the revive clears all lethal state, not just the
+zero HP. (Every Need added later must reset there for the same reason.) `handle_deaths`
 runs **before** `regenerate_vitals` in `step()` on purpose (and a Downed player is
 *excluded* from regen): the other order would let the same tick's regen nudge a 0-health
 entity back above zero, and it would never die or stay down. The order of the system calls
@@ -152,6 +154,22 @@ orbs into a shared resource the colony competes over.
     a later survival slice; this is its seed. (The drain is also kept gentle so the 12 s
     colony spawner out-paces attrition regardless.)
 
+**Water** is the fourth vital and the **second** Need — hunger's twin, and proof the Need shape
+generalises. It is the *same* falling `Vital` (`drain_water` mirrors `drain_hunger`: gentle at rest,
+faster while moving, never self-recovering), and at empty it **dehydrates** you — chipping `health`
+through the same `handle_deaths` path. The heal-gate simply grew one clause: `regenerate_vitals`
+skips healing while `hunger <= 0` **or** `water <= 0`, so the two needs compose and either one nets
+your health strictly downward.
+
+What makes Water *distinct* from hunger is how you refill it. Hunger rides on combat loot (eat an
+orb). Water has a **fixed source** — a `WaterSource` pond you **`drink`** from by standing in it (it
+is *not* consumed, so you return to it and many can share it). That is the design's spatial
+"walk-to-the-well" loop, and NPCs run it too: a thirsty colonist (a new **thirst rung** in
+`steer_npcs`, just below hunger) steers to the nearest pond and drinks on arrival — full player==NPC
+parity. Because the source is a place rather than scattered orbs, a colonist is *less* likely to die
+of thirst in a quiet corner than of hunger; it is the seed of the water economy (wells now, irrigated
+crops later).
+
 ## Extending it
 
 Every one of these is a small, contained change — the system is made to grow
@@ -188,10 +206,10 @@ here.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger), `Hazard`, and the `Npc` marker.
-- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals`, `update_stamina`, `drain_hunger`, `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
+- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `WaterSource`, `Hazard`, and the `Npc` marker.
+- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
 - `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the wandering NPCs, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
-- `game/app/main.cpp` — the health, stamina, and hunger bars and the "NPCs alive" counter in the debug panel.
+- `game/app/main.cpp` — the health, stamina, hunger, and water bars and the "NPCs alive" counter in the debug panel; `world.cpp`'s `make_water_source` places the pond.
 - `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, hunger/starvation/eating, and permadeath tests.
 
 ## Go deeper

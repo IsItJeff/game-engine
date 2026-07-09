@@ -65,6 +65,17 @@ void update_stamina(entt::registry& reg, float dt);
 // character dies through the normal handle_deaths path. The first survival Need (P6).
 void drain_hunger(entt::registry& reg, float dt);
 
+// Drain the Water need: the twin of drain_hunger for the SECOND survival Need. Every person loses
+// water each tick, faster while moving; at 0 they dehydrate, chipping health through the same death
+// path. Refilled not by orbs but by the `drink` system at a fixed WaterSource — the design's "walk
+// to the well" loop. (P6.)
+void drain_water(entt::registry& reg, float dt);
+
+// Refill Water: every person standing within a WaterSource's radius drinks — its water rises toward
+// full while it lingers. The source is NOT consumed (unlike a food orb), so it's a place you return
+// to. Downed bodies and creatures don't drink. (P6.)
+void drink(entt::registry& reg, float dt);
+
 // Resolve contact damage: any entity with Stats (the player or an NPC) that
 // overlaps a Hazard takes its `damage`, and the hazard is then consumed
 // (destroyed). A SYSTEM, not a command — collision is the sim's own rule, so it

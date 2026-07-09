@@ -20,6 +20,20 @@ entt::entity make_mote(entt::registry& reg, Vec2 pos, Vec2 vel, Vec3 color) {
   return e;
 }
 
+// Create a fixed WaterSource — a pond a thirsty colonist walks to and drinks from (the `drink`
+// system). Transform + PrevTransform so the renderer draws it (a still, dark-blue disc — it never
+// moves), RenderDot sized to its drink `radius` so the visible pool IS the reach, and WaterSource
+// itself. No Stats/Velocity: it's scenery, not a person.
+entt::entity make_water_source(entt::registry& reg, Vec2 pos, float radius) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.15f, 0.4f, 0.65f},
+                         radius);  // deep-blue pool, drawn at its reach
+  reg.emplace<WaterSource>(e, WaterSource{radius});
+  return e;
+}
+
 // Create one NPC: a wandering non-player character. It has Stats (so it takes
 // contact damage and could regenerate) and the Npc marker (so handle_deaths
 // destroys it on death rather than respawning it — permadeath). It is otherwise a
@@ -231,6 +245,12 @@ void spawn_npc_if_due(entt::registry& reg, float& timer, std::mt19937& rng, floa
 entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   const Vec2 center{kFieldWidth * 0.5f, kFieldHeight * 0.5f};
 
+  // A single pond in the lower field — the colony's water. Created FIRST so it draws UNDER everyone
+  // who walks into it. Off-centre so it's a landmark to walk to, not underfoot at spawn. One well
+  // is the seed of the water economy; wander thirsty and you'll watch colonists peel off to drink
+  // here.
+  make_water_source(reg, Vec2{center.x, kFieldHeight * 0.8f}, 60.0f);
+
   const entt::entity player = reg.create();
   reg.emplace<Transform>(player, center);
   reg.emplace<PrevTransform>(player, center);
@@ -311,6 +331,7 @@ void World::step() {
   npc_attack(registry_, rng_);     // NPCs strike any hazard now in reach (positions are current)
   update_stamina(registry_, dt);   // moving costs stamina; resting restores it
   drain_hunger(registry_, dt);     // people get hungry; starving (0) chips health before deaths
+  drain_water(registry_, dt);      // ...and thirsty; dehydrating (0) chips health the same way
   advance_progression(registry_);  // activity -> skill+attribute XP -> level -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
   // Collision runs after movement (positions are current), then death is checked
@@ -320,6 +341,7 @@ void World::step() {
   resolve_creature_contacts(registry_, dt, rng_);  // creatures swing; player may dodge (DEX)
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt);
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
+  drink(registry_, dt);            // anyone standing in a water source refills their canteen
   npc_equip(registry_);            // unarmed NPCs wield a dropped weapon they've reached
   regenerate_vitals(registry_, dt);
   decay_flashes(registry_, dt);  // age the hit-flashes left by this tick's blows (presentation)

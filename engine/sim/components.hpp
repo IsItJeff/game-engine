@@ -336,6 +336,21 @@ struct Stats {
   // to starve (it chips health, killing you through the normal death path). The first of
   // Food/Water/Fatigue; the same Vital shape, the "you must feed the colony" pressure.
   Vital hunger{100.0f, 100.0f, 0.0f};  // falls over time; 0 = starving
+  // A SECOND survival Need, Water — the same falling Vital as hunger, but refilled at a fixed
+  // WaterSource (the drink system) rather than by eating orbs, so it drives the design's "walk to
+  // the well" spatial loop. Empty it and you DEHYDRATE: it chips health through the same death path
+  // as starving. Falls independently of hunger, so a colonist can be watered yet starving, or vice
+  // versa.
+  Vital water{100.0f, 100.0f, 0.0f};  // falls over time; 0 = dehydrating
+};
+
+// A fixed drinking spot — a pond or well the `drink` system tops nearby thirsty characters up from,
+// WITHOUT being consumed (unlike a one-shot food orb). `radius` is how close you must be to drink.
+// The seed of the design's water economy (wells now, irrigated crops later); a thirsty NPC walks to
+// the nearest one (steer_npcs). Drawn like any entity if given a RenderDot — the sim never reads
+// it.
+struct WaterSource {
+  float radius = 60.0f;
 };
 
 // --- Progression: skills feed attributes ---
