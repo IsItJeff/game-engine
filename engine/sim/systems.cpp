@@ -104,11 +104,16 @@ void steer_npcs(entt::registry& reg) {
     // rather than food or fear — the concrete seed of the design's PROTECT stance. Reuses the
     // same "nearest X in radius, steer toward" shape as foraging, and outranks it: you drop
     // what you're doing to save someone.
-    // ponytail: no self-preservation gate — a rescuer will cross a creature swarm to reach you
-    // and may die en route. Bravery now exists (it scales the flee radius above); a natural
-    // SECOND read is here — a coward abandons a risky rescue — but that is a later increment.
+    // BRAVERY reads a SECOND time here (the same value used for the flee radius above), and this
+    // is the self-preservation the flee comment used to promise: it scales how far an NPC will
+    // COMMIT to a rescue. A brave colonist crosses the field to save someone (radius grows); a
+    // coward won't make the risky trek and only helps an ally close by (radius shrinks). Note the
+    // sign is OPPOSITE the flee radius — there, higher bravery SHRINKS the radius (holds ground);
+    // here it GROWS it (commits further) — so on both rungs "braver" is the courageous choice.
+    // Neutral 0 = kRescueRadius exactly (bit-identical). ponytail: still no *en-route* danger
+    // check (distance is the risk proxy); a hazard-aware path cost is the richer future version.
     entt::entity fallen = entt::null;
-    float nearest_fallen = kRescueRadius;
+    float nearest_fallen = kRescueRadius * (1.0f + bravery / 200.0f);
     for (const entt::entity f : downed) {
       const float d = glm::distance(pos, downed.get<Transform>(f).position);
       if (d < nearest_fallen) {
