@@ -304,8 +304,15 @@ void steer_npcs(entt::registry& reg) {
     // priority (never overrides a real need — a hungry or endangered colonist ignores the hero).
     // Player-only (only a player earns standing today); no ledger or standing < kKnownAt -> no
     // pull, so a neutral/villain player draws nobody and the pre-hero world is bit-identical.
+    //
+    // SOCIABILITY (the fifth axis) scales the rally RADIUS, reusing industry's radius SHAPE on this
+    // social want — so the rally rung, like every other acting rung, now reads a trait. A sociable
+    // colonist (+) crosses the field to gather round a champion; a loner (-) rallies only to one
+    // practically underfoot. Neutral 0 -> kRallyRadius exactly (bit-identical). Reuses the `pers`
+    // fetched at the top of the loop; cast to float before the divide (-Wconversion).
+    const float sociability = pers != nullptr ? static_cast<float>(pers->sociability) : 0.0f;
     entt::entity champion = entt::null;
-    float nearest_hero = kRallyRadius;
+    float nearest_hero = kRallyRadius * (1.0f + sociability / 200.0f);
     auto heroes = reg.view<PlayerControlled, Transform>();
     for (const entt::entity h : heroes) {
       const BehaviorLedger* led = reg.try_get<BehaviorLedger>(h);
