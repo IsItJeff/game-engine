@@ -130,6 +130,12 @@ void decay_flashes(entt::registry& reg, float dt);
 // it the same way just by calling this. A no-op for entities without Skills.
 void train_on_damage(entt::registry& reg, entt::entity victim, float damage);
 
+// Stamp a fresh white hit-flash on an entity that just took a blow — presentation only (the
+// renderer blinks it; no rule reads HitFlash). Public so every damage source shares one "blink on
+// a hit": the systems contact/attack/projectile sites and the DamagePlayer command alike. Draws no
+// RNG; emplace_or_replace refreshes rather than stacks.
+void stamp_flash(entt::registry& reg, entt::entity e);
+
 // Resolve one melee swing for `attacker`: find the nearest attackable target (a
 // Hazard mote OR a hostile Enemy) within reach (reach grows with Strength), train
 // Striking -> Strength for a connecting strike, and act by target kind:

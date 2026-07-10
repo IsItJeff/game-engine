@@ -1122,6 +1122,20 @@ TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   REQUIRE(after == Approx(before - 25.0f).margin(0.5f));
 }
 
+TEST_CASE("a DamagePlayer command blinks the player white: hit-flash parity", "[sim]") {
+  // Every OTHER damage source (creature melee, a hazard mote, a projectile) stamps a hit-flash on
+  // its victim; the DamagePlayer command must do the same, so a hit through the funnel gives the
+  // player the same "I got hit" feedback. No flash while unhurt; a HitFlash once the command lands.
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  REQUIRE_FALSE(world.registry().all_of<eng::sim::HitFlash>(player));  // unhurt: no flash
+
+  world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 15.0f));
+  world.step();
+
+  REQUIRE(world.registry().all_of<eng::sim::HitFlash>(player));  // took a hit -> blinks white
+}
+
 TEST_CASE("a lethal hit downs the player in place, not an instant respawn", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
