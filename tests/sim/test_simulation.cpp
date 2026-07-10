@@ -1632,6 +1632,31 @@ TEST_CASE("an idle colonist drifts toward a friend it has bonded with", "[sim]")
   REQUIRE(colonist_velocity_x(400.0f) == Approx(0.0f));  // friend past the bond radius -> no pull
 }
 
+TEST_CASE("a grudge-holder keeps its distance: an idle colonist backs away from the resented",
+          "[sim]") {
+  // The ACTIVE completion of a grudge and the negative twin of the bond pull above: an idle
+  // colonist that resents a nearby (non-downed) entity — affinity <= the grudge threshold, e.g. a
+  // player who struck it — steers AWAY from it, where a friend it would drift toward. A neutral tie
+  // triggers neither (it stays idle); a positive tie falls through to the bond pull. Base avoid
+  // radius 150.
+  const auto colonist_velocity_x = [](std::int8_t affinity) {
+    entt::registry reg;
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    const entt::entity other = reg.create();
+    reg.emplace<eng::sim::Transform>(other, eng::Vec2{100.0f, 0.0f});  // 100 away, +x (within 150)
+    eng::sim::nudge_affinity(reg, colonist, other, affinity);          // how it regards `other`
+
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(colonist_velocity_x(-30) < 0.0f);         // resented (<= -20) -> backs AWAY (-x)
+  REQUIRE(colonist_velocity_x(0) == Approx(0.0f));  // neutral -> neither avoid nor bond -> idle
+  REQUIRE(colonist_velocity_x(30) > 0.0f);          // a friend (>= +10) -> bond pull draws it (+x)
+}
+
 TEST_CASE("loyalty shapes how far a colonist follows a bonded friend", "[sim]") {
   // The SIXTH and last personality axis, read by the bond-pull radius exactly as sociability reads
   // the rally radius (so every acting steer rung now reads a trait, and all six axes are wired).
