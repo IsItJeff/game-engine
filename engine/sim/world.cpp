@@ -131,18 +131,20 @@ entt::entity make_swarmer(entt::registry& reg, Vec2 pos) {
 // A SPITTER: the ranged artillery — the hostile mirror of the player's throw, and the payoff of the
 // Projectile primitive. Fragile (25 HP) and SLOW (chase 55, it hangs back) with only a feeble bite
 // (attack_damage 4), but it launches a homing spit from well out of your melee reach (spit_range
-// 250 > a swing's ~45) that chips you every ~1.5s. So it flips the usual pressure: you must CLOSE
-// on it (or throw back) to shut it down, rather than kite. On death it drops its VENOM FANG (a
-// venom weapon) — closing on the caustic artillery arms you with a poison blade, giving the venom
-// weapon a renewable battlefield source (the spitter is the rare 15% spawn, so fangs don't flood
-// the field the way a swarmer drop would). ponytail: HP/speed/range/damage and its spawn share are
-// balance knobs.
+// 250 > a swing's ~45) that chips you every ~1.5s — and the spit is VENOMOUS: a hit ENVENOMS you
+// (Poisoned, the ranged echo of a swarmer's bite), so a shot keeps chipping after it lands, and you
+// must CLOSE on it (or throw back) to shut it down rather than kite. On death it drops its VENOM
+// FANG (a venom weapon) — fitting for a venom creature, and closing on the caustic artillery arms
+// you with the poison blade, giving it a renewable battlefield source (the rare 15% spawn, so fangs
+// don't flood the field the way a swarmer drop would). ponytail: HP/speed/range/damage/venom and
+// its spawn share are balance knobs.
 entt::entity make_spitter(entt::registry& reg, Vec2 pos) {
   const entt::entity e = make_creature(reg, pos, 25.0f, 55.0f, 4.0f, 1, Vec3{0.6f, 0.25f, 0.7f},
                                        7.0f);  // violet
   Enemy& enemy = reg.get<Enemy>(e);
   enemy.spit_range = 250.0f;
   enemy.spit_damage = 7.0f;
+  enemy.poison_per_second = 5.0f;      // the spit is venomous — it envenoms on hit (a knob)
   enemy.drop = DropKind::VenomWeapon;  // the poison-build blade's renewable source
   return e;
 }

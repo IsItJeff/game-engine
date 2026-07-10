@@ -313,15 +313,16 @@ struct Enemy {
   float attack_timer = 0.0f;            // seconds until it can swing again; 0 = ready
   float chase_speed = 70.0f;            // how fast it closes on its prey (chase_prey)
   DropKind drop = DropKind::HealthOrb;  // on death: what this archetype leaves behind
-  // If > 0, a landed blow also ENVENOMS the victim: it applies a Poisoned that chips health for a
+  // If > 0, a landed attack also ENVENOMS the victim: it applies a Poisoned that chips health for a
   // while after. 0 = not venomous. "Procs as data" (the design's P4) — an archetype knob, not a
-  // special case in the combat code. Swarmers are venomous; brutes/sentinels aren't.
+  // special case in the combat code. Both the swarmer's BITE (resolve_creature_contacts) and the
+  // spitter's SPIT (which carries this on its Projectile) read it; brutes/sentinels leave it 0.
   float poison_per_second = 0.0f;
   // If spit_range > 0 this creature is a RANGED attacker: creature_spit periodically launches a
   // Projectile (the same primitive the player's throw uses) at the nearest person within
   // spit_range, dealing spit_damage on impact. 0 = melee-only (the default). More "procs as data" —
-  // a spitter is just these three knobs, no new creature class. spit_timer counts down to its next
-  // spit.
+  // a spitter is just these ranged knobs (plus poison_per_second above, so its spit envenoms), no
+  // new creature class. spit_timer counts down to its next spit.
   float spit_range = 0.0f;
   float spit_damage = 0.0f;
   float spit_timer = 0.0f;
@@ -360,12 +361,18 @@ inline constexpr float kGuardMoveScale = 0.35f;  // how much a guard slows you �
 // straight-line) so it reliably catches an APPROACHING creature — a straight shot aimed at where
 // the foe was would overshoot as it closes. It carries its own render dot, so the renderer draws it
 // for free. If the target dies mid-flight the shot is wasted (despawned) — the one cost of the
-// travel delay. This is the reusable seed of every future ranged effect (arrows, spit, bolts).
+// travel delay. This is the reusable seed of every ranged effect: the player's throw and the
+// spitter's (venomous) spit ride it already; arrows and bolts would too.
 struct Projectile {
   entt::entity target;   // the Enemy it homes on (despawns if this becomes invalid)
   entt::entity owner;    // who threw it — credited Valor on a killing hit
   float damage = 0.0f;   // pre-mitigated at launch (homing keeps the same target, so VIT is fixed)
   float speed = 600.0f;  // world units/second — faster than any creature, so it always converges
+  // If > 0, a landed shot also ENVENOMS its target (applies Poisoned), the RANGED echo of a
+  // swarmer's venomous bite — a venom spitter's spit carries this; the player's plain throw leaves
+  // it 0. Placed LAST so the existing positional Projectile{target, owner, damage, speed} inits
+  // keep meaning.
+  float poison_per_second = 0.0f;
 };
 inline constexpr float kProjectileHitRadius = 10.0f;  // how close counts as an impact
 inline constexpr float kProjectileSpeed = 600.0f;     // a thrown shot's travel speed

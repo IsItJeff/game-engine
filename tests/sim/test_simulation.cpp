@@ -2169,6 +2169,22 @@ TEST_CASE("a spitter launches a homing spit at a person in range", "[sim]") {
   REQUIRE(reg.get<eng::sim::Stats>(victim).health.current < 50.0f);  // the spit chipped the victim
 }
 
+TEST_CASE("a venom spitter's spit envenoms its target; a plain one doesn't", "[sim]") {
+  // The spit carries the spitter's own poison_per_second as its payload, so a VENOM spitter's shot
+  // leaves the struck person Poisoned (the ranged echo of a swarmer's bite) while a plain shot (or
+  // the player's throw, which carries poison 0 through the same Projectile) just chips.
+  const auto poisoned_after_spit = [](float spitter_poison) {
+    entt::registry reg;
+    const auto [spitter, victim] = make_spitter_and_person(reg, 100.0f, 7.0f, false);
+    reg.get<eng::sim::Enemy>(spitter).poison_per_second = spitter_poison;  // venomous or not
+    eng::sim::creature_spit(reg, 1.0f / 60.0f);  // launch the spit (carrying the venom)
+    eng::sim::advance_projectiles(reg, 1.0f);    // fly it home and land it
+    return reg.all_of<eng::sim::Poisoned>(victim);
+  };
+  REQUIRE(poisoned_after_spit(5.0f));        // a venom spit leaves the victim poisoned...
+  REQUIRE_FALSE(poisoned_after_spit(0.0f));  // ...a plain spit (poison 0, like a throw) does not
+}
+
 TEST_CASE("a spitter with no one in range holds its fire", "[sim]") {
   // The range gate: a person past spit_range draws no shot.
   entt::registry reg;
@@ -3732,8 +3748,8 @@ TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, 
   // make_brute/make_swarmer/make_spitter are file-local, but a fresh World seeds one of each. Pin
   // their HP/speed/damage here: make_creature takes three adjacent float params (hp, chase_speed,
   // attack_damage) that a future archetype could transpose silently — this is the guard that would
-  // catch it. The spitter also pins its ranged knobs (spit_range/damage), which melee kinds leave
-  // 0.
+  // catch it. The spitter also pins its ranged + venom knobs (spit_range/damage/poison), which
+  // melee kinds leave 0.
   eng::sim::World world;
   entt::registry& reg = world.registry();
 
@@ -3750,12 +3766,14 @@ TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, 
       REQUIRE(en.attack_damage == Approx(15.0f));
       REQUIRE(dex == 1);               // default Dexterity -> dodge_chance 0
       REQUIRE(en.spit_range == 0.0f);  // melee-only
-    } else if (hp == Approx(25.0f)) {  // spitter: fragile, slow, feeble melee — but RANGED
+    } else if (hp ==
+               Approx(25.0f)) {  // spitter: fragile, slow, feeble melee — but RANGED + venomous
       saw_spitter = true;
       REQUIRE(en.chase_speed == Approx(55.0f));
       REQUIRE(en.attack_damage == Approx(4.0f));
       REQUIRE(en.spit_range == Approx(250.0f));
       REQUIRE(en.spit_damage == Approx(7.0f));
+      REQUIRE(en.poison_per_second == Approx(5.0f));  // its spit envenoms on hit
     } else {  // swarmer: fragile, fast, weak — and slippery
       saw_swarmer = true;
       REQUIRE(hp == Approx(15.0f));
