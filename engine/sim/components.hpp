@@ -68,10 +68,9 @@ struct PlayerControlled {
 // A character's PERSONALITY — innate leanings that BEHAVIOURS read to make decisions (the P7 seed),
 // and that the character's own DEEDS slowly reshape (record_deed drifts the matching axis — "you
 // are what you do"; see morality). The design's model has six int8 axes in [-100, +100]: bravery,
-// compassion, industry, loyalty, greed, sociability. Five are wired so far (bravery, greed,
-// compassion, industry, sociability); only `loyalty` waits, appending here once relationships give
-// a behaviour to read it. Neutral 0 = "no leaning", so an entity with all-zero axes — or no
-// Personality at all — behaves exactly as it did before this existed (bit-identical).
+// compassion, industry, loyalty, greed, sociability. ALL SIX are now wired to a behaviour. Neutral
+// 0 = "no leaning", so an entity with all-zero axes — or no Personality at all — behaves exactly as
+// it did before this existed (bit-identical).
 struct Personality {
   std::int8_t bravery = 0;      // [-100 coward .. +100 brave]; shapes how near a hazard gets before
                                 // an NPC flees (steer_npcs). A coward bolts early, the brave hold.
@@ -88,6 +87,10 @@ struct Personality {
                                 // to RALLY to a hero (the steer ladder's last rung): the sociable
                                 // cross the field to gather round a champion, the loner keep to
                                 // themselves. Reuses industry's radius SHAPE on a social want.
+  std::int8_t loyalty = 0;      // [-100 fickle .. +100 loyal]; shapes how far an idle NPC
+                                // ranges to FOLLOW a bonded friend (the relationships
+                                // bond-pull): the loyal cross the field to stay near an
+                                // ally they rescued, the fickle follow only one underfoot.
 };
 
 // The KINDS of moral deed a character can accrue — the design's six behaviour-ledger dimensions.

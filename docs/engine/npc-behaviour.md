@@ -128,9 +128,9 @@ renowned hero — that was at first trait-blind; sociability now scales *its* ra
 `kRallyRadius × (1 + sociability/200)`, so a **sociable** colonist
 crosses the field to join the throng while a **loner** stays put unless the champion is nearly
 underfoot. So the rule holds again: **every acting rung of the steer ladder reads a trait**. The
-opening four NPCs get a fixed bravery/greed/compassion/industry/sociability spread — with sociability
-the *inverse* of industry, so the openers read as idle-socialites then keen-loners — each a distinct
-five-axis combo, so the personalities read from frame one.
+opening four NPCs get a fixed bravery/greed/compassion/industry/sociability/loyalty spread — with
+sociability the *inverse* of industry (idle-socialites then keen-loners) and loyalty a reverse
+alternation — each a distinct six-axis combo, so the personalities read from frame one.
 
 Ongoing **reinforcements** don't get that hand-authored spread — they follow the design's *"NPCs
 roll an **archetype** + jitter"*. Each arriving colonist picks one of a handful of coherent presets
@@ -138,13 +138,17 @@ roll an **archetype** + jitter"*. Each arriving colonist picks one of a handful 
 and wobbles each axis a little, so the colony stays as varied as the openers — and *coherent* (a
 recognizable character), not a random stat-blob — instead of drifting toward neutral as the first
 four die. The roll is deterministic (the spawner's own isolated RNG stream, draws sequenced) and now
-spans all five wired axes (a **Rogue** is a greedy loner, a **Kindler** a sociable carer). The
-design's other archetypes (Schemer, Zealot, Loner, Firebrand) join once loyalty is wired to tell the
-last of them apart.
+spans **all six wired axes** (a **Rogue** is a greedy, fickle loner; a **Stalwart** a brave and
+*loyal* backbone). The design's other archetypes (Schemer, Zealot, Loner, Firebrand) join once the
+richer social layer gives more to tell them apart.
 
-This is the smallest honest seed of the master plan's **personality/morality** layer: axes that
-real behaviours *read* and that change visible motion. The one remaining axis, **loyalty**, appends
-to the same struct once relationships give a behaviour to read it.
+A **sixth axis, `loyalty`**, completes the set — the one the [relationships](relationships.md) seed
+was built to unblock. It scales the bond-pull radius (the personal twin of the hero-rally) the same
+way sociability scales the public one: `kBondRadius × (1 + loyalty/200)`, so a **loyal** colonist
+crosses the field to stay near a bonded ally (one it rescued) while a **fickle** one follows only a
+friend underfoot. So **all six personality axes now read a behaviour**, and every acting rung of the
+steer ladder reads a trait — the smallest honest seed of the master plan's personality layer, now
+whole.
 
 And you can now *see* it: the renderer tints each colonist's dot by its **bravery** — the brave
 warm toward yellow, the cowardly cool toward teal, green left untouched so a tinted NPC stays
@@ -219,8 +223,8 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up / rally ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, and a bottom-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — the two gameplay readers of morality); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
-- `engine/sim/components.hpp` — `Personality` (the P7 seed; `bravery` + `greed` + `compassion` + `industry` + `sociability` axes, only `loyalty` unwired); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / arm-up / rally ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, a bottom-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — and a lowest **bond** rung (below rally) pulls it toward a bonded friend it likes; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
 - `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player, a downed villain is skipped), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally.
 

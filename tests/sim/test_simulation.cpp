@@ -1417,6 +1417,30 @@ TEST_CASE("an idle colonist drifts toward a friend it has bonded with", "[sim]")
   REQUIRE(colonist_velocity_x(400.0f) == Approx(0.0f));  // friend past the bond radius -> no pull
 }
 
+TEST_CASE("loyalty shapes how far a colonist follows a bonded friend", "[sim]") {
+  // The SIXTH and last personality axis, read by the bond-pull radius exactly as sociability reads
+  // the rally radius (so every acting steer rung now reads a trait, and all six axes are wired).
+  // Base bond radius is 220; a friend sits 150 away. A LOYAL colonist (+100 -> radius 330) crosses
+  // to stay near it; a FICKLE one (-100 -> radius 110) stays put — same distance, opposite pulls.
+  const auto colonist_velocity_x = [](int loyalty) {
+    entt::registry reg;
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    reg.emplace<eng::sim::Personality>(
+        colonist, eng::sim::Personality{0, 0, 0, 0, 0, static_cast<std::int8_t>(loyalty)});
+    const entt::entity friend_e = reg.create();
+    reg.emplace<eng::sim::Transform>(friend_e, eng::Vec2{150.0f, 0.0f});  // 150 away
+    eng::sim::nudge_affinity(reg, colonist, friend_e, 30);
+
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(colonist_velocity_x(100) > 0.0f);            // loyal -> radius 330 -> follows (+x)
+  REQUIRE(colonist_velocity_x(-100) == Approx(0.0f));  // fickle -> radius 110 < 150 -> stays put
+}
+
 TEST_CASE("a bond to a vanished friend is skipped, not dereferenced", "[sim]") {
   // The dangling-handle guard: edges store entity ids by value and ids recycle, so the reader gates
   // on reg.valid(other). A colonist bonded to an entity that is then destroyed steers nowhere and

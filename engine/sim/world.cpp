@@ -55,7 +55,7 @@ entt::entity make_food_source(entt::registry& reg, Vec2 pos, float radius) {
 // destroys it on death rather than respawning it — permadeath). It is otherwise a
 // drifting dot, like a mote, but it is a *person* the world owns, not a hazard.
 entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel, int bravery = 0, int greed = 0,
-                      int compassion = 0, int industry = 0, int sociability = 0) {
+                      int compassion = 0, int industry = 0, int sociability = 0, int loyalty = 0) {
   const entt::entity e = reg.create();
   reg.emplace<Transform>(e, pos);
   reg.emplace<PrevTransform>(e, pos);
@@ -72,7 +72,7 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel, int bravery = 0, 
   reg.emplace<Personality>(
       e, Personality{static_cast<std::int8_t>(bravery), static_cast<std::int8_t>(greed),
                      static_cast<std::int8_t>(compassion), static_cast<std::int8_t>(industry),
-                     static_cast<std::int8_t>(sociability)});
+                     static_cast<std::int8_t>(sociability), static_cast<std::int8_t>(loyalty)});
   return e;
 }
 
@@ -191,18 +191,18 @@ void spawn_creature_if_due(entt::registry& reg, float& timer, std::mt19937& rng,
 // The design's "NPCs roll an ARCHETYPE + jitter": a reinforcement colonist picks one of these
 // coherent personality presets rather than independent random axes, so each is a recognizable
 // character (a dependable Stalwart, a self-serving Rogue) instead of a random stat-blob. Values
-// span the five WIRED axes (bravery, greed, compassion, industry, sociability) in [-100,100]; the
-// design's other archetypes (Schemer, Zealot, Loner, Firebrand) append here once loyalty is wired
-// to tell them apart. The opening four keep their hand-authored showcase spread (build_scene) —
-// this is only for the ongoing reinforcements. ponytail: the numbers are tuning knobs.
+// span all SIX wired axes (bravery, greed, compassion, industry, sociability, loyalty) in
+// [-100,100]; the design's other archetypes (Schemer, Zealot, Loner, Firebrand) append here once
+// the richer social layer gives more to tell them apart. The opening four keep their hand-authored
+// showcase spread (build_scene) — this is only for the ongoing reinforcements. ponytail: the
+// numbers are tuning knobs.
 constexpr std::array<Personality, 4> kArchetypes{{
-    // bravery, greed, compassion, industry, sociability
-    {70, -40, 50, 60, 60},     // Stalwart: brave, generous, kind, industrious, companionable
-    {-50, 80, -50, -30, -60},  // Rogue: cowardly, greedy, callous, idle, a loner — out for itself
-    {30, -60, 85, 20,
-     80},  // Kindler: generous, deeply compassionate, and very sociable — the carer
-    {-10, 20, -15, 80,
-     -40},  // Drudge: timid, tireless, and keeps to itself — the heads-down worker
+    // bravery, greed, compassion, industry, sociability, loyalty
+    {70, -40, 50, 60, 60,
+     80},  // Stalwart: brave, generous, kind, industrious, companionable, LOYAL
+    {-50, 80, -50, -30, -60, -70},  // Rogue: cowardly, greedy, callous, idle, a loner, FICKLE
+    {30, -60, 85, 20, 80, 60},      // Kindler: generous, compassionate, sociable, and steadfast
+    {-10, 20, -15, 80, -40, 30},    // Drudge: timid, tireless, keeps to itself, quietly dependable
 }};
 
 // How far each axis wobbles off its archetype so two colonists of the same kind aren't clones —
@@ -221,7 +221,7 @@ int jitter(std::int8_t base, std::mt19937& rng, std::uniform_real_distribution<f
 }
 
 // Roll a reinforcement's personality: pick an archetype, then jitter each axis. Draws are SEQUENCED
-// (the index first, then the five jitters in field order) so the result is deterministic same-build
+// (the index first, then the six jitters in field order) so the result is deterministic same-build
 // — the same discipline the bravery draw used. Uses the spawner's OWN stream via `unit`/`rng`.
 Personality roll_archetype(std::mt19937& rng, std::uniform_real_distribution<float>& unit) {
   const std::size_t which =
@@ -232,9 +232,10 @@ Personality roll_archetype(std::mt19937& rng, std::uniform_real_distribution<flo
   const int c = jitter(base.compassion, rng, unit);
   const int in = jitter(base.industry, rng, unit);
   const int so = jitter(base.sociability, rng, unit);
-  return Personality{static_cast<std::int8_t>(b), static_cast<std::int8_t>(g),
-                     static_cast<std::int8_t>(c), static_cast<std::int8_t>(in),
-                     static_cast<std::int8_t>(so)};
+  const int lo = jitter(base.loyalty, rng, unit);
+  return Personality{static_cast<std::int8_t>(b),  static_cast<std::int8_t>(g),
+                     static_cast<std::int8_t>(c),  static_cast<std::int8_t>(in),
+                     static_cast<std::int8_t>(so), static_cast<std::int8_t>(lo)};
 }
 
 // Keep the colony alive: on its own (slower) timer, wander a fresh colonist in from a
@@ -278,7 +279,8 @@ void spawn_npc_if_due(entt::registry& reg, float& timer, std::mt19937& rng, floa
   // determinism hole.
   const Vec2 wander{vel(rng), vel(rng)};
   const Personality p = roll_archetype(rng, unit);
-  make_npc(reg, pos, wander, p.bravery, p.greed, p.compassion, p.industry, p.sociability);
+  make_npc(reg, pos, wander, p.bravery, p.greed, p.compassion, p.industry, p.sociability,
+           p.loyalty);
 }
 
 // Build the opening scene: a controllable player in the centre, a few wandering
@@ -321,13 +323,15 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
                    static_cast<float>((i + 1) * 140 % static_cast<int>(kFieldHeight))};
     // A fixed personality spread so the demo shows the range from the first frame: bravery
     // -90/-30/+30/+90, greed REVERSED (+90/+30/-30/-90), compassion ALTERNATING (-75/+75/-75/+75),
-    // industry GROUPED (-80/-80/+80/+80, the first pair idle, the second keen), and sociability the
-    // INVERSE grouping (+80/+80/-80/-80), so the openers are idle-socialites then keen-loners —
-    // each a distinct FIVE-axis combo, not clones on one dial. Pure index expressions, NO rng draw,
-    // so the seeded streams stay bit-aligned. This hand-authored spread is the OPENING showcase;
-    // ongoing reinforcements instead roll a coherent archetype + jitter (roll_archetype).
+    // industry GROUPED (-80/-80/+80/+80, the first pair idle, the second keen), sociability the
+    // INVERSE grouping (+80/+80/-80/-80, idle-socialites then keen-loners), and loyalty the REVERSE
+    // alternation (+70/-70/+70/-70) — each opener a distinct SIX-axis combo, not clones on one
+    // dial. Pure index expressions, NO rng draw, so the seeded streams stay bit-aligned. This
+    // hand-authored spread is the OPENING showcase; ongoing reinforcements instead roll an
+    // archetype + jitter.
     make_npc(reg, pos, Vec2{vel(rng), vel(rng)}, (i * 2 - 3) * 30, (3 - i * 2) * 30,
-             ((i % 2) * 2 - 1) * 75, ((i / 2) * 2 - 1) * 80, ((1 - i / 2) * 2 - 1) * 80);
+             ((i % 2) * 2 - 1) * 75, ((i / 2) * 2 - 1) * 80, ((1 - i / 2) * 2 - 1) * 80,
+             ((1 - i % 2) * 2 - 1) * 70);
   }
 
   // A few hostile creatures at the edges that hunt the nearest person (you or an NPC) — one of each
