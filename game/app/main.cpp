@@ -193,6 +193,12 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::Text("standing: %d (%s)", static_cast<int>(standing_value),
                 eng::sim::standing_title(standing_value));
   }
+  // Build: which trained Attribute dominates names what KIND of fighter you are (Warrior /
+  // Skirmisher / Bulwark / Chancer) — the "from build" half of the derived-recognition titles,
+  // the twin of the deed-derived standing title above. "Greenhorn" until you train one.
+  if (const eng::sim::Attributes* attrs = world.registry().try_get<eng::sim::Attributes>(player)) {
+    ImGui::Text("build: %s", eng::sim::build_title(*attrs));
+  }
   if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
     // Show one learned skill's level + progress bar. Toughness only appears once the
     // player has taken a hit (it isn't in `owned` until then), so guard on find().

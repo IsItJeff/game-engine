@@ -2717,6 +2717,36 @@ TEST_CASE("standing_title names each band, symmetric about neutral", "[sim]") {
   REQUIRE(title(-eng::sim::kRenownFullAt) == "Notorious");  // ready and symmetric)
 }
 
+TEST_CASE("build_title names the dominant trained attribute", "[sim]") {
+  // The "from build" derived title, the twin of standing_title: which of the four trained
+  // Attributes leads names what KIND of fighter you are. Pure query; untrained = Greenhorn; ties
+  // break in a fixed order so it's deterministic.
+  const auto title = [](const eng::sim::Attributes& a) {
+    return std::string(eng::sim::build_title(a));
+  };
+
+  REQUIRE(title(eng::sim::Attributes{}) == "Greenhorn");  // all at level 1 -> no build yet
+
+  eng::sim::Attributes warrior{};
+  warrior.strength.level = 6;
+  REQUIRE(title(warrior) == "Warrior");
+  eng::sim::Attributes skirmisher{};
+  skirmisher.dexterity.level = 6;
+  REQUIRE(title(skirmisher) == "Skirmisher");
+  eng::sim::Attributes bulwark{};
+  bulwark.endurance.level = 6;
+  REQUIRE(title(bulwark) == "Bulwark");
+  eng::sim::Attributes chancer{};
+  chancer.luck.level = 6;
+  REQUIRE(title(chancer) == "Chancer");
+
+  // A tie for the top breaks in the fixed order (strength first), so the title is deterministic.
+  eng::sim::Attributes tied{};
+  tied.strength.level = 6;
+  tied.dexterity.level = 6;
+  REQUIRE(title(tied) == "Warrior");
+}
+
 TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it lands", "[sim]") {
   // The bootstrap: at Dexterity 1 you can't dodge yet, so the blow lands — but facing
   // it still trains Evasion and its Dexterity, which is what eventually lets you dodge.
