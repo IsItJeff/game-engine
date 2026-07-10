@@ -1297,8 +1297,16 @@ void advance_projectiles(entt::registry& reg, float dt) {
         // player's throw). A creature's spit homes on a PERSON, so this guard keeps a spitter from
         // ever earning Valor for killing a colonist (creatures have no morality anyway).
         if (was_alive && st->health.current <= 0.0f && reg.all_of<Enemy>(p.target) &&
-            reg.valid(p.owner))
+            reg.valid(p.owner)) {
           record_deed(reg, p.owner, Deed::Valor, kValorKill);
+          // ...and, like a melee kill, the shot forges CAMARADERIE — the RANGED half of
+          // bond_witnesses (the follow-up the melee bond noted). Centred on the OWNER (the one who
+          // fought), not the distant impact, so it bonds those who stood with the shooter. Guard
+          // the owner's Transform (it's valid here, but may be a positionless entity in theory).
+          if (const Transform* owner_tf = reg.try_get<Transform>(p.owner)) {
+            bond_witnesses(reg, p.owner, owner_tf->position);
+          }
+        }
       }
       spent.push_back(s);
     } else {
