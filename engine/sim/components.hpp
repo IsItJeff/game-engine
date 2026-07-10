@@ -278,6 +278,14 @@ struct Enemy {
   // while after. 0 = not venomous. "Procs as data" (the design's P4) — an archetype knob, not a
   // special case in the combat code. Swarmers are venomous; brutes/sentinels aren't.
   float poison_per_second = 0.0f;
+  // If spit_range > 0 this creature is a RANGED attacker: creature_spit periodically launches a
+  // Projectile (the same primitive the player's throw uses) at the nearest person within
+  // spit_range, dealing spit_damage on impact. 0 = melee-only (the default). More "procs as data" —
+  // a spitter is just these three knobs, no new creature class. spit_timer counts down to its next
+  // spit.
+  float spit_range = 0.0f;
+  float spit_damage = 0.0f;
+  float spit_timer = 0.0f;
 };
 
 // A lingering damage-over-time left by a venomous blow (resolve_creature_contacts). Unlike a hit,
