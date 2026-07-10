@@ -11,7 +11,7 @@ engine skeleton's ECS. It is the worked example of
 - **`Vital`** — a reusable "bar" stat: `current`, `max`, `regen_per_second`.
 - **`Stats`** — one component per entity that holds its vitals (its character sheet).
 - **`regenerate_vitals`** — a system that recovers each *passive* vital (health) toward its cap, faster the higher your Endurance (VIT), and **not at all while starving**.
-- **`update_stamina`** — a system that spends stamina while moving and restores it while still.
+- **`update_stamina`** — a system that spends stamina while moving and restores it while still — but **not** while starving or dehydrated (an empty stomach or canteen gives no second wind, the stamina twin of the heal-gate).
 - **`drain_hunger`** — a system that lowers the hunger Need over time (the first survival need); at empty it starves health.
 - **`DamagePlayer`** — a command that subtracts from a player's health, applied
   through the funnel (the `H` key in the demo).
@@ -93,6 +93,14 @@ starvation nets their health strictly downward at **any** regen rate. "You can't
 empty stomach" replaces the old fragile "starvation-per-second must stay above the fastest
 self-heal". (It does make starvation bite harder — a wounded starver no longer claws back the
 regen — which is the intended, more honest survival pressure.)
+
+The same discipline now covers your **second wind**: `update_stamina` skips its resting recovery
+while `hunger <= 0` **or** `water <= 0`, so survival failure drains your stamina reserves too, not
+just your health. Composed with the empty-bar crawl below, this is the design's *escalating
+inefficiency* emerging from two systems rather than a bespoke debuff — a starver who keeps fleeing
+spends stamina it can no longer recover, tires to a crawl, and can't shake it off until it eats or
+drinks. (`update_stamina` runs just *before* `drain_hunger`/`drain_water`, so it reads last tick's
+need — a one-frame lag that's immaterial for a Need that empties over minutes.)
 
 Health also drops from *gameplay*, and that shows the other half of the rule.
 Touching a `Hazard` (a drifting mote) hurts whoever overlaps it — the player or an
