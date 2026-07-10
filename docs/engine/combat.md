@@ -197,6 +197,21 @@ mobility for mitigation. **Plant and tank, or move and dodge — not both.** It 
 it, and the softening system reads `Blocking` on *any* entity — so an NPC-guard behaviour would fall
 out for free (today only the player, being input-driven, ever guards).
 
+And a guard **bites back**: a blow turned on a raised guard chips the attacker for a flat
+`kRiposteDamage` (4) — a **riposte** — so planting your guard isn't purely defensive; it's a slow
+offence, wearing an attacker down while you soak its (softened) blows. But a riposte is an
+**exertion**: each one spends `kRiposteStaminaCost` (15) stamina, and — crucially — a **raised guard
+gives no second wind** (`update_stamina` skips recovery while `Blocking`, the twin of the starvation
+gate). So a guard-tank *bleeds* the stamina its ripostes spend and can't refill it until it lowers
+the guard. That turns a would-be risk-free hold into a **rhythm**: turn blows until you're winded,
+then drop the guard to catch your breath — exposed, taking full hits — and go again. A **winded**
+guard still softens but can't riposte, so you can never simply stand in a corner and let a lone foe
+kill itself. The riposte routes through the creature's own `Stats`, so if it lands the last hit the
+creature dies through `handle_deaths` like any other — loot and all — though it credits **no Valor**
+(Valor rewards a strike *you* throw; a riposte is the beast breaking itself on your shield).
+*ponytail:* `kRiposteDamage` / `kRiposteStaminaCost` are flat balance knobs (scale them with a
+Guarding skill or shield gear later).
+
 ### Throwing — the ranged option (F)
 
 Every attack so far has been melee: you must close to within ~45 units. **Throwing** (press **F**)

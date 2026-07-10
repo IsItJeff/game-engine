@@ -561,6 +561,12 @@ void update_stamina(entt::registry& reg, float dt) {
       // empties over minutes. Creatures default hunger/water to full (100), so they're never gated
       // here.
       if (st.hunger.current <= 0.0f || st.water.current <= 0.0f) continue;
+      // Nor behind a raised GUARD: bracing to turn blows is exertion, not rest — you get no second
+      // wind while Blocking. So a guard-tank bleeds the stamina its ripostes spend (see
+      // resolve_creature_contacts) and can't refill it until it lowers the guard, making a
+      // prolonged hold a rhythm rather than a free stand-and-win. Only the player guards today, and
+      // Blocking is set by the same-tick MovePlayer command before this system runs.
+      if (reg.all_of<Blocking>(e)) continue;
       // A no-Attributes entity just uses the base rate (boost 1.0).
       const Attributes* attrs = reg.try_get<Attributes>(e);
       float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
@@ -1786,6 +1792,9 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
   constexpr float kAttackInterval = 0.8f;   // seconds between a creature's swings
   constexpr float kEnrageThreshold = 0.3f;  // below this fraction of its HP, a creature enrages...
   constexpr float kEnrageDamage = 1.75f;    // ...and its blows hit this much harder (knobs)
+  constexpr float kRiposteDamage =
+      4.0f;  // flat chip a guarding defender deals BACK per blow turned
+  constexpr float kRiposteStaminaCost = 15.0f;  // ...and the vigor each riposte spends (knob)
   const Fixed kEvasionPerSwing = Fixed::from_int(10);  // XP for facing a swing, dodged or not
   std::uniform_real_distribution<float> unit(0.0f, 1.0f);
 
@@ -1834,7 +1843,27 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       }
       // A raised GUARD softens the blow (before VIT mitigates it too) — the active-defence trade
       // for the mobility it costs. Applies to anyone Blocking; only the player guards today.
-      if (reg.all_of<Blocking>(p)) attack_dmg *= kBlockDamageFactor;
+      if (reg.all_of<Blocking>(p)) {
+        attack_dmg *= kBlockDamageFactor;
+        // RIPOSTE: turning a blow bites back — but it's an EXERTION that spends
+        // kRiposteStaminaCost, so it fires only while you have the vigor. A WINDED guard still
+        // SOFTENS but can't riposte; and because a raised guard gives no second wind
+        // (update_stamina skips recovery while Blocking), a prolonged hold bleeds stamina it can't
+        // refill — so guard-tanking a lone foe is a RHYTHM (turn blows till winded, then lower the
+        // guard to recover, exposed), not a risk-free stand-and-win. Pure sim (no RNG). It routes
+        // through the creature's own Stats, so a riposte that lands the last hit reaps it via
+        // handle_deaths like any other damage (loot still drops). It credits NO Valor, though:
+        // Valor rewards an ACTIVE strike, and a riposte is the creature breaking itself on your
+        // guard, not a blow you threw.
+        Vital& p_stamina = prey.get<Stats>(p).stamina;
+        Stats* cs = reg.try_get<Stats>(c);
+        if (p_stamina.current >= kRiposteStaminaCost && cs != nullptr) {
+          p_stamina.current -= kRiposteStaminaCost;  // turning the blow tires you
+          cs->health.current -= kRiposteDamage;
+          if (cs->health.current < 0.0f) cs->health.current = 0.0f;
+          stamp_flash(reg, c);  // the recoiling creature blinks too, so the riposte reads
+        }
+      }
       const float applied = mitigate(attack_dmg, defence_of(reg, p));
       Vital& health = prey.get<Stats>(p).health;
       health.current -= applied;
