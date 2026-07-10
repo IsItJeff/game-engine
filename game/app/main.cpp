@@ -63,8 +63,9 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     const eng::Vec2 p = world_to_screen(blended, vp);
 
     // The dot's colour is layered from the base outward: personality tints it, health dims it,
-    // venom greens it, a fresh blow flashes it white. Each is a renderer-only cue the sim never
-    // reads, and each is optional (most entities have none), so each is a try_get guard on `rgb`.
+    // starvation greys it, venom greens it, a fresh blow flashes it white. Each is a renderer-only
+    // cue the sim never reads, and each is optional (most entities have none), so each is a try_get
+    // guard on `rgb`.
     eng::Vec3 rgb = dot.color;
 
     // Personality tint: colour a colonist by its BRAVERY (warm = brave, cool = coward) so the
@@ -79,19 +80,33 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     // pickups/weapons have none) — same try_get the debug panel uses. Kept in `brightness` so the
     // poison tint below can dim its green by the same factor (see there).
     float brightness = 1.0f;
-    if (const auto* st = world.registry().try_get<eng::sim::Stats>(e)) {
+    const auto* st =
+        world.registry().try_get<eng::sim::Stats>(e);  // reused by the pallor cue below
+    if (st != nullptr) {
       brightness = eng::sim::wounded_brightness(st->health.current, st->health.max);
     }
     rgb *= brightness;
 
+    // Need pallor: a starving or parched colonist wastes to a sallow grey, by EXACTLY how much the
+    // Need debuff saps its blows (need_pallor is derived from need_efficiency — one source of
+    // truth, so the look and the combat penalty can never diverge). Full needs -> 0 -> an unchanged
+    // draw (bit-identical for the well-fed). A STEADY-state cue, so it sits UNDER the acute poison/
+    // flash overlays below — a poisoned starving dot still greens (poison mixes on top,
+    // self-capped) and a fresh blow still blinks white, rather than the grey erasing them. Scaled
+    // by the wounded `brightness` so it never re-brightens a near-dead dot. Reuses the `st` fetched
+    // for the wounded cue.
+    if (st != nullptr) {
+      rgb = glm::mix(rgb, eng::Vec3{0.5f, 0.48f, 0.4f} * brightness, eng::sim::need_pallor(*st));
+    }
+
     // Poison: a venomed dot glows an ACID green while the venom lasts, deeper the stronger the dose
     // (poison_tint_strength), so the poison you've spread — or taken — reads on the field. Bilious
     // yellow-green, distinct from the friendly NPC green so it reads on colonists (a prime venom
-    // victim) as well as the blue player. A STATUS overlay over the personality hue (active harm
-    // matters more than the trait) but under the hit-flash, so a fresh blow still blinks white. The
-    // target green is scaled by the same wounded `brightness`, so poison NEVER re-brightens a
-    // dimmed, near-dead dot — the health cue survives under the venom cue. Optional (most aren't
-    // poisoned).
+    // victim) as well as the blue player. A STATUS overlay over the personality hue AND the steady
+    // pallor (active harm matters more than the trait or a slow need) but under the hit-flash, so a
+    // fresh blow still blinks white. The target green is scaled by the same wounded `brightness`,
+    // so poison NEVER re-brightens a dimmed, near-dead dot — the health cue survives under the
+    // venom cue. Optional (most aren't poisoned).
     if (const auto* pois = world.registry().try_get<eng::sim::Poisoned>(e)) {
       rgb = glm::mix(rgb, eng::Vec3{0.55f, 0.9f, 0.1f} * brightness,
                      eng::sim::poison_tint_strength(pois->damage_per_second));

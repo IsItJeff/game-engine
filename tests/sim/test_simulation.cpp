@@ -2515,6 +2515,31 @@ TEST_CASE("need_efficiency saps a starving or parched fighter toward a floor", "
   REQUIRE(need_efficiency(s) == Approx(0.75f));
 }
 
+TEST_CASE("need_pallor tracks the combat debuff: a starving colonist looks as gaunt as it fights",
+          "[sim]") {
+  // The presentation cue is DERIVED from need_efficiency, so the sallow look can never drift from
+  // the damage penalty. Well-fed -> 0 pallor (an unchanged draw); empty -> full pallor; and it is
+  // exactly 2*(1 - need_efficiency) at every point in between.
+  using eng::sim::need_efficiency;
+  using eng::sim::need_pallor;
+  using eng::sim::Stats;
+  Stats s;                                  // full needs
+  REQUIRE(need_pallor(s) == Approx(0.0f));  // fed -> no pallor (bit-identical draw)
+
+  s.hunger.current = 0.0f;                  // starving
+  REQUIRE(need_pallor(s) == Approx(1.0f));  // empty -> full pallor (need_efficiency's floor)
+
+  s.hunger.current = 100.0f;
+  s.water.current = 0.0f;                   // parched
+  REQUIRE(need_pallor(s) == Approx(1.0f));  // the other need pales it too
+
+  // Half-way into the last quarter: need_efficiency 0.75 -> pallor 0.5, and it stays locked to the
+  // debuff formula so the look and the penalty are one number apart.
+  s.water.current = 12.5f;
+  REQUIRE(need_pallor(s) == Approx(0.5f));
+  REQUIRE(need_pallor(s) == Approx(2.0f * (1.0f - need_efficiency(s))));
+}
+
 TEST_CASE("a starving fighter hits softer: an empty need saps melee damage", "[sim]") {
   // The survival Need debuff on the battlefield: two identical swings, the only difference the
   // attacker's belly. The starving one deals the floor fraction (half) of the fed one's blow, so

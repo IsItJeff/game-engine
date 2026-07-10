@@ -122,6 +122,12 @@ colony both **fed and watered** to keep its blows at full strength. So an empty 
 third way (softer hits), alongside the stalled heal and the drained second wind — the design's
 escalating inefficiency, all of it emergent from the shared `Vital`/`Stats` sheet.
 
+And now it **shows**: `need_pallor(stats)` — a renderer-only cue *derived from* `need_efficiency`
+(one source of truth, so the look can never drift from the penalty) — wastes a starving or parched
+dot toward a **sallow grey**, by exactly how much the debuff is biting. A well-fed colonist draws
+unchanged; one running on empty visibly gaunts, so you can read *who's about to fight weak* across
+the field at a glance, not just off the HUD bars. Presentation only — the sim never reads it.
+
 Health also drops from *gameplay*, and that shows the other half of the rule.
 Touching a `Hazard` (a drifting mote) hurts whoever overlaps it — the player or an
 NPC, anything with `Stats` — through the `resolve_contacts` **system**, which
@@ -254,11 +260,11 @@ here.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `need_efficiency` (the empty-Need combat debuff), `WaterSource`, `FoodSource`, `Hearth`, `Hazard`, and the `Npc` marker.
+- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `need_efficiency` (the empty-Need combat debuff) and its presentation twin `need_pallor`, `WaterSource`, `FoodSource`, `Hearth`, `Hazard`, and the `Npc` marker.
 - `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `graze` (the regrowing food plots), `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
 - `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the wandering NPCs, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
-- `game/app/main.cpp` — the health, stamina, hunger, and water bars and the "NPCs alive" counter in the debug panel; `world.cpp`'s `make_water_source` places the pond and `make_hearth` the hearth.
-- `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, hunger/starvation/eating, the `need_efficiency` debuff (a starving fighter hits softer), and permadeath tests.
+- `game/app/main.cpp` — the health, stamina, hunger, and water bars and the "NPCs alive" counter in the debug panel, plus the `need_pallor` sallow-dot cue in `draw_entities`; `world.cpp`'s `make_water_source` places the pond and `make_hearth` the hearth.
+- `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, hunger/starvation/eating, the `need_efficiency` debuff (a starving fighter hits softer) and its `need_pallor` visual twin, and permadeath tests.
 
 ## Go deeper
 
