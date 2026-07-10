@@ -4,17 +4,18 @@
 
 The first trace of a character's **social ties** — who they've come to care about.
 [Personality](npc-behaviour.md) is who a colonist *is* and [morality](morality.md) is
-what they've *done*; relationships are who they're *bonded to*. It is the seed of the
-design's P8 social layer, and it starts, deliberately, as one component and one event:
+what they've *done*; relationships are who they're *bonded to* — or *against*. It is the seed of
+the design's P8 social layer, and it starts, deliberately, as one component and a pair of
+mirror-image events:
 
 - **`Relation`** — one **directed** tie: `THIS entity → other`, carrying an `int8`
   **`affinity`** (`−100` dislike … `+100` like). Directed because A→B need not equal
   B→A.
 - **`Relationships`** — a lazy, sparse, append-ordered `std::vector<Relation>` on the
   subject: how *this* character regards others.
-- **`nudge_affinity(from, toward, delta)`** — the single write-point every future
-  bond-forming event will funnel through (the [`record_deed`](morality.md#how-it-works)
-  twin). The **rescue** already fires it: hauling up a fallen ally forms a bond.
+- **`nudge_affinity(from, toward, delta)`** — the single write-point every affinity-moving
+  event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Two fire it today:
+  a **rescue** forms a bond, a **cruel strike** forms a grudge.
 
 ## Why it matters
 
@@ -34,8 +35,8 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
 
 ## How it works
 
-One event forms a bond today. It lives at the **rescue** in `handle_deaths` — the same
-line that already credits the rescuer with **Charity**:
+**Two events** move affinity today, one each way. The positive one lives at the **rescue** in
+`handle_deaths` — the same line that already credits the rescuer with **Charity**:
 
 ```cpp
 record_deed(reg, rescuer, Deed::Charity, kRescueCharity);
@@ -52,25 +53,36 @@ bond, then **find-or-update** the edge toward the target — deepen an existing 
 a new one — so the edge count is the number of *distinct partners*, never per-tick growth.
 Pure integer add, clamped to `±100`, touching no view (safe mid-iteration).
 
-The first **reader** is a new lowest rung in `steer_npcs`, the *personal* twin of the
-**hero-rally** (see [NPC behaviour](npc-behaviour.md)): an idle colonist with **no public
-hero** to gather to drifts toward its nearest
-well-liked **friend** — so *the colony clusters by bond, not only around the famous*. A
-colonist you rescued now sticks by you even while you're Unproven. It reuses the rally
-toward-vector and speed verbatim, reading affinity instead of standing, and sits *below*
-the hero-rally (guarded by `if (champion == null)`), so the public rally stays
-byte-identical. It **must** gate on `reg.valid(other)` before steering — edges store
-entity ids by value and ids recycle, so a stale tie to a dead entity is skipped, never
-dereferenced.
+The affinity is **read two ways** — a positive draw and a negative repulsion, the two faces of a
+tie:
+
+- **Bond-pull** (positive) — a new lowest rung in `steer_npcs`, the *personal* twin of the
+  **hero-rally** (see [NPC behaviour](npc-behaviour.md)): an idle colonist with **no public hero**
+  to gather to drifts toward its nearest well-liked **friend** — so *the colony clusters by bond,
+  not only around the famous*. A colonist you rescued sticks by you even while you're Unproven. It
+  scans its own edges for the closest positive tie, reuses the rally toward-vector and speed
+  verbatim, sits *below* the hero-rally (guarded by `if (champion == null)`) so the public rally
+  stays byte-identical, and gates on `reg.valid(other)` — a stale tie to a recycled id is skipped,
+  never dereferenced.
+- **Grudge / abandonment** (negative) — the resentful side. Every cruel strike, besides the Cruelty
+  deed, fires a *second* `nudge_affinity(victim, attacker, kCrueltyGrudge)` — the struck colonist
+  forms a **grudge** toward the striker (the mirror of the rescue's bond). Its reader is a check in
+  the **rescue** path, via `affinity_toward(from, toward)` — the targeted read-side counterpart of
+  `nudge_affinity` (the tie's value, or 0 if none): a colonist whose affinity to the fallen has
+  sunk to `kGrudgeThreshold` won't cross the field to save them (`steer_npcs`) *nor* haul up one
+  already at its feet (`handle_deaths`)
+  — **the resented are abandoned.** Because one strike (`−25`) clears the threshold (`−20`), it is a
+  *personal, earlier* consequence than the global [villain-fear](morality.md) (which needs several
+  strikes to push `standing` past the Suspect line): hurt one colonist and *that* colonist won't
+  save you, long before the whole colony fears you.
 
 ## The tradeoffs
 
-- **One event, one reader.** No personality-match seeding (that's a later ring), no bond
+- **Two events, two readers.** No personality-match seeding (that's a later ring), no bond
   *stages*, no decay — just the smallest struct those grow into. Exactly as the morality
-  seed shipped two of six deeds and let the rest wire themselves.
-- **`affinity` has one reader.** The bond-pull is a presentation-ish behaviour (a gentle
-  gather); the *deeper* readers — a colonist rescuing a friend *first*, fleeing *with*
-  them, refusing to fight them — are later work.
+  seed shipped a couple of deeds and let the rest wire themselves.
+- **The readers are still coarse.** A gentle gather and a rescue-veto; the *deeper* ones — a colonist
+  rescuing a friend *first*, fleeing *with* them, refusing to *fight* them — are later work.
 - **Unbounded edge list.** Bounded in practice (ties form only on a rescue, only toward a
   downed player), but formally open — a `ponytail:` comment names the `cap-N +
   evict-weakest` upgrade so it's tracked debt, not silent.
@@ -86,22 +98,24 @@ trait-scaled-radius shape every other axis uses — so a loyal colonist crosses 
 near a bonded ally while a fickle one follows only a friend underfoot. **All six personality
 axes are now wired.**
 
-Beyond that, the write-point is the whole point: more events (fighting a common foe, a
-shared meal, a betrayal) each become one `nudge_affinity` call; `trust` appends as a
-second `Relation` field; the derived `bond_tier` names the ladder; and a **leaky decay**
-lets cold ties fade. Then the social `perceive` layer reads affinity *and* standing to
-choose stances (befriend / protect / exploit).
+Beyond that, the write-point is the whole point: the negative half is already proven (a rescue
+bonds, a cruel strike grudges), so more events (fighting a common foe, a shared meal) each become
+one `nudge_affinity` call; `trust` appends as a second `Relation` field; the derived `bond_tier`
+names the ladder; and a **leaky decay** lets cold ties fade (and a grudge cool). Then the social
+`perceive` layer reads affinity *and* standing to choose stances (befriend / protect / exploit).
 
 ## Key files
 
 - `engine/sim/components.hpp` — `Relation` (one directed tie) and `Relationships` (the
   lazy sparse edge list), placed beside `BehaviorLedger`/`standing`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `nudge_affinity` (the single write-point,
-  the `record_deed` twin); the bond formed at `handle_deaths`' rescue branch; the
-  bond-pull rung in `steer_npcs` (below the hero-rally, gated on no champion).
+- `engine/sim/systems.hpp` / `systems.cpp` — `nudge_affinity` (the single write-point, the
+  `record_deed` twin) and `affinity_toward` (its read-side counterpart); the bond formed at
+  `handle_deaths`' rescue branch and the grudge at `perform_attack`'s cruel-strike branch; the
+  bond-pull rung in `steer_npcs` (below the hero-rally) and the grudge-veto in both rescue paths.
 - `tests/sim/test_simulation.cpp` — the write-point (find-or-update + clamp), the bond
-  wired at a rescue, the reader steering toward a friend (and the range gate), and the
-  stale-handle guard.
+  wired at a rescue, the bond-pull steering toward a friend (and the range gate), the
+  stale-handle guard, and the grudge (a cruel strike resents the striker; a grudge-holder
+  won't cross to rescue nor haul up the resented).
 
 ## Go deeper
 

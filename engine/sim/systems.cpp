@@ -39,6 +39,16 @@ constexpr std::int32_t kValorKill = 1;
 // purpose.
 constexpr std::int32_t kCrueltyStrike = 1;
 
+// A cruel strike also earns a personal GRUDGE — the negative mirror of a rescue's +kRescueAffinity
+// bond: the struck colonist loses this much affinity TOWARD the striker (hurt someone and they
+// resent you, exactly as saving someone endears you). A colonist whose affinity toward a player has
+// sunk to kGrudgeThreshold or below will NOT cross the field to rescue that player — the resented
+// are abandoned. One strike (-25) already clears the -20 line, so a single betrayal earns it: a
+// pointed, PERSONAL consequence that lands EARLIER than the global villain-fear (which needs
+// standing past the Suspect line, several strikes off). Playtest knobs.
+constexpr std::int8_t kCrueltyGrudge = -25;
+constexpr std::int8_t kGrudgeThreshold = -20;
+
 // How far a single deed nudges the actor's matching PERSONALITY axis (deed-driven DRIFT). Small and
 // bounded on purpose — the design wants "the war changed him", not a wholly different person: at 2
 // per deed a full ±100 swing takes ~50 deeds, so a demo's handful gives a visible-but-partial
@@ -184,6 +194,10 @@ void steer_npcs(entt::registry& reg) {
     entt::entity fallen = entt::null;
     float nearest_fallen = kRescueRadius * (1.0f + bravery / 200.0f);
     for (const entt::entity f : downed) {
+      // GRUDGE: a colonist won't cross the field to save someone it resents (affinity at or below
+      // kGrudgeThreshold — e.g. a player who struck it). The abandonment half of the relationships
+      // reader, the mirror of the bond-pull; neutral/liked fallen are unaffected (0 > threshold).
+      if (affinity_toward(reg, n, f) <= kGrudgeThreshold) continue;
       const float d = glm::distance(pos, downed.get<Transform>(f).position);
       if (d < nearest_fallen) {
         nearest_fallen = d;
@@ -1038,6 +1052,11 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
           stamp_flash(reg, victim);
         }
         record_deed(reg, attacker, Deed::Cruelty, kCrueltyStrike);
+        // The betrayal is also PERSONAL: the struck colonist forms a GRUDGE toward the striker (a
+        // negative affinity edge, the mirror of a rescue's bond). A resented player won't be
+        // rescued by this colonist later — a targeted consequence that lands before global
+        // villain-fear does.
+        nudge_affinity(reg, victim, attacker, kCrueltyGrudge);
       }
     }
     return entt::null;  // a whiff (or the cruel strike above) — nothing to hand back to destroy
@@ -1469,6 +1488,19 @@ void nudge_affinity(entt::registry& reg, entt::entity from, entt::entity toward,
   rel.edges.push_back(Relation{toward, clamp(static_cast<int>(delta))});  // first tie to `toward`
 }
 
+std::int8_t affinity_toward(const entt::registry& reg, entt::entity from, entt::entity toward) {
+  // The READER counterpart of nudge_affinity — how `from` feels about `toward`, or 0 (neutral) if
+  // there's no tie. Sparse-lazy: an entity that never bonded has no Relationships, so this is a
+  // single null-check for the common case. A plain linear scan (edges are few). Const registry: it
+  // never mutates, so both steer_npcs and handle_deaths can call it while iterating.
+  if (const Relationships* rel = reg.try_get<Relationships>(from)) {
+    for (const Relation& e : rel->edges) {
+      if (e.other == toward) return e.affinity;
+    }
+  }
+  return 0;
+}
+
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // A zero-health entity meets one of two fates, and which one is the game's core rule
   // made concrete: a PLAYER goes DOWNED (helpless where they fell, then rescued-in-place
@@ -1516,6 +1548,10 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
     for (const entt::entity a : allies) {
       if (a == e || allies.get<Stats>(a).health.current <= 0.0f)
         continue;  // self / a corpse can't help
+      // GRUDGE: an ally that resents the fallen (affinity <= kGrudgeThreshold, e.g. one this player
+      // was cruel to) refuses the haul-up — the resented are abandoned even by a bystander in
+      // reach, the completing half of the steer_npcs won't-approach rung above.
+      if (affinity_toward(reg, a, e) <= kGrudgeThreshold) continue;
       if (glm::distance(pos, allies.get<Transform>(a).position) < kReviveDistance) {
         rescuer = a;  // the entity handle both proves the rescue AND names who to credit
         break;
