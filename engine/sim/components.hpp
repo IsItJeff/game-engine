@@ -580,6 +580,7 @@ enum class SkillId : std::uint16_t {
   Evasion,       // trained by facing a creature's swing; main attribute Dexterity (dodging)
   Scavenging,    // trained by collecting loot; main attribute Luck (fortune -> crit)
   Throwing,      // trained by landing a ranged throw; main attribute Dexterity (aim), a little STR
+  Foraging,      // trained by grazing a food plot; main attribute Wisdom (the first WIS skill)
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
@@ -622,12 +623,18 @@ struct Attributes {
   Attribute strength;   // fed by Striking; each level past 1 lengthens attack reach + damage
   Attribute dexterity;  // fed by Evasion + Striking; each level past 1 raises the dodge chance
   Attribute luck;       // fed by Scavenging; each level past 1 raises the chance to crit a strike
+  Attribute wisdom;  // fed by Foraging; each level past 1 raises how much a food plot yields. The
+                     // first of the design's NON-combat attributes (nature/foraging), so it does
+                     // not feed the pools or a fighter build — it grows the survival economy.
 };
 
 // A BUILD-derived title — the "from build" half of the derived recognition the `standing_title`
-// comment promised. Which of the four trained Attributes dominates names what KIND of fighter a
-// character has become: STR a Warrior, DEX a Skirmisher, VIT a Bulwark, LCK a Chancer. A pure query
-// over Attributes (never a stored slot), so it always matches the levels behind it; the HUD shows
+// comment promised. Which of the four COMBAT Attributes dominates names what KIND of fighter a
+// character has become: STR a Warrior, DEX a Skirmisher, VIT a Bulwark, LCK a Chancer. Wisdom (the
+// non-combat gathering attribute) is deliberately NOT considered — a forager isn't a fighter build,
+// so a pure grazer stays a Greenhorn until it trains a combat stat; a "Naturalist"-style WIS title
+// is a later add. A pure query over Attributes (never a stored slot), so it always matches the
+// levels behind it; the HUD shows
 // it beside standing_title and the sim never reads it. All four still at the starting level 1 = no
 // build has emerged ("Greenhorn"). Ties break in a fixed order (strength, dexterity, endurance,
 // luck) so the result is deterministic. Ready to grow — mastery bands, gear, a per-skill "Master
@@ -652,7 +659,7 @@ inline const char* build_title(const Attributes& attrs) {
 // (a skill's XP flows to its MAIN attribute a lot, and to each CONTRIBUTOR a little). An
 // enum, not a member pointer, keeps the defs plain data — the shape mods will add rows to.
 // New attributes append here (and get a case in `attr_ref`, guarded by -Wswitch).
-enum class AttrId : std::uint8_t { Endurance, Strength, Dexterity, Luck };
+enum class AttrId : std::uint8_t { Endurance, Strength, Dexterity, Luck, Wisdom };
 
 // A single global "how experienced overall" level, fed by a fraction of ALL
 // activity (not one skill). Its level is a gentle multiplier — via the same POWER

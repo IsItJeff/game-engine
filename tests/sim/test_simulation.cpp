@@ -429,6 +429,53 @@ TEST_CASE("a food plot regrows its stock over time, capped at its yield", "[sim]
   REQUIRE(grown.stock == Approx(grown.max_stock));
 }
 
+TEST_CASE("grazing a food plot trains Foraging -> Wisdom like an orb trains Scavenging", "[sim]") {
+  // The food-plot mirror of the loot loop: a real graze now trains a Foraging skill feeding the new
+  // Wisdom attribute (the first WIS trainer), just as grabbing an orb trains Scavenging -> Luck. A
+  // grazer carrying the progression pair learns; a bare Stats-only eater (the other graze tests)
+  // trains nothing, so those stay bit-identical.
+  entt::registry reg;
+  const entt::entity plot = reg.create();
+  reg.emplace<eng::sim::Transform>(plot, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::FoodSource>(plot);  // default stock (100)
+  const entt::entity grazer = reg.create();
+  reg.emplace<eng::sim::Transform>(grazer, eng::Vec2{10.0f, 0.0f});  // within reach
+  reg.emplace<eng::sim::Stats>(grazer).hunger.current = 10.0f;       // hungry -> actually eats
+  reg.emplace<eng::sim::Attributes>(grazer);
+  reg.emplace<eng::sim::Skills>(grazer);
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i)
+    eng::sim::graze(reg, dt);  // one second grazing
+
+  REQUIRE(reg.get<eng::sim::Skills>(grazer).find(eng::sim::SkillId::Foraging) !=
+          nullptr);  // learned Foraging by eating...
+  REQUIRE(reg.get<eng::sim::Attributes>(grazer).wisdom.xp > eng::Fixed{});  // ...which fed Wisdom
+}
+
+TEST_CASE("a wiser forager eats more from the same plot: Wisdom raises graze yield", "[sim]") {
+  // Wisdom's first EFFECT (the reason the attribute isn't dead weight): each level past the first
+  // lifts how much a food plot yields per tick, so a seasoned forager tops off faster than a novice
+  // at the SAME patch. Level 1 is the base rate (bit-identical to the pre-Wisdom graze).
+  const auto fed_in_one_tick = [](int wisdom_level) {
+    entt::registry reg;
+    const entt::entity plot = reg.create();
+    reg.emplace<eng::sim::Transform>(plot, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::FoodSource>(plot);  // plenty of stock, so the bite isn't stock-limited
+    const entt::entity grazer = reg.create();
+    reg.emplace<eng::sim::Transform>(grazer, eng::Vec2{10.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(grazer).hunger.current = 0.0f;  // very hungry -> lots of room
+    reg.emplace<eng::sim::Attributes>(grazer).wisdom.level = wisdom_level;
+
+    eng::sim::graze(reg, static_cast<float>(eng::sim::kSecondsPerTick));  // one tick
+    return reg.get<eng::sim::Stats>(grazer).hunger.current;  // how much it ate that tick
+  };
+  const float novice = fed_in_one_tick(1);
+  const float sage = fed_in_one_tick(10);
+  REQUIRE(novice > 0.0f);
+  REQUIRE(sage > novice);  // the wiser forager drew more from the same plot in the same tick
+}
+
 TEST_CASE("a hungry NPC forages a stocked food plot but ignores a bare one", "[sim]") {
   // The forage rung now seeks food PLOTS as well as loot orbs — closing the "quiet corner with no
   // orbs" starvation gap. A stocked plot pulls a hungry NPC in; a bare one (stock 0) isn't a meal.

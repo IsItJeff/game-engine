@@ -211,6 +211,13 @@ renewable-but-finite crop. It closes the "starve in a quiet corner with no orbs"
 a plot to walk to) while adding a real resource dynamic: a small garden can't feed a big colony at
 once. Full player==NPC parity, like every other Need.
 
+A graze also *teaches*: a colonist that carries the progression pair trains **Foraging → Wisdom**
+each tick it eats, the food-plot twin of a loot grab training Scavenging → Luck. **Wisdom** is the
+first of the design's non-combat attributes, and its first payoff is right here — each level lifts
+how much a forager draws per tick (nature knowledge), so a seasoned forager tops off faster at the
+same patch. It doesn't grow the pools or a fighter build (`build_title` ignores it); it grows the
+survival economy. See [progression](progression.md).
+
 ## Extending it
 
 Every one of these is a small, contained change — the system is made to grow
