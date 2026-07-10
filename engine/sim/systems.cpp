@@ -804,11 +804,31 @@ void drink(entt::registry& reg, float dt) {
   }
 }
 
+// grant_skill_xp is a file-local helper defined further down (with attr_ref/skill_def); graze — a
+// survival system that sits ABOVE them — forward-declares it here so a real graze trains Foraging
+// through the SAME one funnel every other XP grant uses (skill + main attribute + character level),
+// never a bypassed, drift-prone copy. In an anonymous namespace to match the definition's internal
+// linkage. No default arg here (graze passes the CharacterLevel explicitly); the default lives on
+// the definition.
+namespace {
+void grant_skill_xp(Skills& skills, Attributes& attrs, SkillId id, Fixed base,
+                    CharacterLevel* character);
+}  // namespace
+
 void graze(entt::registry& reg, float dt) {
   // Hunger restored per second while grazing — and the stock the plot loses to give it. Fast enough
   // that a few seconds at a patch fills you, so it's a real "walk to the garden" destination. A
   // knob.
   constexpr float kFeedPerSecond = 40.0f;
+  // WISDOM's first payoff: each Wisdom level past the first lifts a forager's YIELD by this
+  // fraction (nature knowledge — you read the patch and take more). Level 1 -> 1.0 -> the base
+  // rate, so a grazer with no Attributes or an untrained one eats exactly as before
+  // (bit-identical). A knob.
+  constexpr float kYieldPerWis = 0.05f;
+  // A real graze also TRAINS Foraging -> Wisdom at this per-tick trickle (the food-plot mirror of a
+  // loot grab training Scavenging -> Luck). Matches Conditioning's 20 XP/sec so grazing grows WIS
+  // at the rate moving grows Endurance. (Fixed::from_ratio isn't constexpr, hence a plain const.)
+  const Fixed kForagingPerTick = Fixed::from_ratio(20, 60);
   // The food twin of drink, with one difference: the plot is FINITE. Each tick every plot first
   // REGROWS a little (capped at max_stock), then feeds nearby hungry people, DRAWING DOWN its stock
   // — so a picked-bare patch stops giving until it recovers. Eaters are the same set as drink/eat
@@ -830,11 +850,24 @@ void graze(entt::registry& reg, float dt) {
       const float room = hunger.max - hunger.current;
       if (room <= 0.0f) continue;  // already full
       if (glm::distance(grazers.get<Transform>(e).position, src_pos) > fs.radius) continue;
-      float bite = kFeedPerSecond * dt;  // ...but no more than the eater needs or the plot holds
+      // A wiser forager draws more per tick — WIS scales the base rate. No Attributes (or level 1)
+      // -> 1.0 -> the base rate (bit-identical). Reused for the training grant just below.
+      Attributes* at = reg.try_get<Attributes>(e);
+      const float wis_yield =
+          at != nullptr ? 1.0f + static_cast<float>(at->wisdom.level - 1) * kYieldPerWis : 1.0f;
+      float bite = kFeedPerSecond * wis_yield * dt;  // ...but no more than the eater needs or holds
       if (bite > room) bite = room;
       if (bite > fs.stock) bite = fs.stock;
       hunger.current += bite;
       fs.stock -= bite;
+
+      // The eater LEARNED from this graze: train Foraging -> Wisdom (+ a little Character Level),
+      // through the shared funnel. Only a grazer carrying the progression pair learns; a bare
+      // Stats+Transform eater (every existing graze test) trains nothing and stays bit-identical.
+      if (Skills* sk = reg.try_get<Skills>(e); sk != nullptr && at != nullptr) {
+        grant_skill_xp(*sk, *at, SkillId::Foraging, kForagingPerTick,
+                       reg.try_get<CharacterLevel>(e));
+      }
     }
   }
 }
@@ -880,6 +913,8 @@ Attribute& attr_ref(Attributes& a, AttrId id) {
       return a.dexterity;
     case AttrId::Luck:
       return a.luck;
+    case AttrId::Wisdom:
+      return a.wisdom;
   }
   return a.endurance;  // unreachable (switch is exhaustive) — silences control-reaches-end
 }
@@ -907,6 +942,9 @@ const SkillDef& skill_def(SkillId id) {
   // Throwing is Striking's mirror: aim-led (Dexterity main) with a little hurl-power (Strength
   // 1/4), where Striking is power-led (Strength main) with a little footwork (Dexterity 1/4).
   static const SkillDef kThrowing{AttrId::Dexterity, {{AttrId::Strength, Fixed::from_ratio(1, 4)}}};
+  // Foraging is Scavenging's food-plot twin: a gathering skill, but WISDOM-led (nature knowledge)
+  // where Scavenging is Luck-led (fortune). Main-only, no contributors — the first WIS skill.
+  static const SkillDef kForaging{AttrId::Wisdom, {}};
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -922,6 +960,8 @@ const SkillDef& skill_def(SkillId id) {
       return kScavenging;
     case SkillId::Throwing:
       return kThrowing;
+    case SkillId::Foraging:
+      return kForaging;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -996,6 +1036,7 @@ void advance_progression(entt::registry& reg) {
     apply_levels(attrs.strength.level, attrs.strength.xp);
     apply_levels(attrs.dexterity.level, attrs.dexterity.xp);  // fed by Evasion at the dodge site
     apply_levels(attrs.luck.level, attrs.luck.xp);            // fed by Scavenging at the loot site
+    apply_levels(attrs.wisdom.level, attrs.wisdom.xp);        // fed by Foraging at the graze site
     apply_levels(character.level, character.xp);
 
     // 3. Attributes shape derived stats: each Endurance level past the first adds to
