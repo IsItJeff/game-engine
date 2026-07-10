@@ -81,6 +81,12 @@ the colony — an NPC-villain AI is a later ring), hostiles are always searched 
 the target (so you can reach a colonist only with nothing else to fight), and it must be in
 reach. A downed body is excluded — no infamy for kicking a corpse.
 
+A cruel strike also lands a *personal* mark: besides the Cruelty deed, it forms a **grudge** — the
+struck colonist's affinity toward the striker drops, and a grudge-holder later **refuses to rescue**
+that player. That is a finer, earlier consequence than the global *fear* below (which needs standing
+past the Suspect line): hurt one colonist and *that one* abandons you long before the whole colony
+does. See [relationships](relationships.md).
+
 !!! info "Two heroes and a villain"
     Rescue → Charity and hostile-kill → Valor are the two things a hero *does*; striking a
     peaceful colonist → Cruelty is the mirror. Each is **one `record_deed` call**, exactly

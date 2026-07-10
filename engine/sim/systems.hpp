@@ -208,6 +208,11 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
 // reg.valid.
 void nudge_affinity(entt::registry& reg, entt::entity from, entt::entity toward, std::int8_t delta);
 
+// The reader counterpart of nudge_affinity: how `from` feels about `toward` (its directed
+// affinity), or 0 if there is no tie. A const, no-op-when-absent lookup used by the bond/grudge
+// readers.
+std::int8_t affinity_toward(const entt::registry& reg, entt::entity from, entt::entity toward);
+
 // Spawn a Weapon on the ground at `pos` — the one canonical grounded-weapon entity, shared by
 // a slain brute's drop (handle_deaths) and the player's Drop command so both look and behave
 // identically. Draws no RNG.

@@ -1460,6 +1460,81 @@ TEST_CASE("a bond to a vanished friend is skipped, not dereferenced", "[sim]") {
   REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.y == Approx(0.0f));
 }
 
+TEST_CASE("a cruel strike earns a personal grudge: the victim resents the striker", "[sim]") {
+  // The negative mirror of the rescue-bond: striking a peaceful colonist makes IT form negative
+  // affinity toward the striker (a grudge), alongside the Cruelty deed the striker earns.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(player);
+  reg.emplace<eng::sim::Skills>(player);
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist,
+                                   eng::Vec2{20.0f, 0.0f});  // in reach, no hostile around
+  reg.emplace<eng::sim::Stats>(colonist, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+
+  std::mt19937 rng{1234};
+  eng::sim::perform_attack(reg, player, rng);
+
+  REQUIRE(eng::sim::affinity_toward(reg, colonist, player) < 0);  // the colonist now resents...
+  REQUIRE(eng::sim::affinity_toward(reg, player, colonist) ==
+          0);  // ...but the striker forms no tie
+}
+
+TEST_CASE("a resented player is abandoned: a grudge-holder won't steer to the rescue", "[sim]") {
+  // The abandonment reader in steer_npcs: a colonist that dislikes the downed player (a grudge past
+  // the threshold) won't cross the field to save it, where a neutral one would.
+  const auto rescuer_velocity_x = [](bool holds_grudge) {
+    entt::registry reg;
+    const entt::entity downed = reg.create();
+    reg.emplace<eng::sim::Transform>(downed, eng::Vec2{100.0f, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(downed);
+    reg.emplace<eng::sim::Stats>(downed).health.current = 0.0f;
+    reg.emplace<eng::sim::Downed>(downed);
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});  // 100 away, within rescue radius
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);
+    if (holds_grudge) eng::sim::nudge_affinity(reg, npc, downed, -30);  // resents the downed player
+
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(npc).value.x;  // > 0 = steering toward the downed at +x
+  };
+  REQUIRE(rescuer_velocity_x(false) > 0.0f);          // neutral -> crosses to rescue (+x)
+  REQUIRE(rescuer_velocity_x(true) == Approx(0.0f));  // grudge -> stays put, abandons the resented
+}
+
+TEST_CASE("a resentful ally in reach still won't haul you up", "[sim]") {
+  // The completing half in handle_deaths: even a bystander in revive range refuses to rescue
+  // someone it resents, so a grudge-holder leaves the player Downed where a neutral ally would
+  // revive.
+  const auto revived = [](bool holds_grudge) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{100.0f, 100.0f});
+    reg.emplace<eng::sim::PlayerControlled>(player);
+    reg.emplace<eng::sim::Velocity>(player);
+    reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // down
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally, eng::Vec2{110.0f, 100.0f});  // within revive reach
+    reg.emplace<eng::sim::Velocity>(ally);
+    reg.emplace<eng::sim::Stats>(ally);
+    reg.emplace<eng::sim::Npc>(ally);
+    if (holds_grudge) eng::sim::nudge_affinity(reg, ally, player, -30);
+
+    const eng::Vec2 centre{640.0f, 360.0f};
+    eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // player goes Downed
+    eng::sim::handle_deaths(reg, centre,
+                            1.0f / 60.0f);         // ally in reach -> revive, unless it resents
+    return !reg.all_of<eng::sim::Downed>(player);  // true = hauled up
+  };
+  REQUIRE(revived(false));       // a neutral ally revives...
+  REQUIRE_FALSE(revived(true));  // ...but a grudge-holder leaves you Downed
+}
+
 TEST_CASE("no rescue means no ledger: the deed path stays lazy", "[sim]") {
   // The absent-ledger path must be bit-identical to before morality existed: an entity that never
   // completes a deed never gets a BehaviorLedger. Neither a far-off bystander nor the unrescued
