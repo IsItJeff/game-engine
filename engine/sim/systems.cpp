@@ -349,12 +349,17 @@ void steer_npcs(entt::registry& reg) {
     // of standing. MUST gate on reg.valid(other): edges store entity handles by value and ids
     // recycle, so a stale tie to a dead/reused entity is skipped, never dereferenced. No
     // Relationships -> the whole block is skipped -> the pre-relationships world is bit-identical.
-    // ponytail: kBondRadius is a plain knob today; loyalty (the last Personality axis) scales it
-    // NEXT — kBondRadius * (1 + loyalty/200).
+    // LOYALTY (the sixth and last Personality axis) scales the bond RADIUS, the identical
+    // trait-scaled-radius shape sociability gives the hero rung: a loyal colonist (+) crosses the
+    // field to stay near a bonded ally, a fickle one (-) follows only a friend practically
+    // underfoot. Neutral 0 (or no Personality) -> kBondRadius exactly (bit-identical). Reuses the
+    // `pers` fetched at the top of the loop; cast to float before the divide (-Wconversion). With
+    // this, EVERY acting steer rung reads a trait, and all six axes are wired.
+    const float loyalty = pers != nullptr ? static_cast<float>(pers->loyalty) : 0.0f;
     if (const Relationships* rel = reg.try_get<Relationships>(n)) {
       entt::entity friend_e = entt::null;
       Vec2 friend_pos{0.0f, 0.0f};
-      float nearest_friend = kBondRadius;
+      float nearest_friend = kBondRadius * (1.0f + loyalty / 200.0f);
       for (const Relation& edge : rel->edges) {
         if (edge.affinity < kBondPull || !reg.valid(edge.other))
           continue;  // weak tie, or stale handle

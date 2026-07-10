@@ -80,12 +80,11 @@ dereferenced.
 
 ## Where it goes next
 
-The immediate follow-up unblocks the **last personality axis**. `loyalty` — whose comment
-already says it "waits, appending here once relationships give a behaviour to read it" —
-wires as the bond-pull's radius knob, the identical trait-scaled-radius shape every other
-axis uses: `kBondRadius × (1 + loyalty/200)`. A loyal colonist crosses the field to stay
-near a bonded ally; a disloyal one drifts off unless the friend is underfoot. One field,
-one line.
+The immediate follow-up already landed: this seed **unblocked the last personality axis**.
+`loyalty` now scales the bond-pull's radius — `kBondRadius × (1 + loyalty/200)`, the identical
+trait-scaled-radius shape every other axis uses — so a loyal colonist crosses the field to stay
+near a bonded ally while a fickle one follows only a friend underfoot. **All six personality
+axes are now wired.**
 
 Beyond that, the write-point is the whole point: more events (fighting a common foe, a
 shared meal, a betrayal) each become one `nudge_affinity` call; `trust` appends as a
