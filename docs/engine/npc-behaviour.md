@@ -43,9 +43,11 @@ flowchart TD
   haz -->|yes| flee[flee: velocity straight away]
   haz -->|no| dwn{nearest Downed<br/>ally in range?}
   dwn -->|yes| rescue[rescue: velocity toward them]
-  dwn -->|no| hun{hungry AND<br/>food orb in range?}
-  hun -->|yes| forage[forage: velocity toward the orb]
-  hun -->|no| arm{unarmed AND<br/>weapon in range?}
+  dwn -->|no| hun{hungry AND<br/>food in range?}
+  hun -->|yes| forage[forage: velocity toward the food]
+  hun -->|no| thi{thirsty AND<br/>water in range?}
+  thi -->|yes| drink[drink: velocity toward the well]
+  thi -->|no| arm{unarmed AND<br/>weapon in range?}
   arm -->|yes| seek[arm up: velocity toward the weapon]
   arm -->|no| rally{renowned hero<br/>in range?}
   rally -->|yes| gather[rally: velocity toward the hero]
@@ -55,7 +57,12 @@ flowchart TD
 ```
 
 The first matching want wins and the NPC commits to it that tick (a `continue`), so a
-fleeing NPC never also forages, and a rescuer drops its meal to save someone. One
+fleeing NPC never also forages, and a rescuer drops its meal to save someone. The **two survival
+needs** are the one exception to strict rung order: hunger is drawn above thirst, but they're
+resolved by **urgency** — a colonist seeks whichever need is the *more depleted* (lower
+`current/max`), so the hunger rung defers to thirst when the canteen is emptier than the belly (and
+a well is actually in reach — an unreachable thirst never blocks a meal it *can* get to). Nobody
+dies of thirst standing next to a well just because hunger is checked first. One
 load-bearing detail in the rescue rung: an NPC *already* within revive range holds
 position rather than steering, so it doesn't nudge itself back out before
 `handle_deaths` (later the same tick) hauls the ally up. And every steer speed is scaled

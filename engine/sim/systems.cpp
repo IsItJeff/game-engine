@@ -258,7 +258,29 @@ void steer_npcs(entt::registry& reg) {
     const Stats* stats = reg.try_get<Stats>(n);
     const bool hungry =
         stats != nullptr && stats->hunger.current < stats->hunger.max * seek_fraction;
-    if (hungry) {
+    // URGENCY beats rung order: if a hungry colonist is ALSO thirsty and its WATER is more depleted
+    // than its food (a lower current/max fraction), defer to the water rung below — so a colonist
+    // dying of thirst doesn't forage first merely because hunger is checked first. Fractions
+    // compared by cross-multiply (both maxes > 0), no divide. When only one need bites it wins;
+    // when both bite, the more-depleted one goes first — BUT only if that need is actionable: we
+    // defer to thirst only when a WaterSource is actually in reach, else a thirst it can't act on
+    // would stall the colonist on BOTH needs beside food it could have eaten (the thirst rung would
+    // find no well and fall through). So an unreachable thirst never blocks a reachable meal.
+    bool thirst_first = false;
+    if (hungry) {  // implies stats != nullptr
+      const bool thirsty = stats->water.current < stats->water.max * kThirstSeekFraction;
+      const bool water_more_depleted =
+          stats->water.current * stats->hunger.max < stats->hunger.current * stats->water.max;
+      if (thirsty && water_more_depleted) {
+        for (const entt::entity w : sources) {  // defer only if a well is genuinely reachable
+          if (glm::distance(pos, sources.get<Transform>(w).position) < kWaterSeekRadius) {
+            thirst_first = true;
+            break;
+          }
+        }
+      }
+    }
+    if (hungry && !thirst_first) {
       // Head for the nearest FOOD — a scattered loot orb OR a fixed food plot with stock left,
       // whichever is closer. Track the target POSITION (not entity) so the two kinds compete on one
       // ruler; a bare plot (stock 0) isn't worth the walk, so it's skipped. Orbs are eaten in
@@ -292,10 +314,11 @@ void steer_npcs(entt::registry& reg) {
     }
 
     // Priority 3.5 — thirst: a safe NPC running low on water heads for the nearest WaterSource (the
-    // drink system tops it up on arrival). Ranks just below hunger — both are survival needs; if
-    // BOTH bite the same tick it forages first and seeks water the next. Reuses the `stats` fetched
-    // for the hunger rung; a plain need threshold (no personality read yet, unlike greed on
-    // forage).
+    // drink system tops it up on arrival). Sits just below hunger, but the two are ordered by
+    // URGENCY, not rung position: the hunger rung above defers to this one when water is the more
+    // depleted need (see thirst_first), so whichever need is closer to empty is sought first.
+    // Reuses the `stats` fetched for the hunger rung; a plain need threshold (no personality read
+    // yet, unlike greed on forage).
     if (stats != nullptr && stats->water.current < stats->water.max * kThirstSeekFraction) {
       entt::entity well = entt::null;
       float nearest_water = kWaterSeekRadius;
