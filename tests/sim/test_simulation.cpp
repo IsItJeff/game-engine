@@ -1535,6 +1535,42 @@ TEST_CASE("a resentful ally in reach still won't haul you up", "[sim]") {
   REQUIRE_FALSE(revived(true));  // ...but a grudge-holder leaves you Downed
 }
 
+TEST_CASE("friendship grades the rescue reach: a bond extends it and a mild dislike shortens it",
+          "[sim]") {
+  // The graded positive mirror of the grudge cutoff (a hard refusal at/below kGrudgeThreshold).
+  // ABOVE that line, affinity scales how far a colonist will cross to save the fallen: a bonded
+  // ally is worth a longer trek, a mild dislike a shorter one. Isolated from the idle bond-pull
+  // rung by placing the fallen beyond kBondRadius (the bond case) or using negative affinity below
+  // kBondPull (the dislike case), so ONLY the rescue rung can move the NPC here.
+  const auto rescuer_velocity_x = [](std::int8_t affinity, float fallen_x) {
+    entt::registry reg;
+    const entt::entity downed = reg.create();
+    reg.emplace<eng::sim::Transform>(downed, eng::Vec2{fallen_x, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(downed);
+    reg.emplace<eng::sim::Stats>(downed).health.current = 0.0f;
+    reg.emplace<eng::sim::Downed>(downed);
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);
+    if (affinity != 0) eng::sim::nudge_affinity(reg, npc, downed, affinity);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(npc).value.x;  // > 0 = steering toward the fallen at +x
+  };
+  // Bond EXTENDS the reach: the fallen lies at 400 — beyond the base rescue radius (300) AND beyond
+  // kBondRadius (220, so the idle bond-pull can't reach it either). A neutral colonist won't cross;
+  // a bonded one (+80, ~four past saves) reaches through the extended trek.
+  REQUIRE(rescuer_velocity_x(0, 400.0f) == Approx(0.0f));  // neutral: 400 > 300, stays put
+  REQUIRE(rescuer_velocity_x(80, 400.0f) > 0.0f);          // bonded: reach extends, crosses to save
+  // Mild dislike SHORTENS the reach: the fallen lies at 285 — just inside the base radius. A
+  // neutral colonist crosses; a mildly-disliked one (-18, still ABOVE the -20 grudge line) has its
+  // reach pulled in past the fallen, so it drops the rescue where the hard grudge gate hasn't yet
+  // fired.
+  REQUIRE(rescuer_velocity_x(0, 285.0f) > 0.0f);  // neutral: 285 < 300, crosses
+  REQUIRE(rescuer_velocity_x(-18, 285.0f) ==
+          Approx(0.0f));  // mild dislike: reach shrinks, abandons
+}
+
 TEST_CASE("no rescue means no ledger: the deed path stays lazy", "[sim]") {
   // The absent-ledger path must be bit-identical to before morality existed: an entity that never
   // completes a deed never gets a BehaviorLedger. Neither a far-off bystander nor the unrescued

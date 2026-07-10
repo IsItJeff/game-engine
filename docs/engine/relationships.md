@@ -75,14 +75,22 @@ tie:
   *personal, earlier* consequence than the global [villain-fear](morality.md) (which needs several
   strikes to push `standing` past the Suspect line): hurt one colonist and *that* colonist won't
   save you, long before the whole colony fears you.
+  Above that hard cutoff the same `affinity_toward` read now **grades the rescue reach**: the
+  fallen's distance is discounted by affinity (the `/200` shape the other rungs use), so a bonded
+  ally — its affinity grown by past saves — is worth a *longer* field, while a mild dislike (still
+  above the grudge line) is dropped *sooner*. The reader is a smooth dial from "cross the whole map
+  for my dearest friend" down through neutral to the hard "abandon the resented" floor. It closes a
+  small loop: **save an ally → its affinity climbs → you reach it from farther next time**, so a
+  colonist becomes a devoted protector of those it has saved.
 
 ## The tradeoffs
 
 - **Two events, two readers.** No personality-match seeding (that's a later ring), no bond
   *stages*, no decay — just the smallest struct those grow into. Exactly as the morality
   seed shipped a couple of deeds and let the rest wire themselves.
-- **The readers are still coarse.** A gentle gather and a rescue-veto; the *deeper* ones — a colonist
-  rescuing a friend *first*, fleeing *with* them, refusing to *fight* them — are later work.
+- **The readers are still coarse.** A gentle gather, a rescue-veto, and now a graded rescue reach
+  (a friend reached from farther); the *deeper* ones — fleeing *with* a friend, refusing to *fight*
+  them, healing them *first* — are later work.
 - **Unbounded edge list.** Bounded in practice (ties form only on a rescue, only toward a
   downed player), but formally open — a `ponytail:` comment names the `cap-N +
   evict-weakest` upgrade so it's tracked debt, not silent.
@@ -111,11 +119,13 @@ names the ladder; and a **leaky decay** lets cold ties fade (and a grudge cool).
 - `engine/sim/systems.hpp` / `systems.cpp` — `nudge_affinity` (the single write-point, the
   `record_deed` twin) and `affinity_toward` (its read-side counterpart); the bond formed at
   `handle_deaths`' rescue branch and the grudge at `perform_attack`'s cruel-strike branch; the
-  bond-pull rung in `steer_npcs` (below the hero-rally) and the grudge-veto in both rescue paths.
+  bond-pull rung in `steer_npcs` (below the hero-rally), the grudge-veto in both rescue paths, and
+  the affinity-discounted rescue reach on the `steer_npcs` rescue rung.
 - `tests/sim/test_simulation.cpp` — the write-point (find-or-update + clamp), the bond
   wired at a rescue, the bond-pull steering toward a friend (and the range gate), the
   stale-handle guard, and the grudge (a cruel strike resents the striker; a grudge-holder
-  won't cross to rescue nor haul up the resented).
+  won't cross to rescue nor haul up the resented); and the graded rescue reach (a bond extends the
+  trek beyond the base radius, a mild dislike shortens it — isolated from the bond-pull rung).
 
 ## Go deeper
 

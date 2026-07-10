@@ -96,7 +96,12 @@ a **coward** won't make the risky trek and only helps an ally close by (the radi
 sign is deliberately **opposite** the flee radius — braver *shrinks* the flee radius (holds
 ground) but *grows* the rescue radius (commits further) — so on both rungs "braver" is the
 courageous choice. That two-behaviour payoff is what makes `Personality` earn its keep on its
-second use, not a one-off.
+second use, not a one-off. Layered *on top* of that personality radius, a **relationship** now
+grades the same reach: the fallen's distance is discounted by the rescuer's `affinity` toward it,
+so a **bonded** ally (one it has saved before) is worth a longer trek while a mild dislike shortens
+it — down to the hard grudge cutoff where the resented are abandoned outright (see
+[Relationships](relationships.md)). Bravery is *who* the colonist is; affinity is *who the fallen
+is to them*.
 
 A **second axis, `greed`**, proves `Personality` bends to more than one *shape* of decision. It
 reads the **forage** rung — not a radius but a **need threshold**: the effective "am I hungry?"
