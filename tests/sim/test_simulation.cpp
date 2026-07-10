@@ -89,6 +89,27 @@ TEST_CASE("regenerate_vitals heals the health vital over time, capped at max", "
   REQUIRE(health.current == Approx(health.max));  // capped at 100, never overshot
 }
 
+TEST_CASE("a hearth speeds nearby health regen: mend by the fire", "[sim]") {
+  // The base-building recovery seed: a wounded character resting within a hearth's radius mends
+  // faster than one out in the cold, but is rooted to the spot (a positioning trade). Same wound
+  // and regen rate; only the distance to the hearth differs.
+  const auto healed_in_1s = [](float dist_from_hearth) {
+    entt::registry reg;
+    const entt::entity hearth = reg.create();
+    reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Hearth>(hearth, eng::sim::Hearth{100.0f});  // 100u of warmth
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Transform>(e, eng::Vec2{dist_from_hearth, 0.0f});
+    reg.emplace<eng::sim::Stats>(e, eng::sim::Vital{50.0f, 100.0f, 8.0f});  // wounded; heals 8/sec
+
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::regenerate_vitals(reg, dt);  // 1s
+    return reg.get<eng::sim::Stats>(e).health.current - 50.0f;
+  };
+  REQUIRE(healed_in_1s(500.0f) > 0.0f);  // out in the cold -> base regen still heals...
+  REQUIRE(healed_in_1s(50.0f) > healed_in_1s(500.0f));  // ...but within its warmth, mends faster
+}
+
 TEST_CASE("moving drains the player's stamina", "[sim]") {
   eng::sim::World world;  // player spawns with full stamina (100)
   const entt::entity player = world.player();

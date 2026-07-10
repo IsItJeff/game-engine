@@ -488,6 +488,15 @@ struct WaterSource {
   float radius = 60.0f;
 };
 
+// A fixed HEARTH — a warm, safe spot that speeds the HEALTH regen of anyone resting within `radius`
+// (regenerate_vitals multiplies their regen while in range). The design's base-building recovery
+// seed: a reason to hold/return to a place, and a real positioning trade (mend at base vs act in
+// the field). Like the pond it's scenery the sim reads only for its effect; drawn if given a
+// RenderDot.
+struct Hearth {
+  float radius = 0.0f;
+};
+
 // A fixed food plot — a berry patch / garden a hungry character GRAZES to refill hunger (the
 // `graze` system). Unlike the water pond it is FINITE: `stock` falls as colonists eat and REGROWS
 // over time toward `max_stock`, so a picked-over patch must recover — the seed of the design's food
