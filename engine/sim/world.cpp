@@ -143,6 +143,22 @@ entt::entity make_spitter(entt::registry& reg, Vec2 pos) {
   return e;
 }
 
+// A VENOM blade on the ground — a poison-build weapon, the second weapon TYPE. Lighter than the
+// default steel blade (less +Strength, less heft) but its hits ENVENOM the foe (perform_attack
+// applies Poisoned, reusing tick_poison) — trading raw power for a lingering chip and mobility. The
+// design's "gear grants a +aspect, with a bane". A sickly venom-green dot to tell it from steel.
+entt::entity make_venom_weapon(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.4f, 0.8f, 0.35f}, 6.0f);  // venom green
+  Weapon& w = reg.emplace<Weapon>(e);
+  w.strength_bonus = 2;       // lighter/weaker than the steel blade's +4 — the trade for the proc
+  w.move_penalty = 0.15f;     // and nimbler than the steel blade's 0.25 heft
+  w.venom_per_second = 6.0f;  // its hits poison (health/sec); a knob
+  return e;
+}
+
 // Keep the fight alive: once the spawn timer runs out, add a creature at a field edge
 // (if we're under the cap) and reset it. Deterministic — the timer is a fixed per-tick
 // countdown and the position comes from the seeded rng, so every run spawns the same
@@ -347,6 +363,10 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // A colonist may beat you to one (npc_equip), the same as with weapons.
   spawn_armour(reg, Vec2{center.x + 90.0f, center.y - 40.0f});
   spawn_armour(reg, Vec2{kFieldWidth * 0.6f, kFieldHeight * 0.35f});
+
+  // A VENOM blade (sickly-green dot) as a second weapon TYPE: E it for a poison build — weaker,
+  // nimbler hits that envenom the foe. A brute's steel drop is the raw-power alternative.
+  make_venom_weapon(reg, Vec2{center.x - 120.0f, center.y + 60.0f});
   return player;
 }
 
@@ -538,14 +558,19 @@ void World::apply_command(const Command& cmd) {
         if (players.get<PlayerControlled>(p).player != cmd.player) continue;
         if (registry_.all_of<Downed>(p)) continue;  // helpless — can't drop
         Equipped& eq = players.get<Equipped>(p);
-        if (eq.strength_bonus == 0 && eq.move_penalty == 0.0f) continue;  // no weapon to shed
+        if (eq.strength_bonus == 0 && eq.move_penalty == 0.0f && eq.weapon_venom == 0.0f)
+          continue;  // no weapon to shed
         droppers.push_back(p);
       }
       for (const entt::entity p : droppers) {
+        // ponytail: a dropped weapon is a PLAIN one — a venom blade loses its proc on the ground
+        // (a full item-identity system would preserve it; the seed drops the def, not the
+        // instance).
         spawn_weapon(registry_, registry_.get<Transform>(p).position);  // a weapon where you stand
         Equipped& eq = registry_.get<Equipped>(p);
         eq.strength_bonus = 0;  // clear ONLY the weapon slot; the heft is shed...
         eq.move_penalty = 0.0f;
+        eq.weapon_venom = 0.0f;  // ...and the venom with it
         // ...and if nothing's left worn (no armour either), drop the now-empty cache entirely
         // so the "wielding" HUD clears and MovePlayer/perform_attack see a bare character.
         if (eq.defence_bonus == 0.0f && eq.stamina_regen_penalty == 0.0f) {

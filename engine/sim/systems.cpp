@@ -1121,6 +1121,15 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
     // brave.
     if (was_alive && st->health.current <= 0.0f)
       record_deed(reg, attacker, Deed::Valor, kValorKill);
+    // A VENOM weapon's hit also ENVENOMS the foe — the player-side mirror of a swarmer's bite,
+    // reusing Poisoned + tick_poison (and the same kPoisonDuration). Only a venomous blade
+    // (gear->weapon_venom > 0) does this, so a bare-handed or plain-weapon swing is unchanged;
+    // refreshed on each hit. `gear` is the wielder's Equipped fetched at the top of the function.
+    if (gear != nullptr && gear->weapon_venom > 0.0f) {
+      Poisoned& venom = reg.get_or_emplace<Poisoned>(target);
+      venom.remaining = kPoisonDuration;
+      venom.damage_per_second = gear->weapon_venom;
+    }
   }
   return entt::null;
 }
@@ -1356,6 +1365,7 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
     const Weapon& wpn = weapons.get<Weapon>(nearest);
     eq.strength_bonus = wpn.strength_bonus;
     eq.move_penalty = wpn.move_penalty;
+    eq.weapon_venom = wpn.venom_per_second;  // a venom blade folds its proc in with its other stats
   } else {
     const Armour& arm = armours.get<Armour>(nearest);
     eq.defence_bonus = arm.defence_bonus;
@@ -1728,7 +1738,6 @@ void resolve_contacts(entt::registry& reg) {
 void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng) {
   constexpr float kContactDistance = 15.0f;
   constexpr float kAttackInterval = 0.8f;   // seconds between a creature's swings
-  constexpr float kPoisonDuration = 3.0f;   // how long a venomous bite lingers (a knob)
   constexpr float kEnrageThreshold = 0.3f;  // below this fraction of its HP, a creature enrages...
   constexpr float kEnrageDamage = 1.75f;    // ...and its blows hit this much harder (knobs)
   const Fixed kEvasionPerSwing = Fixed::from_int(10);  // XP for facing a swing, dodged or not
