@@ -47,6 +47,15 @@ constexpr std::int8_t kBondPull = 10;
 // monster reads as +5 standing.
 constexpr std::int32_t kValorKill = 1;
 
+// KILL VIGOR: felling a foe restores this much HEALTH to the killer — combat's direct sustain axis,
+// a comeback tool that rewards pressing the attack instead of turtling. Fires at the SAME kill
+// transition as the Valor credit (melee and ranged both), capped at max. A kill's adrenaline, NOT
+// the passive mending regenerate_vitals gates behind a full belly — a distinct source, so it heals
+// even a starving killer. (Distinct from the STAMINA "second wind" in update_stamina, which IS
+// starvation-gated — this is health from a kill, that is stamina from rest.) A playtest knob; small
+// enough to be a lifeline, not a heal-lock.
+constexpr float kKillVigor = 8.0f;
+
 // Striking a PEACEFUL colonist is a Cruelty deed of this size on the attacker — one atomic deed
 // unit, the VILLAIN mirror of Valor and the first deed that SINKS standing. standing weights
 // Cruelty ×6, so one betrayal reads as -6 standing: villainy is dearer than heroism is cheap, on
@@ -1210,7 +1219,7 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // number every landing branch below shares (the hostile hit, the cruel-strike, AND the cleave all
   // read `raw`), so keeping the colony fed and watered is now a combat concern too. No Stats, or
   // full needs (the common case and every combat test), -> need_efficiency 1.0 -> bit-identical.
-  const Stats* atk_stats = reg.try_get<Stats>(attacker);
+  Stats* atk_stats = reg.try_get<Stats>(attacker);  // read for the need debuff; healed on a kill
   const float need_eff = atk_stats != nullptr ? need_efficiency(*atk_stats) : 1.0f;
   const float raw = (kBaseAttackDamage +
                      static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength * veteran +
@@ -1360,6 +1369,15 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       // skirmish happens within melee reach, so the attacker's own position (tf, non-null past the
       // guard at the top) is its centre.
       bond_witnesses(reg, attacker, tf->position);
+      // ...and the kill grants the killer a burst of VIGOR — a little health back (kKillVigor),
+      // capped at max. Rewards finishing a fight; a full-health killer is unchanged
+      // (bit-identical). Reuses `atk_stats` (the attacker's sheet); an attacker with no Stats
+      // simply doesn't heal. NPCs get it too via the shared perform_attack.
+      if (atk_stats != nullptr) {
+        atk_stats->health.current += kKillVigor;
+        if (atk_stats->health.current > atk_stats->health.max)
+          atk_stats->health.current = atk_stats->health.max;
+      }
     }
     // A VENOM weapon's hit also ENVENOMS the foe — the player-side mirror of a swarmer's bite,
     // reusing Poisoned + tick_poison (and the same kPoisonDuration). Only a venomous blade
@@ -1529,6 +1547,15 @@ void advance_projectiles(entt::registry& reg, float dt) {
           // the owner's Transform (it's valid here, but may be a positionless entity in theory).
           if (const Transform* owner_tf = reg.try_get<Transform>(p.owner)) {
             bond_witnesses(reg, p.owner, owner_tf->position);
+          }
+          // KILL VIGOR on a ranged kill too — the same kKillVigor health-back as a melee kill
+          // (parity), healing the OWNER (the one who fought), capped at max. A full-health owner is
+          // unchanged (bit-identical). p.owner's Stats isn't in the shots view, so this is
+          // view-safe.
+          if (Stats* owner_stats = reg.try_get<Stats>(p.owner); owner_stats != nullptr) {
+            owner_stats->health.current += kKillVigor;
+            if (owner_stats->health.current > owner_stats->health.max)
+              owner_stats->health.current = owner_stats->health.max;
           }
         }
       }
