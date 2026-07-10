@@ -2056,6 +2056,35 @@ TEST_CASE("a killing throw earns Valor, exactly like a melee kill", "[sim]") {
   REQUIRE(eng::sim::standing(*led) == 5);  // a ranged kill is Valor ×5, same as a melee kill
 }
 
+TEST_CASE("a ranged kill also forges camaraderie centred on the shooter", "[sim]") {
+  // The ranged half of bond_witnesses: a killing THROW bonds colonists near the SHOOTER (who
+  // fought), NOT the distant impact. The foe sits far off (x=300) so the shooter's and impact's
+  // camaraderie circles don't overlap — an ally by the shooter bonds; one by the impact does not.
+  const auto witness_affinity = [](float ally_x) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).dexterity.level = 20;  // throws hard enough to one-shot
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{300.0f, 0.0f});  // far, but in throw range
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{2.0f, 2.0f, 0.0f});  // frail: one shot
+    reg.emplace<eng::sim::Enemy>(foe);
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally, eng::Vec2{ally_x, 0.0f});
+    reg.emplace<eng::sim::Npc>(ally);  // a peaceful colonist bystander (not the throw's target)
+
+    eng::sim::perform_throw(reg, atk);
+    eng::sim::advance_projectiles(reg,
+                                  1.0f);  // flies home, fells the foe -> bonds nearby witnesses
+    return eng::sim::affinity_toward(reg, ally, atk);
+  };
+  REQUIRE(witness_affinity(30.0f) > 0);  // an ally by the SHOOTER (dist 30) bonds...
+  REQUIRE(witness_affinity(300.0f) ==
+          0);  // ...one by the IMPACT (dist 300 from the shooter) does not
+}
+
 TEST_CASE("a thrown shot travels: it lands on the target only after it flies there", "[sim]") {
   // The projectile has a travel time — perform_throw LAUNCHES a homing shot, it doesn't hit
   // instantly. So right after the throw the foe is untouched and a shot is airborne; the hit lands

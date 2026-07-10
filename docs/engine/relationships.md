@@ -65,8 +65,9 @@ common foe"*, directed **witness → killer**, so it feeds the very readers belo
 fights beside it. Lighter than a rescue's `+20` (witnessing is a smaller thing than being saved), so
 devotion accrues over several shared victories. Because both player and NPC kills route through the
 shared `perform_attack`, a colonist earns camaraderie whether *you* or a fellow colonist lands the
-blow. *(ponytail: only MELEE kills bond today — the ranged `advance_projectiles` kill is the same
-event and is the noted follow-up.)*
+blow. A **ranged** kill counts too: `advance_projectiles` calls the same `bond_witnesses` on a
+felling shot, centred on the **shooter** (the one who fought), not the distant impact — so a
+throw earns the same regard as a swing.
 
 The affinity is **read two ways** — a positive draw and a negative repulsion, the two faces of a
 tie:
@@ -123,7 +124,7 @@ axes are now wired.**
 
 Beyond that, the write-point is the whole point: three events already prove it out (a rescue bonds,
 a cruel strike grudges, a shared kill forges camaraderie), so each further event — a **shared meal**,
-a **ranged** kill (the melee camaraderie's twin) — is just one more `nudge_affinity` call; `trust`
+a **broken promise** — is just one more `nudge_affinity` call; `trust`
 appends as a second `Relation` field; the derived `bond_tier` names the ladder; and a **leaky decay**
 lets cold ties fade (and a grudge cool). Then the social `perceive` layer reads affinity *and*
 standing to choose stances (befriend / protect / exploit).
@@ -135,7 +136,8 @@ standing to choose stances (befriend / protect / exploit).
 - `engine/sim/systems.hpp` / `systems.cpp` — `nudge_affinity` (the single write-point, the
   `record_deed` twin) and `affinity_toward` (its read-side counterpart); the bond formed at
   `handle_deaths`' rescue branch, the grudge at `perform_attack`'s cruel-strike branch, and
-  `bond_witnesses` (camaraderie) at `perform_attack`'s killing-blow branch; the bond-pull rung in
+  `bond_witnesses` (camaraderie) at `perform_attack`'s AND `advance_projectiles`' killing-blow
+  branches; the bond-pull rung in
   `steer_npcs` (below the hero-rally), the grudge-veto in both rescue paths, and the
   affinity-discounted rescue reach on the `steer_npcs` rescue rung.
 - `tests/sim/test_simulation.cpp` — the write-point (find-or-update + clamp), the bond
