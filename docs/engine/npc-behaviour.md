@@ -49,7 +49,9 @@ flowchart TD
   arm -->|yes| seek[arm up: velocity toward the weapon]
   arm -->|no| rally{renowned hero<br/>in range?}
   rally -->|yes| gather[rally: velocity toward the hero]
-  rally -->|no| drift[drift: leave velocity alone]
+  rally -->|no| bond{a bonded friend<br/>in range?}
+  bond -->|yes| gathb[bond: velocity toward the friend]
+  bond -->|no| drift[drift: leave velocity alone]
 ```
 
 The first matching want wins and the NPC commits to it that tick (a `continue`), so a
@@ -228,3 +230,4 @@ then act, is what stays.
 - [Entities and components](skeleton/ecs.md) — why an NPC is a component set, and how the view targets them.
 - [The stats system](stats-system.md) — the permadeath that fleeing tries to postpone.
 - [Morality](morality.md) — `standing` and the Cruelty deed that turns a player into the villain this flee rung now reads.
+- [Relationships](relationships.md) — the directed bonds the lowest steer rung (below the hero-rally) reads: an idle colonist drifts toward a friend it rescued.

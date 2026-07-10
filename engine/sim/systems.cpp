@@ -22,6 +22,12 @@ constexpr float kReviveDistance = 20.0f;
 // Charity ×4, so one save reads as +4 standing.
 constexpr std::int32_t kRescueCharity = 1;
 
+// A rescue also forms a personal BOND: the rescuer gains this much affinity TOWARD the one they
+// hauled up ("I'm invested in who I saved"). The relationships seed's one forming event, the twin
+// of the Charity deed above. affinity is clamped to ±100, so ~5 saves of the same ally saturate the
+// tie — a playtest knob.
+constexpr std::int8_t kRescueAffinity = 20;
+
 // Landing the killing blow on a HOSTILE is a Valor deed of this size on the attacker — one atomic
 // deed unit, the offensive twin of a rescue's Charity. standing weights Valor ×5, so a slain
 // monster reads as +5 standing.
@@ -82,6 +88,11 @@ void steer_npcs(entt::registry& reg) {
   // the lowest-urgency want. Knobs.
   constexpr float kRallyRadius = 220.0f;
   constexpr float kRallySpeed = 70.0f;
+  // Bond pull: the PERSONAL twin of the public hero-rally — an idle colonist with no hero to gather
+  // to drifts toward a nearby FRIEND (a positive-affinity Relationship, e.g. the one it rescued).
+  // Reuses kRallySpeed. Knobs.
+  constexpr float kBondRadius = 220.0f;
+  constexpr std::int8_t kBondPull = 10;  // affinity floor below which a tie doesn't move you
 
   // Nested loops: every NPC against every hazard / orb / fallen ally / weapon — O(n*m), fine
   // for a handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts
@@ -327,6 +338,41 @@ void steer_npcs(entt::registry& reg) {
       const Vec2 toward = heroes.get<Transform>(champion).position - pos;
       const float len = glm::length(toward);
       if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+      continue;  // gathered to the public hero — the personal-bond pull below is the fallback
+    }
+
+    // Priority 6 — BOND: the PERSONAL twin of the hero-rally, the first reader of the P8
+    // relationships seed. Reached only when no public hero claimed the rung, so the hero-rally
+    // above is byte-identical. An idle colonist with a positive-affinity tie (e.g. the player it
+    // rescued) drifts toward its nearest well-liked friend — the colony clusters by BOND, not only
+    // around the famous. Reuses the rally toward-vector + speed verbatim, reading affinity instead
+    // of standing. MUST gate on reg.valid(other): edges store entity handles by value and ids
+    // recycle, so a stale tie to a dead/reused entity is skipped, never dereferenced. No
+    // Relationships -> the whole block is skipped -> the pre-relationships world is bit-identical.
+    // ponytail: kBondRadius is a plain knob today; loyalty (the last Personality axis) scales it
+    // NEXT — kBondRadius * (1 + loyalty/200).
+    if (const Relationships* rel = reg.try_get<Relationships>(n)) {
+      entt::entity friend_e = entt::null;
+      Vec2 friend_pos{0.0f, 0.0f};
+      float nearest_friend = kBondRadius;
+      for (const Relation& edge : rel->edges) {
+        if (edge.affinity < kBondPull || !reg.valid(edge.other))
+          continue;  // weak tie, or stale handle
+        const Transform* t = reg.try_get<Transform>(edge.other);
+        if (t == nullptr)
+          continue;  // a friend with no position (shouldn't happen, but cheap to guard)
+        const float d = glm::distance(pos, t->position);
+        if (d < nearest_friend) {
+          nearest_friend = d;
+          friend_e = edge.other;
+          friend_pos = t->position;
+        }
+      }
+      if (friend_e != entt::null) {
+        const Vec2 toward = friend_pos - pos;
+        const float len = glm::length(toward);
+        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+      }
     }
   }
 }
@@ -1392,6 +1438,32 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
   }
 }
 
+void nudge_affinity(entt::registry& reg, entt::entity from, entt::entity toward,
+                    std::int8_t delta) {
+  // The whole RELATIONSHIPS write-path, the record_deed twin: lazily give `from` a Relationships on
+  // its first bond, then find-or-update its directed edge toward `toward` — deepen an existing tie,
+  // or append a new one — so the edge count is the number of DISTINCT partners, never per-tick
+  // growth. get_or_emplace keeps a never-bonding entity edge-free (the absent-Relationships world
+  // is bit-identical). Touches no registry view (get_or_emplace + a vector write), so it is safe to
+  // call mid-iteration, exactly like record_deed.
+  //
+  // Clamp to ±100 in ONE place — BOTH the deepen and the first-append path — so the band invariant
+  // holds no matter which branch stores (a future event may nudge past 100 the first time). int8
+  // saturates into bond bands; it doesn't accumulate over a life toward a gate the way ledger dims
+  // do, so a bounded store is the whole point (the derived bond_tier will assume it).
+  const auto clamp = [](int v) {
+    return static_cast<std::int8_t>(v > 100 ? 100 : (v < -100 ? -100 : v));
+  };
+  auto& rel = reg.get_or_emplace<Relationships>(from);
+  for (Relation& e : rel.edges) {
+    if (e.other == toward) {  // deepen an existing tie
+      e.affinity = clamp(static_cast<int>(e.affinity) + static_cast<int>(delta));
+      return;
+    }
+  }
+  rel.edges.push_back(Relation{toward, clamp(static_cast<int>(delta))});  // first tie to `toward`
+}
+
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // A zero-health entity meets one of two fates, and which one is the game's core rule
   // made concrete: a PLAYER goes DOWNED (helpless where they fell, then rescued-in-place
@@ -1455,6 +1527,13 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
       // ledger doesn't disturb the players view being iterated (BehaviorLedger isn't one of its
       // components), the same reason the Downed emplace above is safe here.
       record_deed(reg, rescuer, Deed::Charity, kRescueCharity);
+      // ...and a personal BOND forms: the rescuer grows affinity TOWARD the one they saved (the P8
+      // relationships seed's one forming event). Direction is rescuer->rescued deliberately: only
+      // players go Downed, so `e` is a player that doesn't run steer_npcs — putting the edge on the
+      // RESCUER (usually an NPC that DOES steer) is what lets the bond produce visible motion
+      // later. (If NPCs ever go Downed, revisit that rationale.) Same view-safety as the
+      // record_deed above.
+      nudge_affinity(reg, rescuer, e, kRescueAffinity);
     } else if (down->timer <= 0.0f) {
       // Unrescued: the humane fallback so a solo player isn't stuck down forever — respawn
       // whole at the field centre. A DELAYED, earned-back respawn, not the old instant one.

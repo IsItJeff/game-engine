@@ -126,6 +126,33 @@ inline std::int32_t standing(const BehaviorLedger& led) {
          d(Deed::Cruelty) * 6 - d(Deed::Violence) * 4;
 }
 
+// One directed tie: THIS entity -> `other`. The seed of the design's P8 RELATIONSHIPS (directed,
+// sparse, small event-deltas). int8 like a Personality axis — affinity SATURATES into bond bands,
+// it doesn't accumulate over a life toward a gate the way ledger dims do — so no wide int and no
+// float ever enters the sim. Only `affinity` is fed for now (the design's R1 slice); its two
+// siblings wire later with NO reshape: `trust` is a one-field append the day its own event lands,
+// and the bond ladder (Acquaintance -> Friend -> Partner / Rival -> Nemesis) is a DERIVED band
+// `bond_tier(affinity)` — a pure query, never a stored slot — exactly the standing ->
+// standing_title split.
+struct Relation {
+  entt::entity other = entt::null;  // directed: A->B is a separate edge from B->A
+  std::int8_t affinity = 0;         // [-100 dislike .. +100 like]
+};
+
+// A character's felt ties — how THIS entity regards others. Lazy + sparse + append-ordered, the
+// Skills-vector pattern: deterministic iteration (a hash map's is not) and no heap churn until a
+// real bond forms. Emplaced only on an entity's FIRST bond (nudge_affinity does the
+// get_or_emplace), so a never-bonding entity — and the whole pre-relationships world — carries
+// nothing and replays bit-identically, exactly as BehaviorLedger stays absent for the never-acting.
+// Stored by value: entity ids RECYCLE, so every READER must gate on reg.valid(other) before
+// touching the target.
+struct Relationships {
+  // ponytail: unbounded edge list. Fine while ties are rare (they form only on a rescue, only
+  // toward a downed player); cap-N + evict-weakest-affinity only if a colonist ever bonds with
+  // hundreds.
+  std::vector<Relation> edges;
+};
+
 // Marks an entity as a non-player character. Empty for now — its whole job is to
 // answer "is this a person the world runs, rather than the player?" so systems
 // can treat the two differently (most importantly: an NPC that dies is destroyed,
