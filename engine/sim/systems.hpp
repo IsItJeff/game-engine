@@ -200,6 +200,14 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt);
 // new CALLER of this function, never new state.
 void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_t mag);
 
+// Nudge a directed RELATIONSHIP — the record_deed twin, the SINGLE write-point for the P8
+// relationships seed. Lazily emplaces `from`'s Relationships (edge-free until its first bond, so
+// bit-identical when absent), find-or-updates the edge toward `toward` by `delta`, clamped to ±100.
+// Pure/deterministic, touches no view (safe mid-iteration). Every future bond-forming event is a
+// new CALLER, never new state. Stores entity handles by value, so every READER must gate on
+// reg.valid.
+void nudge_affinity(entt::registry& reg, entt::entity from, entt::entity toward, std::int8_t delta);
+
 // Spawn a Weapon on the ground at `pos` — the one canonical grounded-weapon entity, shared by
 // a slain brute's drop (handle_deaths) and the player's Drop command so both look and behave
 // identically. Draws no RNG.

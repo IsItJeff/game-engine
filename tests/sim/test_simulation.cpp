@@ -1313,6 +1313,129 @@ TEST_CASE("rescuing a downed ally records a Charity deed on the rescuer", "[sim]
   REQUIRE(player_credit == npc_credit);  // ...identical for a player rescuer (parity)
 }
 
+TEST_CASE("nudge_affinity forms one directed edge and deepens it, clamped", "[sim]") {
+  // The single relationships write-point (the record_deed twin): the first nudge appends a directed
+  // edge, a second to the SAME target deepens it (not a duplicate), and repeated nudges saturate at
+  // ±100 rather than overflowing the int8.
+  entt::registry reg;
+  const entt::entity a = reg.create();
+  const entt::entity b = reg.create();
+
+  eng::sim::nudge_affinity(reg, a, b, 20);
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges.size() == 1u);   // one edge appended...
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges[0].other == b);  // ...directed toward b
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges[0].affinity == 20);
+
+  eng::sim::nudge_affinity(reg, a, b, 20);
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges.size() == 1u);  // deepened, not duplicated
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges[0].affinity == 40);
+
+  for (int i = 0; i < 10; ++i) eng::sim::nudge_affinity(reg, a, b, 100);
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges[0].affinity == 100);  // saturates, no overflow
+  for (int i = 0; i < 20; ++i) eng::sim::nudge_affinity(reg, a, b, -100);
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges[0].affinity == -100);  // symmetric floor
+
+  // The clamp holds on FIRST append too, not just on deepen: a big first nudge to a NEW target
+  // lands at the band edge, never out of range.
+  const entt::entity c = reg.create();
+  eng::sim::nudge_affinity(reg, a, c, 120);
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges.size() == 2u);  // a second edge appended
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges[1].other == c);
+  REQUIRE(reg.get<eng::sim::Relationships>(a).edges[1].affinity == 100);  // clamped on append
+}
+
+TEST_CASE("the public hero-rally still beats a personal bond", "[sim]") {
+  // The gating claim that keeps the public rally byte-identical: the bond-pull sits BELOW the
+  // hero-rally, so when a renowned hero is present it claims the rung first. A colonist with a
+  // bonded friend to its LEFT and a Known+ hero to its RIGHT gathers to the HERO (+x), not the
+  // friend.
+  entt::registry reg;
+  const entt::entity hero = reg.create();
+  reg.emplace<eng::sim::Transform>(hero, eng::Vec2{100.0f, 0.0f});  // to the right
+  reg.emplace<eng::sim::PlayerControlled>(hero);
+  eng::sim::record_deed(reg, hero, eng::sim::Deed::Valor, 5);  // +25 standing -> Known+
+
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+  const entt::entity friend_e = reg.create();
+  reg.emplace<eng::sim::Transform>(friend_e, eng::Vec2{-100.0f, 0.0f});  // to the left
+  eng::sim::nudge_affinity(reg, colonist, friend_e, 30);
+
+  eng::sim::steer_npcs(reg);
+
+  // Toward the hero (+x), NOT the friend (-x): the hero-rally claimed the rung first.
+  REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x > 0.0f);
+}
+
+TEST_CASE("a rescue forms a bond: the rescuer gains affinity toward the one it saved", "[sim]") {
+  // The relationships seed's one forming event, wired at the same rescue site as the Charity deed:
+  // the RESCUER (not the rescued) gains a directed affinity edge toward the player it hauled up.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Velocity>(player);
+  reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // down
+  const entt::entity rescuer = reg.create();
+  reg.emplace<eng::sim::Transform>(rescuer, eng::Vec2{110.0f, 100.0f});  // within revive reach
+  reg.emplace<eng::sim::Velocity>(rescuer);
+  reg.emplace<eng::sim::Stats>(rescuer);
+  reg.emplace<eng::sim::Npc>(rescuer);
+  REQUIRE(reg.try_get<eng::sim::Relationships>(rescuer) == nullptr);  // no bond before (lazy)
+
+  const eng::Vec2 centre{640.0f, 360.0f};
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // player goes Downed
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // rescuer in reach -> revive + bond
+
+  const eng::sim::Relationships* rel = reg.try_get<eng::sim::Relationships>(rescuer);
+  REQUIRE(rel != nullptr);
+  REQUIRE(rel->edges.size() == 1u);
+  REQUIRE(rel->edges[0].other == player);  // directed toward the saved player
+  REQUIRE(rel->edges[0].affinity == 20);   // kRescueAffinity
+  REQUIRE(reg.try_get<eng::sim::Relationships>(player) == nullptr);  // the rescued forms no edge
+}
+
+TEST_CASE("an idle colonist drifts toward a friend it has bonded with", "[sim]") {
+  // The first reader of the seed: with no hero to rally to, an idle colonist gathers toward its
+  // nearest positive-affinity friend (e.g. the player it rescued). Base bond radius is 220.
+  const auto colonist_velocity_x = [](float friend_x) {
+    entt::registry reg;
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    const entt::entity friend_e = reg.create();
+    reg.emplace<eng::sim::Transform>(friend_e, eng::Vec2{friend_x, 0.0f});
+    eng::sim::nudge_affinity(reg, colonist, friend_e, 30);  // a real fondness (>= kBondPull 10)
+
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(colonist_velocity_x(150.0f) > 0.0f);           // friend in range -> drift toward (+x)
+  REQUIRE(colonist_velocity_x(400.0f) == Approx(0.0f));  // friend past the bond radius -> no pull
+}
+
+TEST_CASE("a bond to a vanished friend is skipped, not dereferenced", "[sim]") {
+  // The dangling-handle guard: edges store entity ids by value and ids recycle, so the reader gates
+  // on reg.valid(other). A colonist bonded to an entity that is then destroyed steers nowhere and
+  // does not crash (ASan would catch a stale read).
+  entt::registry reg;
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+  const entt::entity friend_e = reg.create();
+  reg.emplace<eng::sim::Transform>(friend_e, eng::Vec2{100.0f, 0.0f});
+  eng::sim::nudge_affinity(reg, colonist, friend_e, 30);
+  reg.destroy(friend_e);  // the friend vanishes before the reader runs
+
+  eng::sim::steer_npcs(reg);  // must not dereference the stale edge
+  REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x == Approx(0.0f));  // no pull toward a ghost
+  REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.y == Approx(0.0f));
+}
+
 TEST_CASE("no rescue means no ledger: the deed path stays lazy", "[sim]") {
   // The absent-ledger path must be bit-identical to before morality existed: an entity that never
   // completes a deed never gets a BehaviorLedger. Neither a far-off bystander nor the unrescued
