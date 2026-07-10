@@ -1268,10 +1268,26 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // full needs (the common case and every combat test), -> need_efficiency 1.0 -> bit-identical.
   Stats* atk_stats = reg.try_get<Stats>(attacker);  // read for the need debuff; healed on a kill
   const float need_eff = atk_stats != nullptr ? need_efficiency(*atk_stats) : 1.0f;
+  // BERSERK: a badly-wounded fighter hits HARDER — the player/NPC-side mirror of a creature's
+  // ENRAGE (resolve_creature_contacts), keyed on the SAME 0.3 HP fraction. A cornered fighter is
+  // dangerous: drop below kBerserkThreshold of your max HP and your blows land kBerserkDamage x.
+  // Reads the attacker's OWN Stats (atk_stats, already fetched); no Stats or above the line -> 1.0
+  // -> every full-HP combat test is bit-identical. Folds into `raw` beside the need debuff (a
+  // starving AND wounded fighter gets both), so it too flows to the hostile hit, cruel-strike, and
+  // cleave. The comeback twin of kill vigor — a low fighter both hits harder and heals on the kill
+  // — and the risk/reward mirror of enrage: leaving your OWN foe (or yourself) half-dead cuts both
+  // ways.
+  constexpr float kBerserkThreshold =
+      0.3f;                               // below this fraction of max HP the fighter berserks...
+  constexpr float kBerserkDamage = 1.5f;  // ...and its blows hit this much harder (knobs)
+  const float berserk = (atk_stats != nullptr &&
+                         atk_stats->health.current < atk_stats->health.max * kBerserkThreshold)
+                            ? kBerserkDamage
+                            : 1.0f;
   const float raw = (kBaseAttackDamage +
                      static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength * veteran +
                      static_cast<float>(gear_strength) * kDamagePerStrength) *
-                    need_eff;
+                    need_eff * berserk;
 
   // Find the nearest attackable target in reach — a fragile mote (Hazard) or a hostile
   // creature (Enemy). Strict < breaks ties by iteration order (deterministic).
