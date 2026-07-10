@@ -4070,6 +4070,63 @@ TEST_CASE("worn armour softens a creature's blow", "[sim]") {
   REQUIRE(arm_dmg > 0.0f);             // ...but never negates (mitigate's floor still lands a hit)
 }
 
+TEST_CASE("armour wears as it soaks blows and shatters: the plate's bane bites both ways",
+          "[sim]") {
+  // The defensive twin of weapon durability — a creature blow the plate softens wears it by one,
+  // and at 0 the armour slot clears (bare again). A creature swings once per kAttackInterval
+  // (0.8s), so two resolve_creature_contacts calls a second apart land two blows.
+  const auto make_creature = [](entt::registry& reg) {
+    const entt::entity c = reg.create();
+    reg.emplace<eng::sim::Transform>(c, eng::Vec2{0.0f, 0.0f});  // on top of the victim -> in reach
+    reg.emplace<eng::sim::Enemy>(c);  // brute: attack_damage 15, ready to swing
+    return c;
+  };
+
+  SECTION("an armour-only wearer shatters to bare: the empty Equipped is removed") {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);       // 100 HP, survives two softened blows
+    reg.emplace<eng::sim::Attributes>(victim);  // DEX 1 -> never dodges
+    eng::sim::Equipped eq{};
+    eq.defence_bonus = 6.0f;
+    eq.stamina_regen_penalty = 0.30f;
+    eq.armour_durability = 2.0f;  // two blows of life left
+    reg.emplace<eng::sim::Equipped>(victim, eq);
+    make_creature(reg);
+    std::mt19937 rng{1234};
+
+    eng::sim::resolve_creature_contacts(reg, 1.0f, rng);  // blow 1: armour 2 -> 1
+    REQUIRE(reg.get<eng::sim::Equipped>(victim).armour_durability == Approx(1.0f));
+    eng::sim::resolve_creature_contacts(reg, 1.0f, rng);    // blow 2: armour 1 -> 0 -> SHATTERS
+    REQUIRE_FALSE(reg.all_of<eng::sim::Equipped>(victim));  // empty cache dropped -> truly bare
+  }
+
+  SECTION(
+      "armour shattering with a weapon wielded keeps the Equipped: only the armour slot clears") {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);
+    reg.emplace<eng::sim::Attributes>(victim);
+    eng::sim::Equipped eq{};
+    eq.defence_bonus = 6.0f;
+    eq.stamina_regen_penalty = 0.30f;
+    eq.armour_durability = 1.0f;  // one blow left...
+    eq.strength_bonus = 4;        // ...but a weapon is also wielded
+    eq.move_penalty = 0.25f;
+    reg.emplace<eng::sim::Equipped>(victim, eq);
+    make_creature(reg);
+    std::mt19937 rng{1234};
+
+    eng::sim::resolve_creature_contacts(reg, 1.0f, rng);  // the one blow shatters the plate
+    const eng::sim::Equipped& after =
+        reg.get<eng::sim::Equipped>(victim);       // still present (weapon)
+    REQUIRE(after.defence_bonus == Approx(0.0f));  // armour slot cleared...
+    REQUIRE(after.strength_bonus == 4);            // ...but the weapon slot is untouched
+  }
+}
+
 TEST_CASE("worn armour slows stamina recovery (its bane)", "[sim]") {
   // The armour bane: plate gives a weaker second wind. Two idle (resting) entities differing
   // only in armour; the armoured one recovers strictly less stamina over the same rest.

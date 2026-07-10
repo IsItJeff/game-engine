@@ -412,6 +412,16 @@ twin — it sheds only the *weapon* pair and leaves your armour on (a blanket re
 it); with only armour worn, `Q` is a no-op. NPCs grab armour through the same shared fold
 (parity), though they only take the first piece they reach for now.
 
+**And the plate wears too.** Armour carries its own `durability` (30 blows, fewer than a blade's 40 —
+plate takes the brunt in a swarm), copied onto `Equipped` at equip. Every creature blow it *softens*
+(`resolve_creature_contacts`) wears it by one, and at 0 it **shatters** — the armour slot clears and
+the wearer is bare, the defensive twin of a blade shattering. So the "bane bites both" pillar is now
+whole: **both** slots are consumables you cycle, offence *and* defence. The breaking blow still gets
+full mitigation (wear is applied after), only a piece you're actually wearing wears (a bare or
+weapon-only victim is bit-identical), and — like a shattered weapon — if nothing else is left the
+now-empty `Equipped` is dropped (shared `remove_equipped_if_empty`, mirroring `Drop`) so an NPC
+re-seeks fresh gear.
+
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), three hardcoded
     defs (a steel weapon, a venom weapon, an armour) each pairing a boon

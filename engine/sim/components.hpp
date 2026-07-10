@@ -439,6 +439,11 @@ struct Weapon {
 struct Armour {
   float defence_bonus = 6.0f;  // + physical defence (softens blows via defence_of/mitigate)
   float stamina_regen_penalty = 0.30f;  // the BANE: fraction of stamina recovery lost while worn
+  // How many creature blows the plate ABSORBS before it SHATTERS — the defensive twin of
+  // Weapon::durability. Each blow it softens wears it by 1, and at 0 the armour slot clears (the
+  // wearer is bare again). Fewer than a blade's life (30 vs 40): plate takes the brunt in a swarm.
+  // Placed last so existing positional `Armour{...}` initialisers keep their meaning.
+  float durability = 30.0f;
 };
 
 // The cached bonuses of everything a character is wearing — the design's EquipMods, folded ONCE
@@ -463,6 +468,11 @@ struct Equipped {
   // initialisers keep their meaning — a hand-built Equipped with no durability set is treated as a
   // wear-free fixture (nothing to dull), which keeps the weapon-combat tests bit-identical.
   float weapon_durability = 0.0f;
+  // The worn armour's REMAINING durability, copied from Armour::durability on equip and worn down
+  // by each creature blow it absorbs (resolve_creature_contacts). 0 = no armour (bare, or the plate
+  // shattered and cleared its slot). Last field — same positional-init and wear-free-fixture
+  // guarantees as weapon_durability, so the armour-combat tests stay bit-identical.
+  float armour_durability = 0.0f;
 };
 
 // --- Stats system ---
