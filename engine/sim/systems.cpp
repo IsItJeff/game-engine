@@ -197,8 +197,19 @@ void steer_npcs(entt::registry& reg) {
       // GRUDGE: a colonist won't cross the field to save someone it resents (affinity at or below
       // kGrudgeThreshold — e.g. a player who struck it). The abandonment half of the relationships
       // reader, the mirror of the bond-pull; neutral/liked fallen are unaffected (0 > threshold).
-      if (affinity_toward(reg, n, f) <= kGrudgeThreshold) continue;
-      const float d = glm::distance(pos, downed.get<Transform>(f).position);
+      const std::int8_t aff = affinity_toward(reg, n, f);
+      if (aff <= kGrudgeThreshold) continue;
+      // FRIENDSHIP grades the trek above that hard cutoff: a bonded ally (one this NPC has saved
+      // before, so its affinity has grown) FEELS closer — its distance is discounted on the same
+      // /200 shape the other rungs use — so the colonist crosses a LONGER real field for a dear
+      // friend, while a mild dislike (still above the grudge line) feels a touch farther and is
+      // dropped sooner. The graded positive mirror of the grudge cutoff, and the loop that closes
+      // the bond: save an ally -> affinity climbs -> you reach them from farther next time. The
+      // discount only weights the CHOICE of whom to save; the steer below uses real geometry.
+      // Neutral 0 -> real distance (bit-identical). ponytail: the /200 reach knob is a tuning
+      // value.
+      const float d = glm::distance(pos, downed.get<Transform>(f).position) *
+                      (1.0f - static_cast<float>(aff) / 200.0f);
       if (d < nearest_fallen) {
         nearest_fallen = d;
         fallen = f;
