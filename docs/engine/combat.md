@@ -129,9 +129,11 @@ and drops armour.)
   `Enemy::poison_per_second > 0`, "procs as data") also applies a `Poisoned` status that keeps
   chipping the victim's `health` for a few seconds *after* the attacker moves on — routed through
   the same `handle_deaths` path, so it can be lethal. Venom **suppresses healing** while it lasts
-  (`regenerate_vitals` skips a poisoned entity), so the chip lands in full rather than being
-  cancelled by regen; a tougher character resists via its bigger HP **pool** (VIT), not by
-  out-healing it. Refreshed on each fresh bite, reaped when it wears off, and cleared by a revive
+  (`regenerate_vitals` skips a poisoned entity), so the chip can't be cancelled by regen. What *does*
+  blunt it is **hardiness**: `tick_poison` shaves the chip by the victim's **VIT** (5% per Endurance
+  level past 1, capped at 75% — venom always bites at least a quarter), the DoT counterpart of how VIT
+  softens a *blow* (`defence_of`) — so a tough constitution shrugs off both a hit and a poison, on top
+  of its bigger HP **pool**. Refreshed on each fresh bite, reaped when it wears off, and cleared by a revive
   (no lethal status survives being hauled up). Any victim, player or NPC (parity); brutes/sentinels
   leave it `0`.
 - **Enrage** — worn below `kEnrageThreshold` (30%) of its *own* HP, a creature's blows hit
