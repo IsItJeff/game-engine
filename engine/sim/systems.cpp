@@ -1218,6 +1218,21 @@ void stamp_flash(entt::registry& reg, entt::entity e) {
   reg.emplace_or_replace<HitFlash>(e, HitFlash{kHitFlashSeconds});
 }
 
+namespace {
+// Drop a now-EMPTY Equipped cache so "bare" reads as gear == nullptr everywhere — steer_npcs'
+// arm-up rung and npc_equip both gate on Equipped PRESENCE, so a leftover all-zero cache would
+// strand a stripped NPC from ever re-gearing. Called after a slot is cleared (a weapon OR an armour
+// shatter): if BOTH slots are now zero, remove the component. Mirrors the Drop command's inline
+// logic (world.cpp) — shared here by the two shatters so they can never drift.
+void remove_equipped_if_empty(entt::registry& reg, entt::entity e, const Equipped& eq) {
+  if (eq.strength_bonus == 0 && eq.move_penalty == 0.0f && eq.weapon_venom == 0.0f &&
+      eq.weapon_durability == 0.0f && eq.defence_bonus == 0.0f &&
+      eq.stamina_regen_penalty == 0.0f && eq.armour_durability == 0.0f) {
+    reg.remove<Equipped>(e);
+  }
+}
+}  // namespace
+
 entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt19937& rng) {
   constexpr float kBaseReach = 45.0f;                 // a little past contact range (15)
   constexpr float kReachPerStrength = 6.0f;           // each Strength level past 1 adds reach
@@ -1500,16 +1515,11 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       gear->move_penalty = 0.0f;
       gear->weapon_venom = 0.0f;
       gear->weapon_durability = 0.0f;
-      // ...and if nothing else is worn, REMOVE the now-empty cache — exactly as the Drop command
-      // does (world.cpp). "Unarmed" must read as gear == nullptr everywhere: steer_npcs' arm-up
-      // rung and npc_equip both gate on Equipped PRESENCE, so a leftover all-zero cache would
-      // strand a shattered NPC bare-handed forever (never re-seeking or re-grabbing a blade) — a
-      // player==NPC parity break. `gear` dangles after this remove, but we return immediately
-      // below. Removing a component NOT in npc_attack's iterated view is view-safe, like the
-      // deed/bond emplaces above.
-      if (gear->defence_bonus == 0.0f && gear->stamina_regen_penalty == 0.0f) {
-        reg.remove<Equipped>(attacker);
-      }
+      // ...and if nothing else is worn, REMOVE the now-empty cache so "bare" reads as gear ==
+      // nullptr everywhere (else a shattered NPC, gated on Equipped presence, never re-arms).
+      // `gear` dangles after the remove, but we return immediately below; removing a component NOT
+      // in npc_attack's iterated view is view-safe, like the deed/bond emplaces above.
+      remove_equipped_if_empty(reg, attacker, *gear);
     }
   }
   return entt::null;
@@ -1788,6 +1798,7 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
     const Armour& arm = armours.get<Armour>(nearest);
     eq.defence_bonus = arm.defence_bonus;
     eq.stamina_regen_penalty = arm.stamina_regen_penalty;
+    eq.armour_durability = arm.durability;  // fresh plate starts with its full life; blows wear it
   }
   return nearest;
 }
@@ -2282,6 +2293,24 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
         Poisoned& venom = reg.get_or_emplace<Poisoned>(p);
         venom.remaining = kPoisonDuration;
         venom.damage_per_second = enemy.poison_per_second;
+      }
+
+      // ARMOUR WEAR: the plate that just softened this blow (defence_of above) wears by one — the
+      // defensive twin of a blade dulling on a swing. At 0 it SHATTERS: the armour slot clears and
+      // the wearer is bare again (and the cache is dropped if no weapon remains, so an NPC re-seeks
+      // gear). Only a victim actually WEARING armour (armour_durability > 0) wears, so a bare or
+      // weapon-only victim is bit-identical; and the mitigation above already used the full
+      // defence, so the breaking blow was still softened. Equipped isn't in the prey view, so this
+      // is view-safe like the Poisoned emplace above.
+      if (Equipped* pg = reg.try_get<Equipped>(p); pg != nullptr && pg->armour_durability > 0.0f) {
+        pg->armour_durability -= 1.0f;
+        if (pg->armour_durability <=
+            0.0f) {  // plate shattered — clear the armour slot, keep a weapon
+          pg->defence_bonus = 0.0f;
+          pg->stamina_regen_penalty = 0.0f;
+          pg->armour_durability = 0.0f;
+          remove_equipped_if_empty(reg, p, *pg);
+        }
       }
     }
   }
