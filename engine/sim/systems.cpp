@@ -104,6 +104,12 @@ void steer_npcs(entt::registry& reg) {
   constexpr float kThirstSeekFraction = 0.6f;
   constexpr float kWaterSeekRadius = 260.0f;
   constexpr float kWaterSeekSpeed = 80.0f;
+  // Retreat: a WOUNDED colonist (health below this fraction) falls back to the nearest Hearth to
+  // mend in its warmth (regenerate_vitals boosts regen there). It holds once inside the hearth's
+  // own radius. Same wide-scan shape as the other survival wants. Knobs.
+  constexpr float kRetreatFraction = 0.5f;
+  constexpr float kHearthSeekRadius = 300.0f;
+  constexpr float kHearthSeekSpeed = 80.0f;
   // Rally: an IDLE colonist drifts toward a nearby renowned-enough hero (the inverted twin of the
   // top-priority villain flee). A gentle gather — lower speed than a flee or a forage, since it's
   // the lowest-urgency want. Knobs.
@@ -126,6 +132,7 @@ void steer_npcs(entt::registry& reg) {
   auto weapons = reg.view<Weapon, Transform>();
   auto sources = reg.view<WaterSource, Transform>();
   auto plots = reg.view<FoodSource, Transform>();
+  auto hearths = reg.view<Hearth, Transform>();
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
 
@@ -337,6 +344,39 @@ void steer_npcs(entt::registry& reg) {
       }
     }
 
+    // Priority 3.75 — retreat to a HEARTH to heal: a SAFE but WOUNDED colonist (health below
+    // kRetreatFraction of max) falls back to the nearest hearth to mend faster in its warmth
+    // (regenerate_vitals boosts regen there). Ranks below the NEEDS deliberately — a starving
+    // colonist can't heal anyway (the regen gate), so it forages/drinks first, then mends — and
+    // above arming up (survive before you gear). Once inside the hearth's own radius it HOLDS
+    // (stops, to sit in the warmth); outside, it heads in. This makes the hearth a USED landmark,
+    // not just a passive spot: wounded colonists gather at the fire. No hearth in range -> falls
+    // through (bit-identical to before hearths existed). Reuses the `stats` fetched for the hunger
+    // rung.
+    if (stats != nullptr && stats->health.current < stats->health.max * kRetreatFraction) {
+      entt::entity fire = entt::null;
+      float nearest_fire = kHearthSeekRadius;
+      float fire_radius = 0.0f;
+      for (const entt::entity h : hearths) {
+        const float d = glm::distance(pos, hearths.get<Transform>(h).position);
+        if (d < nearest_fire) {
+          nearest_fire = d;
+          fire = h;
+          fire_radius = hearths.get<Hearth>(h).radius;
+        }
+      }
+      if (fire != entt::null) {
+        const Vec2 toward = hearths.get<Transform>(fire).position - pos;
+        const float len = glm::length(toward);
+        if (len > fire_radius) {  // still out in the cold — head for the warmth...
+          npcs.get<Velocity>(n).value = (toward / len) * kHearthSeekSpeed * move_scale;
+        } else {
+          npcs.get<Velocity>(n).value = Vec2{0.0f, 0.0f};  // ...within it, hold and mend
+        }
+        continue;  // tending its wounds — don't also go weapon-hunting
+      }
+    }
+
     // Priority 4 — arm up: an UNARMED colonist (no rescue to make, not hungry, or no food in
     // range) walks to the nearest dropped weapon. npc_equip wields it on reach. An armed NPC
     // skips this. A match now `continue`s so the rally rung below is reached only by a truly idle
@@ -367,10 +407,10 @@ void steer_npcs(entt::registry& reg) {
     }
 
     // Priority 5 — RALLY: the hero twin of the villain-fear at the top of the ladder. Reached only
-    // by a truly IDLE colonist (nothing to flee, rescue, forage, drink, or arm toward), it drifts
-    // toward a nearby renowned-enough hero — a player whose deeds have earned standing at or above
-    // the "Known" line (+kKnownAt), the exact mirror of the -kKnownAt villain it flees at the top.
-    // The colony gathers around its champion. INVERTED from fear (toward, not away) and LOWEST
+    // by a truly IDLE colonist (nothing to flee, rescue, forage, drink, mend, or arm toward), it
+    // drifts toward a nearby renowned-enough hero — a player whose deeds have earned standing at or
+    // above the "Known" line (+kKnownAt), the exact mirror of the -kKnownAt villain it flees at the
+    // top. The colony gathers around its champion. INVERTED from fear (toward, not away) and LOWEST
     // priority (never overrides a real need — a hungry or endangered colonist ignores the hero).
     // Player-only (only a player earns standing today); no ledger or standing < kKnownAt -> no
     // pull, so a neutral/villain player draws nobody and the pre-hero world is bit-identical.

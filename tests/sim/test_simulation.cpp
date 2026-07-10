@@ -110,6 +110,30 @@ TEST_CASE("a hearth speeds nearby health regen: mend by the fire", "[sim]") {
   REQUIRE(healed_in_1s(50.0f) > healed_in_1s(500.0f));  // ...but within its warmth, mends faster
 }
 
+TEST_CASE("a wounded colonist retreats to a hearth and holds in its warmth", "[sim]") {
+  // The retreat rung makes the hearth a USED landmark: a safe but wounded colonist falls back to
+  // the nearest fire to mend, then holds inside its radius; a healthy one ignores it. Health max
+  // defaults to 100, so kRetreatFraction 0.5 -> wounded below 50.
+  const auto steer = [](float health, float npc_x) {
+    entt::registry reg;
+    const entt::entity fire = reg.create();
+    reg.emplace<eng::sim::Transform>(fire, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Hearth>(fire, eng::sim::Hearth{60.0f});  // healing radius 60
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{npc_x, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc, eng::Vec2{7.0f, 0.0f});  // a drift, so a HOLD must zero it
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Stats>(npc).health.current = health;
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(npc).value;
+  };
+  REQUIRE(steer(40.0f, 200.0f).x < 0.0f);  // wounded + out in the cold (200 > 60) -> heads in (-x)
+  REQUIRE(steer(80.0f, 200.0f).x > 0.0f);  // healthy -> ignores the fire, keeps its drift (+x)
+  const eng::Vec2 held = steer(40.0f, 30.0f);  // wounded + already in the warmth (30 < 60)...
+  REQUIRE(held.x == 0.0f);                     // ...holds: velocity zeroed, sits and mends...
+  REQUIRE(held.y == 0.0f);
+}
+
 TEST_CASE("moving drains the player's stamina", "[sim]") {
   eng::sim::World world;  // player spawns with full stamina (100)
   const entt::entity player = world.player();
