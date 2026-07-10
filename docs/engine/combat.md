@@ -151,6 +151,14 @@ envenoming spit from a distance you can't melee. (A slow, heavily-plated **senti
   pay for dawdling. Also pure sim (reads the target's current HP fraction), no RNG, so a low
   creature just dies a touch sooner and replay stays bit-identical. Applies to the melee strike on
   hostiles (`perform_attack`), NPCs and player alike; a cruel strike on a colonist doesn't execute.
+- **Cleave** — a wide swing catches a **second** foe: after a melee hit lands on a creature, the
+  nearest *other* `Enemy` within `kCleaveRadius` (40, a swing's width) of it takes `kCleaveFraction`
+  (½) of the blow, softened by *its* own VIT. This hands melee an **anti-swarm** answer — the
+  close-range twin of the ranged throw — with no new input: one swing, two foes when they cluster.
+  It's spillover, not an aimed blow, so it carries **no crit/execute/venom, and no Valor** (the same
+  "spillover isn't a strike" call the [riposte](#raising-a-guard--active-block-k) makes); it still
+  chips through `handle_deaths` and flashes so it reads. Pure sim, no RNG (the cleave draws none), so
+  replay stays bit-identical *in the stream* — it only adds a second victim to the same swing.
 - Motes are excluded from creatures (`entt::exclude<Enemy>` in `resolve_contacts`), so
   ambient hazards can't cheaply kill one and bypass its VIT.
 
@@ -481,7 +489,7 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Blocking` (the raised guard), `Projectile` (a thrown bolt in flight), `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, and *executes* a worn-down foe for bonus damage), `perform_throw` (the stamina-costed ranged option — launches a `Projectile`), `advance_projectiles` (flies each bolt home and lands it), `creature_spit` (a ranged enemy launches a spit through the same `Projectile`), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), and guard (K) inputs come from `game/app/main.cpp`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, *executes* a worn-down foe for bonus damage, and *cleaves* a fraction of the blow into a second clustered foe), `perform_throw` (the stamina-costed ranged option — launches a `Projectile`), `advance_projectiles` (flies each bolt home and lands it), `creature_spit` (a ranged enemy launches a spit through the same `Projectile`), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, and softens a `Blocking` victim's blow), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), and guard (K) inputs come from `game/app/main.cpp`.
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` / `make_spitter` / `make_sentinel` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).
