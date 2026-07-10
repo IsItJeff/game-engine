@@ -1274,6 +1274,38 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       venom.damage_per_second = gear->weapon_venom;
     }
   }
+
+  // CLEAVE: a wide swing catches a SECOND foe. The nearest OTHER Enemy within kCleaveRadius of the
+  // one you struck takes kCleaveFraction of the (raw) blow, softened by its OWN VIT — so melee gets
+  // an anti-swarm answer (the throw's close-range twin): one swing, two foes when they cluster,
+  // with no new input. Reached only past the mote/dodge/whiff returns above, so `target` is a
+  // just-struck Enemy. NO crit/execute/venom/Valor on the spillover — it's the blade catching a
+  // bystander, not an aimed blow (the "spillover isn't a strike" call the riposte's no-Valor
+  // already set). Chips through handle_deaths like any damage, flashes so it reads. No RNG.
+  // View-safe: reads the `enemies` view (Enemy+Transform) and writes only Stats/HitFlash — in
+  // neither that view nor npc_attack's — so it is fine even when npc_attack calls perform_attack
+  // mid-iteration. ponytail: radius/fraction knobs.
+  constexpr float kCleaveRadius =
+      40.0f;  // a swing's width — a foe this near the struck one is caught
+  constexpr float kCleaveFraction = 0.5f;  // ...for this share of the blow
+  const Vec2 target_pos = enemies.get<Transform>(target).position;
+  entt::entity cleaved = entt::null;
+  float nearest_other = kCleaveRadius;
+  for (const entt::entity other : enemies) {
+    if (other == target) continue;  // don't re-hit the one you struck
+    const float d = glm::distance(target_pos, enemies.get<Transform>(other).position);
+    if (d < nearest_other) {
+      nearest_other = d;
+      cleaved = other;
+    }
+  }
+  if (cleaved != entt::null) {
+    if (Stats* cs = reg.try_get<Stats>(cleaved); cs != nullptr) {
+      cs->health.current -= mitigate(raw * kCleaveFraction, defence_of(reg, cleaved));
+      if (cs->health.current < 0.0f) cs->health.current = 0.0f;
+      stamp_flash(reg, cleaved);  // the cleaved foe blinks too, so the spillover reads
+    }
+  }
   return entt::null;
 }
 

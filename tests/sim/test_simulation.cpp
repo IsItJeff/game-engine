@@ -3087,6 +3087,36 @@ TEST_CASE("a finishing blow hits a worn-down creature harder: execute, the mirro
   REQUIRE(on_edge == Approx(healthy));         // ...but only once it's past the threshold
 }
 
+TEST_CASE("a melee hit cleaves a second creature when they cluster", "[sim]") {
+  // Anti-swarm melee: the swing that strikes the nearest creature ALSO chips the nearest OTHER
+  // creature within a swing's width of it — one hit, two foes when they cluster. A second foe far
+  // from the struck one takes no cleave. Two identical foes; the primary at 20 is the aimed target.
+  const auto second_hp_lost = [](float second_x) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);
+    reg.emplace<eng::sim::Skills>(atk);
+    const entt::entity primary = reg.create();
+    reg.emplace<eng::sim::Transform>(primary,
+                                     eng::Vec2{20.0f, 0.0f});  // the aimed target (in reach)
+    reg.emplace<eng::sim::Stats>(primary, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(primary);  // DEX 1 -> never dodges, so the hit lands
+    reg.emplace<eng::sim::Enemy>(primary);
+    const entt::entity second = reg.create();
+    reg.emplace<eng::sim::Transform>(second, eng::Vec2{second_x, 0.0f});
+    reg.emplace<eng::sim::Stats>(second, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(second);
+    reg.emplace<eng::sim::Enemy>(second);
+
+    std::mt19937 rng{1234};
+    eng::sim::perform_attack(reg, atk, rng);
+    return 100.0f - reg.get<eng::sim::Stats>(second).health.current;
+  };
+  REQUIRE(second_hp_lost(50.0f) > 0.0f);    // 30 from the struck foe (< the ~40 width) -> cleaved
+  REQUIRE(second_hp_lost(400.0f) == 0.0f);  // 380 away -> well outside the swing, untouched
+}
+
 TEST_CASE("a raised guard softens a creature's blow", "[sim]") {
   // A Blocking victim takes less damage — the reward that pays for the mobility a guard costs.
   const auto hit_damage = [](bool guarding) {
