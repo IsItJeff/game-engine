@@ -1438,6 +1438,24 @@ void spawn_armour(entt::registry& reg, Vec2 pos) {
   reg.emplace<Armour>(e);
 }
 
+// Spawn a VENOM blade on the ground — the second weapon TYPE. Lighter than the default steel blade
+// (less +Strength, less heft) but its hits ENVENOM the foe (perform_attack applies Poisoned,
+// reusing tick_poison) — trading raw power for a lingering chip and mobility (the design's "gear
+// grants a +aspect, with a bane"). A sickly venom-green dot to tell it from steel. One definition
+// shared by the opening scene and a slain spitter's drop, so a looted fang is identical to the
+// seeded one. Like spawn_weapon it spawns the DEFAULT venom Weapon — lossless while its mods are
+// the only source of Equipped's weapon_venom.
+void spawn_venom_weapon(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.4f, 0.8f, 0.35f}, 6.0f);  // venom green
+  Weapon& w = reg.emplace<Weapon>(e);
+  w.strength_bonus = 2;       // lighter/weaker than the steel blade's +4 — the trade for the proc
+  w.move_penalty = 0.15f;     // and nimbler than the steel blade's 0.25 heft
+  w.venom_per_second = 6.0f;  // its hits poison (health/sec); a knob
+}
+
 void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_t mag) {
   // The whole morality write-path, one line: lazily give the actor a ledger on its first deed, then
   // add the magnitude to the chosen dimension. No switch — every dimension accrues identically, so
@@ -1600,8 +1618,9 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // dies here too, the same way an NPC does — one death path for everyone non-player.
   std::vector<entt::entity> dead;
   std::vector<Vec2> orb_drops;     // where slain swarmers fell — a health orb lands at each
-  std::vector<Vec2> weapon_drops;  // ...where brutes fell — a weapon instead...
-  std::vector<Vec2> armour_drops;  // ...and where sentinels fell — a piece of armour
+  std::vector<Vec2> weapon_drops;  // ...where brutes fell — a steel weapon instead...
+  std::vector<Vec2> armour_drops;  // ...where sentinels fell — a piece of armour...
+  std::vector<Vec2> venom_drops;  // ...and where spitters fell — a venom fang (poison-build blade)
   auto npcs = reg.view<Stats, Npc>();
   for (const entt::entity e : npcs) {
     if (npcs.get<Stats>(e).health.current <= 0.0f) dead.push_back(e);
@@ -1624,13 +1643,17 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
         case DropKind::Armour:
           armour_drops.push_back(pos);
           break;
+        case DropKind::VenomWeapon:
+          venom_drops.push_back(pos);
+          break;
       }
     }
   }
   for (const entt::entity e : dead) reg.destroy(e);
-  for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);     // sustain from a swarmer
-  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos);  // offence from a brute
-  for (const Vec2& pos : armour_drops) spawn_armour(reg, pos);  // defence from a sentinel
+  for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);          // sustain from a swarmer
+  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos);       // offence from a brute
+  for (const Vec2& pos : armour_drops) spawn_armour(reg, pos);       // defence from a sentinel
+  for (const Vec2& pos : venom_drops) spawn_venom_weapon(reg, pos);  // poison build from a spitter
 }
 
 void collect_pickups(entt::registry& reg, float dt) {

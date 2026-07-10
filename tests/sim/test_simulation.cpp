@@ -3111,8 +3111,9 @@ TEST_CASE("equipping a venom weapon folds its venom into the wielder", "[sim]") 
 }
 
 TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
-  // The symmetric loot economy: a brute yields OFFENCE (a weapon), a swarmer SUSTAIN (a health
-  // orb), a sentinel DEFENCE (armour) — each keyed on DropKind, resolving independently.
+  // The loot economy, keyed on DropKind and resolving independently: a brute yields raw OFFENCE (a
+  // steel weapon), a swarmer SUSTAIN (a health orb), a sentinel DEFENCE (armour), and a spitter a
+  // VENOM fang (the poison-build blade).
   entt::registry reg;
   const entt::entity brute = reg.create();
   reg.emplace<eng::sim::Transform>(brute, eng::Vec2{100.0f, 100.0f});
@@ -3127,16 +3128,35 @@ TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
   reg.emplace<eng::sim::Transform>(sentinel, sentinel_pos);
   reg.emplace<eng::sim::Stats>(sentinel, eng::sim::Vital{0.0f, 60.0f, 0.0f});  // dead
   reg.emplace<eng::sim::Enemy>(sentinel).drop = eng::sim::DropKind::Armour;
+  const eng::Vec2 spitter_pos{400.0f, 400.0f};
+  const entt::entity spitter = reg.create();
+  reg.emplace<eng::sim::Transform>(spitter, spitter_pos);
+  reg.emplace<eng::sim::Stats>(spitter, eng::sim::Vital{0.0f, 25.0f, 0.0f});  // dead
+  reg.emplace<eng::sim::Enemy>(spitter).drop = eng::sim::DropKind::VenomWeapon;
 
   eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f);
 
-  REQUIRE(reg.storage<eng::sim::Weapon>().size() == 1);  // the brute yields gear...
+  REQUIRE(reg.storage<eng::sim::Weapon>().size() == 2);  // the brute's steel AND the spitter's fang
   REQUIRE(reg.storage<eng::sim::Pickup>().size() == 1);  // ...the swarmer, sustain...
   REQUIRE(reg.storage<eng::sim::Armour>().size() == 1);  // ...the sentinel, armour
-  // ...and the armour lies where the sentinel fell.
-  const entt::entity dropped = *reg.view<eng::sim::Armour>().begin();
-  REQUIRE(reg.get<eng::sim::Transform>(dropped).position.x == Approx(sentinel_pos.x));
-  REQUIRE(reg.get<eng::sim::Transform>(dropped).position.y == Approx(sentinel_pos.y));
+  // ...the armour lies where the sentinel fell.
+  const entt::entity dropped_armour = *reg.view<eng::sim::Armour>().begin();
+  REQUIRE(reg.get<eng::sim::Transform>(dropped_armour).position.x == Approx(sentinel_pos.x));
+  REQUIRE(reg.get<eng::sim::Transform>(dropped_armour).position.y == Approx(sentinel_pos.y));
+  // ...and exactly ONE of the two weapons is envenomed (the spitter's fang, at its dps) — the
+  // brute's steel is plain — lying where the spitter fell.
+  entt::entity fang = entt::null;
+  int venom_count = 0;
+  for (const entt::entity w : reg.view<eng::sim::Weapon>()) {
+    if (reg.get<eng::sim::Weapon>(w).venom_per_second > 0.0f) {
+      ++venom_count;
+      fang = w;
+    }
+  }
+  REQUIRE(venom_count == 1);
+  REQUIRE(reg.get<eng::sim::Weapon>(fang).venom_per_second == Approx(6.0f));
+  REQUIRE(reg.get<eng::sim::Transform>(fang).position.x == Approx(spitter_pos.x));
+  REQUIRE(reg.get<eng::sim::Transform>(fang).position.y == Approx(spitter_pos.y));
 }
 
 TEST_CASE("a sentinel's dropped armour is a real acquisition path: pick it up and wear it",
