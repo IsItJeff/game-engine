@@ -266,11 +266,13 @@ inline float renown_scale(std::int32_t standing_value) {
 // caps.
 inline constexpr std::int32_t kKnownAt = 15;
 
-// A character's TITLE — the design's "derived recognition": a pure query over `standing`, never a
-// stored slot, so it's always in sync with the deeds behind it. Five bands, symmetric about neutral
-// (villain titles are ready but unreachable until a villain deed exists). This is the seed of the
-// richer title system (Master Smith, Dragonslayer, the Butcher — from build + gear + deeds too);
-// today it reads standing alone. Pure and unit-testable; the HUD shows it, the sim never reads it.
+// A character's DEED-derived TITLE — the design's "derived recognition": a pure query over
+// `standing`, never a stored slot, so it's always in sync with the deeds behind it. Five bands,
+// symmetric about neutral (villain titles are ready but unreachable until a villain deed exists).
+// Its build-derived twin is `build_title` (below), which reads what you've TRAINED rather than what
+// you've DONE; the richer ones (Master Smith, Dragonslayer, the Butcher — from gear and specific
+// skills) layer on the same pure-query idea. Unit-testable; the HUD shows it, the sim never reads
+// it.
 inline const char* standing_title(std::int32_t standing_value) {
   if (standing_value >= kRenownFullAt) return "Renowned";
   if (standing_value >= kKnownAt) return "Known";
@@ -565,6 +567,30 @@ struct Attributes {
   Attribute dexterity;  // fed by Evasion + Striking; each level past 1 raises the dodge chance
   Attribute luck;       // fed by Scavenging; each level past 1 raises the chance to crit a strike
 };
+
+// A BUILD-derived title — the "from build" half of the derived recognition the `standing_title`
+// comment promised. Which of the four trained Attributes dominates names what KIND of fighter a
+// character has become: STR a Warrior, DEX a Skirmisher, VIT a Bulwark, LCK a Chancer. A pure query
+// over Attributes (never a stored slot), so it always matches the levels behind it; the HUD shows
+// it beside standing_title and the sim never reads it. All four still at the starting level 1 = no
+// build has emerged ("Greenhorn"). Ties break in a fixed order (strength, dexterity, endurance,
+// luck) so the result is deterministic. Ready to grow — mastery bands, gear, a per-skill "Master
+// Smith" — the same way standing_title will.
+inline const char* build_title(const Attributes& attrs) {
+  const int str = attrs.strength.level;
+  const int dex = attrs.dexterity.level;
+  const int vit = attrs.endurance.level;
+  const int lck = attrs.luck.level;
+  int top = str;  // manual max (no <algorithm> pulled into this header for one call)
+  if (dex > top) top = dex;
+  if (vit > top) top = vit;
+  if (lck > top) top = lck;
+  if (top <= 1) return "Greenhorn";     // untrained — no build has emerged yet
+  if (str == top) return "Warrior";     // STR: power and reach
+  if (dex == top) return "Skirmisher";  // DEX: speed, dodge, aim
+  if (vit == top) return "Bulwark";     // VIT: hardiness and defence
+  return "Chancer";                     // LCK: fortune and crits
+}
 
 // Names an attribute so a data-driven `SkillDef` can say which attribute(s) a skill feeds
 // (a skill's XP flows to its MAIN attribute a lot, and to each CONTRIBUTOR a little). An

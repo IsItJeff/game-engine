@@ -160,12 +160,13 @@ record nothing.
 
 ## Where it goes next
 
-The first **title** is already here: `standing_title(standing)` is a pure query that names
-your repute — *Unproven* → *Known* → *Renowned*, and its villain mirror *Suspect* → *Notorious*
-that Cruelty deeds now reach (strike your own and the title falls), shown in the HUD beside your
-`standing` number. That is the design's
-"titles are derived queries, never stored slots" in miniature; the richer ones (*Master Smith*,
-*Dragonslayer* — from build and gear as well as deeds) hang off the same idea.
+Two **titles** are already here, both pure queries — the design's "titles are derived queries,
+never stored slots". `standing_title(standing)` names your *repute* from **deeds** — *Unproven* →
+*Known* → *Renowned*, and its villain mirror *Suspect* → *Notorious* that Cruelty deeds now reach
+(strike your own and the title falls). Its twin `build_title(attributes)` names your *build* from
+what you've **trained** — a *Warrior* (STR), *Skirmisher* (DEX), *Bulwark* (VIT) or *Chancer* (LCK),
+*Greenhorn* until one leads — so the HUD shows *what you've done* beside *what you are*. The richer
+ones (*Master Smith*, *Dragonslayer* — from specific skills and gear) hang off the same idea.
 
 The write-point is the whole point: the remaining deeds (unjust Violence, Honesty, Loyalty)
 each become one `record_deed` call at their event, exactly as Cruelty just did. `standing`'s
@@ -179,7 +180,8 @@ climb back) lands when deeds start to matter over long play.
 
 - `engine/sim/components.hpp` — `Deed` (the six dimensions), `BehaviorLedger` (the
   earned counterpart of `Personality`), the pure `standing` function, `renown_scale`
-  (the presentation twin of `personality_tint`), and `standing_title` (the derived title).
+  (the presentation twin of `personality_tint`), and the two derived titles `standing_title`
+  (from deeds) and `build_title` (from trained attributes).
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point,
   which also **drifts** the actor's matching `Personality` axis); the Charity credit in
   `handle_deaths`' rescue branch, the Valor credit in `perform_attack`'s killing-blow
@@ -187,7 +189,7 @@ climb back) lands when deeds start to matter over long play.
   branch (`kCrueltyStrike`).
 - `game/app/main.cpp` — `draw_entities` scales a dot's radius by `renown_scale(standing(...))`
   so standing reads on screen *both ways* (heroes swell, villains shrink), and the debug HUD
-  shows the player's `standing` number and `standing_title`.
+  shows the player's `standing` number and both titles (`standing_title` and `build_title`).
 - `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired deeds with
   player==NPC parity, the lazy no-deed-no-ledger path, and `renown_scale`.
 
