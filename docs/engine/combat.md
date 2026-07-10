@@ -101,13 +101,13 @@ give waves texture:
 |---|---|---|---|---|---|
 | **Brute** (red) | 40 | 70 | 15 | 0% | slow, tanky, hits hard — wear it down, kite it |
 | **Swarmer** (orange) | 15 | 130 | 8 | ~21% | fast, fragile (~one strike), weak, *slippery*, and **venomous** — corners you in numbers, and its bite lingers |
-| **Spitter** (violet) | 25 | 55 | 4 | 0% | slow, fragile, feeble in melee — but **ranged**: plinks you with a homing spit from beyond your reach, so you must close on it or throw back; drops a **venom fang** when felled |
+| **Spitter** (violet) | 25 | 55 | 4 | 0% | slow, fragile, feeble in melee — but **ranged** and **venomous**: plinks you with a homing spit that **envenoms** on hit, from beyond your reach, so you must close on it or throw back; drops a **venom fang** when felled |
 
 The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips ~1 strike in
-5, its innate Dexterity) *and venomous*, and the spitter is **RANGED** — so they threaten you for
-different reasons: the brute up front, the swarm on the retreat, the spitter from a distance you
-can't melee. (A slow, heavily-plated **sentinel** — 60 HP, VIT 5 — rounds out the reinforcement mix
-and drops armour.)
+5, its innate Dexterity) *and venomous*, and the spitter is **RANGED** *and venomous* — so they
+threaten you for different reasons: the brute up front, the swarm on the retreat, the spitter's
+envenoming spit from a distance you can't melee. (A slow, heavily-plated **sentinel** — 60 HP, VIT 5
+— rounds out the reinforcement mix and drops armour.)
 
 - **HP** (a `Stats` component) that strikes whittle down; **no regen**, so you can wear
   it down. **VIT** (an `Attributes` component) softens the blows it takes.
@@ -122,12 +122,15 @@ and drops armour.)
   primitive** (the player's *Throwing* section below): a **spitter** (any `Enemy` with
   `spit_range > 0`), off its own reload, launches a *homing* spit at the nearest person in range —
   the same `Projectile` your throw uses, so a ranged enemy needed no new movement/impact code, only
-  the launch. A killing spit records **no** Valor (its target is a person, not a hostile; creatures
-  have no morality). "Procs as data" again — a spitter is just three `Enemy` knobs
-  (`spit_range` / `spit_damage` / `spit_timer`), not a new creature class.
+  the launch. The spit **carries the spitter's `poison_per_second`** on the `Projectile`, so it
+  ENVENOMS on impact (the ranged echo of a swarmer's bite) — the player's plain throw carries `0`, so
+  it's unchanged. A killing spit records **no** Valor (its target is a person, not a hostile;
+  creatures have no morality). "Procs as data" again — a spitter is just a few `Enemy` knobs
+  (`spit_range` / `spit_damage` / `spit_timer` / `poison_per_second`), not a new creature class.
 - **Venom (`Poisoned` + `tick_poison`)** — a landed blow from a venomous archetype (a swarmer's
-  `Enemy::poison_per_second > 0`, "procs as data") also applies a `Poisoned` status that keeps
-  chipping the victim's `health` for a few seconds *after* the attacker moves on — routed through
+  bite, or a **spitter's ranged spit** — both `Enemy::poison_per_second > 0`, "procs as data"; the
+  spit *carries* that venom on its `Projectile` and applies it on impact) also applies a `Poisoned`
+  status that keeps chipping the victim's `health` for a few seconds *after* the attacker moves on — routed through
   the same `handle_deaths` path, so it can be lethal. Venom **suppresses healing** while it lasts
   (`regenerate_vitals` skips a poisoned entity), so the chip can't be cancelled by regen. What *does*
   blunt it is **hardiness**: `tick_poison` shaves the chip by the victim's **VIT** (5% per Endurance
@@ -243,8 +246,9 @@ flies to the target and applies the blow on arrival (`advance_projectiles`). So 
 visible travel, and it's **wasted if the target dies first** (its shot despawns unhit) — the one
 cost of the delay. The shot *homes* rather than flying straight so it reliably catches an
 approaching creature (a straight bolt aimed at where the foe *was* would overshoot as it closes on
-you). The `Projectile` is the reusable seed of every later ranged effect — arrows, spit, bolts — so
-a ranged *enemy* would fall out of the same primitive. *ponytail:* it homes and can't miss its
+you). The `Projectile` is the reusable seed of every ranged effect: the spitter's (venomous) spit
+already rides it — a ranged *enemy* fell out of the same primitive — and arrows or bolts would too.
+*ponytail:* it homes and can't miss its
 target; a straight-line shot you must *lead* is a gameplay refinement, not a plumbing change.
 
 ### Keeping the fight alive — the spawners

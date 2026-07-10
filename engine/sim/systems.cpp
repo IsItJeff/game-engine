@@ -1293,6 +1293,16 @@ void advance_projectiles(entt::registry& reg, float dt) {
         st->health.current -= p.damage;
         if (st->health.current < 0.0f) st->health.current = 0.0f;
         stamp_flash(reg, p.target);
+        // A VENOM spit ENVENOMS its target — the ranged echo of a swarmer's bite, reusing Poisoned
+        // + tick_poison (and kPoisonDuration). Only a venom-carrying shot does this; the player's
+        // plain throw carries poison 0, so it stays unchanged. get_or_emplace is safe here
+        // (Poisoned is in no view this loop walks). Harmless on a just-felled target, like the
+        // venom weapon.
+        if (p.poison_per_second > 0.0f) {
+          Poisoned& venom = reg.get_or_emplace<Poisoned>(p.target);
+          venom.remaining = kPoisonDuration;
+          venom.damage_per_second = p.poison_per_second;
+        }
         // Valor is for felling a HOSTILE, so credit it only when the shot killed an Enemy (a
         // player's throw). A creature's spit homes on a PERSON, so this guard keeps a spitter from
         // ever earning Valor for killing a colonist (creatures have no morality anyway).
@@ -1335,6 +1345,7 @@ void creature_spit(entt::registry& reg, float dt) {
     entt::entity target;
     entt::entity owner;
     float damage;
+    float poison;  // the spit's venom (0 for a non-venomous spitter)
   };
   std::vector<Shot> shots;
   auto spitters = reg.view<Enemy, Transform>();
@@ -1361,7 +1372,10 @@ void creature_spit(entt::registry& reg, float dt) {
     // Fire: reset the reload and queue a spit carrying VIT-mitigated damage (mitigated once at
     // launch, like the player's throw — the projectile then just delivers it).
     enemy.spit_timer = kSpitInterval;
-    shots.push_back({pos, victim, e, mitigate(enemy.spit_damage, defence_of(reg, victim))});
+    // The spit carries the spitter's own venom (poison_per_second) as its payload, alongside the
+    // VIT-mitigated impact — a VENOM spitter poisons on hit, a plain one (poison 0) just chips.
+    shots.push_back({pos, victim, e, mitigate(enemy.spit_damage, defence_of(reg, victim)),
+                     enemy.poison_per_second});
   }
 
   // Launch the queued spits. A violet bolt, distinct from the player's bright-yellow throw, so
@@ -1371,7 +1385,8 @@ void creature_spit(entt::registry& reg, float dt) {
     reg.emplace<Transform>(bolt, s.from);
     reg.emplace<PrevTransform>(bolt, s.from);
     reg.emplace<RenderDot>(bolt, Vec3{0.8f, 0.3f, 0.85f}, 4.0f);
-    reg.emplace<Projectile>(bolt, Projectile{s.target, s.owner, s.damage, kProjectileSpeed});
+    reg.emplace<Projectile>(bolt,
+                            Projectile{s.target, s.owner, s.damage, kProjectileSpeed, s.poison});
   }
 }
 
