@@ -522,6 +522,10 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   // resources' capacity AND regen" role (it already grows the pool via advance_progression).
   // Kept a SEPARATE knob from stamina's so HP and stamina sustain tune independently.
   constexpr float kHealthRegenPerEndurance = 0.10f;  // ponytail: playtest value
+  // A HEARTH multiplies the health regen of anyone resting within its radius — the base-building
+  // recovery seed. Modest, so the fire is a place to MEND between fights, not an invincible camp: a
+  // creature still reaches you there, and you're rooted to the spot (can't kite while healing).
+  constexpr float kHearthRegenBoost = 2.0f;  // ponytail: playtest knob
 
   // view<Stats>() iterates exactly the entities that have stats — the player
   // here, not the drifting motes — so this can't touch anything without them.
@@ -529,6 +533,7 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   // whoever has the right data, nobody else. A DOWNED player is excluded: they
   // lie at 0 HP for the whole helpless window, so a trickle of self-heal must not
   // quietly lift them off the floor — only a rescue or respawn brings them back.
+  auto hearths = reg.view<Hearth, Transform>();
   auto view = reg.view<Stats>(entt::exclude<Downed>);
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
@@ -556,9 +561,22 @@ void regenerate_vitals(entt::registry& reg, float dt) {
     // Tougher characters heal faster (VIT). No Attributes -> boost 1.0 (bit-identical to
     // before), so creatures and bare entities are unchanged. Same shape as update_stamina.
     const Attributes* attrs = reg.try_get<Attributes>(e);
-    const float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
-                                                      kHealthRegenPerEndurance
-                                         : 1.0f;
+    float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
+                                                kHealthRegenPerEndurance
+                                   : 1.0f;
+    // ...and faster still by a HEARTH: a colonist resting within one's radius mends quicker (stacks
+    // on the VIT boost). No hearth in reach (or none exist) -> x1.0, bit-identical to before. Reads
+    // the entity's own Transform; a Stats entity without one just skips the check.
+    if (const Transform* tf = reg.try_get<Transform>(e)) {
+      for (const entt::entity h : hearths) {
+        if (glm::distance(tf->position, hearths.get<Transform>(h).position) <=
+            hearths.get<Hearth>(h)
+                .radius) {  // <= to match the drink/graze reach test (edge counts)
+          boost *= kHearthRegenBoost;
+          break;  // one hearth's warmth is enough; don't stack multiple
+        }
+      }
+    }
     recover(s.health, dt, boost);
     // Health only ever ticks back up, so it recovers here. Stamina is different —
     // it's spent by moving — so it has its own system (update_stamina) instead of

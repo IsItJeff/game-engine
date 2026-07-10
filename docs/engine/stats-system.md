@@ -10,7 +10,7 @@ engine skeleton's ECS. It is the worked example of
 
 - **`Vital`** — a reusable "bar" stat: `current`, `max`, `regen_per_second`.
 - **`Stats`** — one component per entity that holds its vitals (its character sheet).
-- **`regenerate_vitals`** — a system that recovers each *passive* vital (health) toward its cap, faster the higher your Endurance (VIT), and **not at all while starving**.
+- **`regenerate_vitals`** — a system that recovers each *passive* vital (health) toward its cap, faster the higher your Endurance (VIT) **and faster still within a `Hearth`'s warmth**, and **not at all while starving** (or dehydrated or poisoned).
 - **`update_stamina`** — a system that spends stamina while moving and restores it while still — but **not** while starving or dehydrated (an empty stomach or canteen gives no second wind, the stamina twin of the heal-gate).
 - **`drain_hunger`** — a system that lowers the hunger Need over time (the first survival need); at empty it starves health.
 - **`DamagePlayer`** — a command that subtracts from a player's health, applied
@@ -93,6 +93,15 @@ starvation nets their health strictly downward at **any** regen rate. "You can't
 empty stomach" replaces the old fragile "starvation-per-second must stay above the fastest
 self-heal". (It does make starvation bite harder — a wounded starver no longer claws back the
 regen — which is the intended, more honest survival pressure.)
+
+Regen also has a **place**: a **`Hearth`** — a fixed, warm safe spot — multiplies the health
+regen of anyone resting within its radius (`kHearthRegenBoost`, stacking on the VIT boost). It's
+the design's **base-building recovery seed**: a reason to hold or fall back to a spot, and a real
+positioning trade — mend by the fire *or* act in the field, not both, since a guard-less heal keeps
+you rooted where creatures can still reach you. The boost sits *after* the starvation/dehydration/
+poison gates, so the fire speeds a *healthy* recovery but never lets a starving or envenomed colonist
+heal — you can't mend on an empty stomach even by the warmest hearth. No hearth in reach → ×1, so a
+hearthless world regenerates exactly as before.
 
 The same discipline now covers your **second wind**: `update_stamina` skips its resting recovery
 while `hunger <= 0` **or** `water <= 0`, so survival failure drains your stamina reserves too, not
@@ -227,10 +236,10 @@ here.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `WaterSource`, `FoodSource`, `Hazard`, and the `Npc` marker.
+- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `WaterSource`, `FoodSource`, `Hearth`, `Hazard`, and the `Npc` marker.
 - `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `graze` (the regrowing food plots), `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
 - `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the wandering NPCs, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
-- `game/app/main.cpp` — the health, stamina, hunger, and water bars and the "NPCs alive" counter in the debug panel; `world.cpp`'s `make_water_source` places the pond.
+- `game/app/main.cpp` — the health, stamina, hunger, and water bars and the "NPCs alive" counter in the debug panel; `world.cpp`'s `make_water_source` places the pond and `make_hearth` the hearth.
 - `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, hunger/starvation/eating, and permadeath tests.
 
 ## Go deeper

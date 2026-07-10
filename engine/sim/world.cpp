@@ -50,6 +50,18 @@ entt::entity make_food_source(entt::registry& reg, Vec2 pos, float radius) {
   return e;
 }
 
+// Create a fixed HEARTH — a warm safe spot that speeds nearby health regen (regenerate_vitals).
+// Drawn as an ember-orange disc sized to its `radius` (like the pond is drawn at its reach), so the
+// visible glow IS the healing range. Scenery — no Stats/Velocity. The base-building recovery seed.
+entt::entity make_hearth(entt::registry& reg, Vec2 pos, float radius) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.9f, 0.45f, 0.15f}, radius);  // warm ember-orange, at its reach
+  reg.emplace<Hearth>(e, Hearth{radius});
+  return e;
+}
+
 // Create one NPC: a wandering non-player character. It has Stats (so it takes
 // contact damage and could regenerate) and the Npc marker (so handle_deaths
 // destroys it on death rather than respawning it — permadeath). It is otherwise a
@@ -301,6 +313,9 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // garden is finite, so a well-fed crowd picks it bare and it must regrow before it feeds again.
   make_water_source(reg, Vec2{center.x, kFieldHeight * 0.8f}, 60.0f);
   make_food_source(reg, Vec2{center.x, kFieldHeight * 0.2f}, 55.0f);
+  // A hearth near the centre — an ember-orange glow you can retreat to and MEND faster between
+  // fights (the base-building recovery seed). Rooted to the spot: heal here, or act in the field.
+  make_hearth(reg, Vec2{center.x, center.y}, 80.0f);
 
   const entt::entity player = reg.create();
   reg.emplace<Transform>(player, center);
