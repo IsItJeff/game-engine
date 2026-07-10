@@ -103,6 +103,17 @@ tie:
   for my dearest friend" down through neutral to the hard "abandon the resented" floor. It closes a
   small loop: **save an ally → its affinity climbs → you reach it from farther next time**, so a
   colonist becomes a devoted protector of those it has saved.
+- **Avoidance** (negative, active) — the grudge's *active* completion, the negative twin of
+  bond-pull. Where a friend draws an idle colonist **toward** it, a resented one (affinity at/below
+  `kGrudgeThreshold`) pushes it **away**: a new `steer_npcs` rung, just above the gather rungs, steers
+  an otherwise-idle colonist straight away from its nearest resented (non-downed) entity within
+  `kAvoidRadius`. So a colonist you struck not only refuses to save you — it *keeps its distance*.
+  It's the **personal** counterpart of the global [villain-fear](morality.md): fear flees a famous
+  villain (by `standing`); avoidance shies from someone *you personally* wronged (by affinity), and
+  lands earlier (one strike clears the line). It reads **bravery** for its radius — the same
+  threat-reactivity shape the danger-flee uses, so a coward keeps further off — and **skips a Downed
+  target**: you don't flee a helpless body, you just don't help it (the rescue veto already covers
+  that), which also keeps the abandonment rung byte-identical.
 
 ## The tradeoffs
 

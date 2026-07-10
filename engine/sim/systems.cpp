@@ -153,6 +153,10 @@ void steer_npcs(entt::registry& reg) {
   // kBondPull (the affinity floor at which a tie is a real bond) is shared with the
   // loyalty-on-rescue deed, so it lives with the deed constants at the top of the file rather than
   // local here.
+  // Avoid: the negative twin of the bond pull — an idle colonist keeps this much distance from an
+  // entity it RESENTS (affinity <= kGrudgeThreshold). Smaller than the friend-gather range (a
+  // personal-space bubble, not a cross-field draw). Reuses kRallySpeed. A knob.
+  constexpr float kAvoidRadius = 150.0f;
 
   // Nested loops: every NPC against every hazard / orb / fallen ally / weapon — O(n*m), fine
   // for a handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts
@@ -450,14 +454,57 @@ void steer_npcs(entt::registry& reg) {
       }
     }
 
-    // Priority 5 — RALLY: the hero twin of the villain-fear at the top of the ladder. Reached only
-    // by a truly IDLE colonist (nothing to flee, rescue, forage, drink, mend, or arm toward), it
-    // drifts toward a nearby renowned-enough hero — a player whose deeds have earned standing at or
-    // above the "Known" line (+kKnownAt), the exact mirror of the -kKnownAt villain it flees at the
-    // top. The colony gathers around its champion. INVERTED from fear (toward, not away) and LOWEST
-    // priority (never overrides a real need — a hungry or endangered colonist ignores the hero).
-    // Player-only (only a player earns standing today); no ledger or standing < kKnownAt -> no
-    // pull, so a neutral/villain player draws nobody and the pre-hero world is bit-identical.
+    // Priority 5 — AVOID: the negative twin of the BOND pull below. An idle colonist keeps its
+    // distance from someone it RESENTS — an entity it holds a grudge toward (affinity <=
+    // kGrudgeThreshold, e.g. a player who struck it), the ACTIVE completion of the grudge that
+    // already makes it refuse to rescue that player (handle_deaths). It steers AWAY from the
+    // nearest such entity within kAvoidRadius — the mirror of bond-pull's TOWARD. Distinct from the
+    // top-of- ladder FEAR (which flees a globally VILLAINOUS player by standing): this is PERSONAL
+    // (by affinity) and lands EARLIER — one cruel strike crosses kGrudgeThreshold, long before
+    // standing sinks past the Suspect line — so a wronged colonist shies from you before the whole
+    // colony does. LOW priority, so a hungry or endangered colonist tends its needs first and only
+    // backs off when otherwise idle. BRAVERY scales the avoid RADIUS, the SAME shape the fear rung
+    // uses on the danger radius (threat reactivity, now reading personal enemies too): a coward
+    // keeps its distance from further, the brave let a resented one get close. Neutral 0 (or no
+    // Personality) -> kAvoidRadius exactly. No Relationships -> skipped -> the pre-grudge world is
+    // bit-identical, and a positive/neutral tie (affinity > kGrudgeThreshold) falls through to the
+    // gather rungs below.
+    if (const Relationships* rel = reg.try_get<Relationships>(n)) {
+      entt::entity rival = entt::null;
+      Vec2 rival_pos{0.0f, 0.0f};
+      float nearest_rival = kAvoidRadius * (1.0f - bravery / 200.0f);
+      for (const Relation& edge : rel->edges) {
+        if (edge.affinity > kGrudgeThreshold || !reg.valid(edge.other) ||
+            reg.all_of<Downed>(edge.other))
+          continue;  // not resented enough, a stale handle, or a helpless DOWNED body — you don't
+                     // flee a body, you just don't help it (the rescue veto in handle_deaths covers
+                     // that). This also keeps the grudge-holder-won't-rescue behaviour unchanged.
+        const Transform* t = reg.try_get<Transform>(edge.other);
+        if (t == nullptr) continue;  // a rival with no position (shouldn't happen, cheap to guard)
+        const float d = glm::distance(pos, t->position);
+        if (d < nearest_rival) {
+          nearest_rival = d;
+          rival = edge.other;
+          rival_pos = t->position;
+        }
+      }
+      if (rival != entt::null) {
+        const Vec2 away = pos - rival_pos;  // AWAY from the resented one (bond-pull's mirror)
+        const float len = glm::length(away);
+        if (len > 0.0f) npcs.get<Velocity>(n).value = (away / len) * kRallySpeed * move_scale;
+        continue;  // keeping its distance — skip the rally/bond gather rungs below
+      }
+    }
+
+    // Priority 6 — RALLY: the hero twin of the villain-fear at the top of the ladder. Reached only
+    // by a truly IDLE colonist (nothing to flee, rescue, forage, drink, mend, arm toward, or
+    // avoid), it drifts toward a nearby renowned-enough hero — a player whose deeds have earned
+    // standing at or above the "Known" line (+kKnownAt), the exact mirror of the -kKnownAt villain
+    // it flees at the top. The colony gathers around its champion. INVERTED from fear (toward, not
+    // away) and LOWEST priority (never overrides a real need — a hungry or endangered colonist
+    // ignores the hero). Player-only (only a player earns standing today); no ledger or standing <
+    // kKnownAt -> no pull, so a neutral/villain player draws nobody and the pre-hero world is
+    // bit-identical.
     //
     // SOCIABILITY (the fifth axis) scales the rally RADIUS, reusing industry's radius SHAPE on this
     // social want — so the rally rung, like every other acting rung, now reads a trait. A sociable
@@ -484,7 +531,7 @@ void steer_npcs(entt::registry& reg) {
       continue;  // gathered to the public hero — the personal-bond pull below is the fallback
     }
 
-    // Priority 6 — BOND: the PERSONAL twin of the hero-rally, the first reader of the P8
+    // Priority 7 — BOND: the PERSONAL twin of the hero-rally, the first reader of the P8
     // relationships seed. Reached only when no public hero claimed the rung, so the hero-rally
     // above is byte-identical. An idle colonist with a positive-affinity tie (e.g. the player it
     // rescued) drifts toward its nearest well-liked friend — the colony clusters by BOND, not only

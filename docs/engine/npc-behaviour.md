@@ -51,7 +51,9 @@ flowchart TD
   wnd -->|yes| mend[retreat: velocity toward the hearth]
   wnd -->|no| arm{unarmed AND<br/>weapon in range?}
   arm -->|yes| seek[arm up: velocity toward the weapon]
-  arm -->|no| rally{renowned hero<br/>in range?}
+  arm -->|no| avoid{resented entity<br/>in range?}
+  avoid -->|yes| back[avoid: velocity away from them]
+  avoid -->|no| rally{renowned hero<br/>in range?}
   rally -->|yes| gather[rally: velocity toward the hero]
   rally -->|no| bond{a bonded friend<br/>in range?}
   bond -->|yes| gathb[bond: velocity toward the friend]
@@ -198,15 +200,26 @@ onlooker's own might — is a later ring), and a threshold set at *Suspect* so a
 visibly turn the colony against you. A hero or an unproven player reads as no threat at all, so the
 pre-cruelty world is bit-identical.
 
-The **hero twin** completes the mirror: standing reads *both* ways now. At the very *bottom* of the
-ladder — reached only by a colonist with nothing to flee, rescue, forage, drink, mend, or arm toward — an
-**idle** colonist drifts *toward* a player whose deeds have earned **`standing ≥ +kKnownAt`** (the
-*Known* line, the exact positive mirror of the *Suspect* villain it flees at the top). The colony
-**gathers around its champion**. It is deliberately the **lowest** priority (fear is the highest): a
+The **hero twin** completes the mirror: standing reads *both* ways now. Near the *bottom* of the
+ladder — reached only by a colonist with nothing to flee, rescue, forage, drink, mend, arm toward, or
+avoid — an **idle** colonist drifts *toward* a player whose deeds have earned **`standing ≥ +kKnownAt`**
+(the *Known* line, the exact positive mirror of the *Suspect* villain it flees at the top). The colony
+**gathers around its champion**. It is deliberately a **low** priority (fear is the highest, the
+personal bond below it lower still): a
 hungry or endangered colonist ignores the hero, so rallying never overrides a real need — it only
 fills the idle moments a colonist would otherwise spend drifting. Same guards as fear: player-only,
 and below the *Known* line (a neutral or villain player) it pulls nobody, so that world stays
 bit-identical too. Villainy **repels**, heroism **attracts** — the two faces of one scalar.
+
+Where the villain-fear reads *public* `standing`, a quieter rung reads *personal* affinity: a new
+**avoid** rung (just above the gather rungs) steers an idle colonist **away** from anyone it holds a
+grudge against — the active twin of the [relationships](relationships.md) bond-pull that draws it
+*toward* a friend. So a player who strikes one colonist is shunned by *that* colonist — kept at
+arm's length as well as [refused a rescue](relationships.md) — long before enough cruelty sinks their
+`standing` and the *whole* colony flees. It reads **bravery** for its keep-away radius (a coward
+recoils from further) and ignores a **downed** target (you don't flee a helpless body), so the
+abandonment rung stays byte-identical. Personal grudge and public reputation now *both* push a cruel
+player away, at two different ranges.
 
 !!! info "Greedy and memoryless — on purpose"
     It flees the *single nearest* threat, with no memory. An NPC can dodge one
@@ -244,7 +257,7 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / drink / retreat-to-hearth / arm-up / rally / bond ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee AND rescue radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, a bottom-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — and a lowest **bond** rung (below rally) pulls it toward a bonded friend it likes; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / drink / retreat-to-hearth / arm-up / avoid / rally / bond ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, AND avoid radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — and a lowest **bond** rung (below rally) pulls it toward a bonded friend it likes; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
 - `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
 - `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player, a downed villain is skipped), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally.
