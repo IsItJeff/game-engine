@@ -235,26 +235,30 @@ inline Vec3 personality_tint(std::int8_t bravery) {
   return Vec3{1.0f + t * kPersonalityTintStrength, 1.0f, 1.0f - t * kPersonalityTintStrength};
 }
 
-// How much bigger a fully-renowned dot draws, and the standing it takes to get there — presentation
-// KNOBS. Renown (positive `standing`) is shown as PRESENCE (size), the channel the bravery tint
-// (colour) and wounded dimming (brightness) leave free, so the three cues never fight. ~10 kills or
-// ~13 rescues reaches the cap.
+// How much a fully-renowned dot swells / a fully-infamous one shrinks, and the standing it takes to
+// reach either — presentation KNOBS. STANDING is shown as PRESENCE (size): the channel the bravery
+// tint (colour) and wounded dimming (brightness) leave free, so the three cues never fight. A hero
+// looms, a villain draws small and shunned, neutral is authored size. ~10 kills / ~13 rescues swell
+// to the cap; ~8 betrayals (Cruelty x6) shrink to the floor.
 inline constexpr float kRenownMaxScale = 0.3f;     // +30% radius at full renown
-inline constexpr std::int32_t kRenownFullAt = 50;  // standing at which the size bump caps
+inline constexpr std::int32_t kRenownFullAt = 50;  // |standing| at which the size change caps
+inline constexpr float kInfamyMaxShrink = 0.3f;    // -30% radius at full infamy (floored, never 0)
 
 // Presentation-only, the morality twin of personality_tint: how much to scale a dot's radius for a
-// character's RENOWN (its derived `standing`). Returns a >= 1.0 multiplier — 1.0 at neutral OR
-// villainous standing (<= 0), rising linearly to 1 + kRenownMaxScale at kRenownFullAt and CAPPING
-// there, so a celebrated colonist visibly looms while nobody balloons without bound. A pure
-// function of the scalar (the renderer computes standing() and passes it in), so it's unit-testable
-// and the sim never reads it. Villainy (negative standing) is left at authored size for now — its
-// own cue lands when villain deeds do.
+// character's STANDING (its derived morality scalar). SYMMETRIC about neutral — 1.0 at standing 0,
+// rising linearly to 1 + kRenownMaxScale at +kRenownFullAt (a hero looms) and falling to
+// 1 - kInfamyMaxShrink at -kRenownFullAt (a villain shrinks to a shunned husk), CAPPING at either
+// end so nobody balloons or vanishes. A pure function of the scalar (the renderer computes
+// standing() and passes it in), so it's unit-testable and the sim never reads it.
 inline float renown_scale(std::int32_t standing_value) {
-  if (standing_value <= 0) return 1.0f;
-  const float t = standing_value >= kRenownFullAt
-                      ? 1.0f
-                      : static_cast<float>(standing_value) / static_cast<float>(kRenownFullAt);
-  return 1.0f + t * kRenownMaxScale;
+  const float cap = static_cast<float>(kRenownFullAt);
+  const float s = static_cast<float>(standing_value);
+  if (standing_value >= 0) {
+    const float t = standing_value >= kRenownFullAt ? 1.0f : s / cap;
+    return 1.0f + t * kRenownMaxScale;  // heroes loom
+  }
+  const float t = standing_value <= -kRenownFullAt ? 1.0f : -s / cap;
+  return 1.0f - t * kInfamyMaxShrink;  // villains shrink to a shunned husk
 }
 
 // The lower title threshold — cross it (in either direction) and you stop being anonymous. The

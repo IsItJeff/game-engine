@@ -90,11 +90,11 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     }
     const ImU32 color = ImGui::ColorConvertFloat4ToU32(ImVec4{rgb.r, rgb.g, rgb.b, 1.0f});
 
-    // Renown: a dot grows with its positive STANDING (the derived morality scalar), so you can
-    // WATCH a colonist earn repute by rescuing allies and felling monsters. Size is the cue colour
-    // and brightness leave free. Optional ledger (only those who've done a deed carry one), so
-    // try_get; standing <= 0 leaves the authored radius. Presentation-only — the sim never reads
-    // size.
+    // Standing as PRESENCE: a dot grows with positive STANDING (rescues, monster kills) and shrinks
+    // with negative (striking your own) — so you can WATCH a colonist swell into a figure of repute
+    // or dwindle into a shunned villain. Size is the cue colour and brightness leave free. Optional
+    // ledger (only those who've done a deed carry one), so try_get; standing 0 leaves the authored
+    // radius. Presentation-only — the sim never reads size.
     float radius = dot.radius;
     if (const auto* led = world.registry().try_get<eng::sim::BehaviorLedger>(e)) {
       radius *= eng::sim::renown_scale(eng::sim::standing(*led));

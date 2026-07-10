@@ -2623,22 +2623,30 @@ TEST_CASE("personality_tint warms the brave and cools the coward, neutral untint
   REQUIRE(brave.b == Approx(coward.r));
 }
 
-TEST_CASE("renown_scale grows a dot with positive standing and caps", "[sim]") {
-  // Pure presentation helper: renown (positive standing) swells a dot's size so you can watch a
-  // colonist earn repute. Neutral AND villainous standing draw at the authored size; renown rises
-  // to a capped maximum, so a hero looms but nobody balloons without bound.
+TEST_CASE("renown_scale scales a dot by standing: heroes loom, villains shrink, both cap",
+          "[sim]") {
+  // Pure presentation helper: STANDING is shown as size. Renown (positive) swells a dot so you can
+  // watch a colonist earn repute; infamy (negative) shrinks it to a shunned husk. Symmetric about
+  // neutral, capped at both ends so nobody balloons or vanishes.
   REQUIRE(eng::sim::renown_scale(0) == 1.0f);  // neutral -> authored size EXACTLY (identity)
-  REQUIRE(eng::sim::renown_scale(-40) ==
-          1.0f);  // villainous -> also authored size (its cue is TODO)
   REQUIRE(eng::sim::renown_scale(eng::sim::kRenownFullAt) ==
           Approx(1.0f + eng::sim::kRenownMaxScale));  // full renown -> the max bump
   REQUIRE(eng::sim::renown_scale(eng::sim::kRenownFullAt * 10) ==
           Approx(1.0f + eng::sim::kRenownMaxScale));  // beyond full -> capped, no runaway
+  REQUIRE(eng::sim::renown_scale(-eng::sim::kRenownFullAt) ==
+          Approx(1.0f - eng::sim::kInfamyMaxShrink));  // full infamy -> the max shrink (the floor)
+  REQUIRE(eng::sim::renown_scale(-eng::sim::kRenownFullAt * 10) ==
+          Approx(1.0f - eng::sim::kInfamyMaxShrink));  // beyond -> capped, never shrinks to nothing
 
-  // Monotonic in between: a mid renown sits strictly between the neutral and capped ends.
-  const float mid = eng::sim::renown_scale(eng::sim::kRenownFullAt / 2);
-  REQUIRE(mid > 1.0f);
-  REQUIRE(mid < 1.0f + eng::sim::kRenownMaxScale);
+  // Monotonic on BOTH sides: a mid renown sits strictly between neutral and the swell cap; a mid
+  // infamy strictly between neutral and the shrink floor (and the floor stays well above zero).
+  const float hero = eng::sim::renown_scale(eng::sim::kRenownFullAt / 2);
+  REQUIRE(hero > 1.0f);
+  REQUIRE(hero < 1.0f + eng::sim::kRenownMaxScale);
+  const float villain = eng::sim::renown_scale(-eng::sim::kRenownFullAt / 2);
+  REQUIRE(villain < 1.0f);
+  REQUIRE(villain > 1.0f - eng::sim::kInfamyMaxShrink);
+  REQUIRE(1.0f - eng::sim::kInfamyMaxShrink > 0.0f);  // the shrink floor never reaches nothing
 }
 
 TEST_CASE("standing_title names each band, symmetric about neutral", "[sim]") {

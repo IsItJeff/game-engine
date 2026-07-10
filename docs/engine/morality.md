@@ -117,14 +117,15 @@ two wired deeds drift — the other four axes/deeds wire themselves the day thei
 
 ## What to expect
 
-You can now **see** it both ways. A character's dot **grows** with its positive `standing`,
-so a colonist that keeps rescuing allies and felling monsters visibly swells into a figure
-of repute — a presentation-only reader (the renderer, never the sim, so determinism holds).
-**Size** is the free channel: colour already carries bravery, brightness carries health. And
-the HUD prints the player's `standing` *number* and `standing_title`, so a **fall** reads
-too: strike your own colonists and the number goes negative and the title flips *Known →
-Suspect → Notorious*. (The dot doesn't yet *shrink* below neutral — a negative-renown visual
-is the villain twin of the growth cue, still to come.)
+You can now **see** it both ways. A character's dot **scales with its `standing`**: it *swells*
+as a colonist keeps rescuing allies and felling monsters (visibly a figure of repute) and
+*shrinks* as they strike their own (dwindling to a shunned husk) — symmetric about neutral and
+capped at both ends (`renown_scale`), so nobody balloons or vanishes. A presentation-only reader
+(the renderer, never the sim, so determinism holds). **Size** is the free channel: colour already
+carries bravery, brightness carries health. And the HUD prints the player's `standing` *number*
+and `standing_title` to match, so a **fall** now reads on *both* the dot and the label — strike
+your own colonists and the number goes negative, the dot draws small, and the title flips *Known →
+Suspect → Notorious*.
 
 And now standing **acts**, not just shows — *both* ways. A player who crosses the *Suspect* line
 becomes a **threat colonists flee**; a player who crosses the mirror *Known* line becomes a **hero
@@ -160,8 +161,9 @@ record nothing.
 ## Where it goes next
 
 The first **title** is already here: `standing_title(standing)` is a pure query that names
-your repute — *Unproven* → *Known* → *Renowned* (and the mirror *Suspect* → *Notorious* for
-when villain deeds land), shown in the HUD beside your `standing` number. That is the design's
+your repute — *Unproven* → *Known* → *Renowned*, and its villain mirror *Suspect* → *Notorious*
+that Cruelty deeds now reach (strike your own and the title falls), shown in the HUD beside your
+`standing` number. That is the design's
 "titles are derived queries, never stored slots" in miniature; the richer ones (*Master Smith*,
 *Dragonslayer* — from build and gear as well as deeds) hang off the same idea.
 
@@ -184,8 +186,8 @@ climb back) lands when deeds start to matter over long play.
   branch, and the Cruelty credit in the same function's player-only "no hostile in reach"
   branch (`kCrueltyStrike`).
 - `game/app/main.cpp` — `draw_entities` scales a dot's radius by `renown_scale(standing(...))`
-  so renown reads on screen, and the debug HUD shows the player's `standing` number and
-  `standing_title`.
+  so standing reads on screen *both ways* (heroes swell, villains shrink), and the debug HUD
+  shows the player's `standing` number and `standing_title`.
 - `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired deeds with
   player==NPC parity, the lazy no-deed-no-ledger path, and `renown_scale`.
 
