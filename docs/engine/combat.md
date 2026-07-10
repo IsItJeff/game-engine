@@ -176,6 +176,14 @@ envenoming spit from a distance you can't melee. (A slow, heavily-plated **senti
   pay for dawdling. Also pure sim (reads the target's current HP fraction), no RNG, so a low
   creature just dies a touch sooner and replay stays bit-identical. Applies to the melee strike on
   hostiles (`perform_attack`), NPCs and player alike; a cruel strike on a colonist doesn't execute.
+- **Berserk** — enrage turned *inward*: when the **attacker's own** HP falls below the same 30% line
+  (`kBerserkThreshold`), its blows land `kBerserkDamage` (1.5×) harder — a cornered *fighter* is
+  dangerous too, not just a cornered beast. It folds into `raw` beside the [need debuff](stats-system.md),
+  so a starving *and* wounded fighter carries both, and it applies to every attacker through the shared
+  `perform_attack` (player and NPC alike). Pure sim (reads the attacker's own HP), no RNG, and a
+  full-HP fighter is unchanged — every existing combat test is bit-identical. It's the comeback twin
+  of **kill vigor**: at low health you both hit harder *and* heal on the kill, a real last-stand — the
+  symmetric mirror of the enrage you exploit in your foes.
 - **Cleave** — a wide swing catches a **second** foe: after a melee hit lands on a creature, the
   nearest *other* `Enemy` within `kCleaveRadius` (40, a swing's width) of it takes `kCleaveFraction`
   (½) of the blow, softened by *its* own VIT. This hands melee an **anti-swarm** answer — the

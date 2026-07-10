@@ -2677,6 +2677,35 @@ TEST_CASE("a ranged kill grants vigor too: a killing throw heals the thrower", "
           50.0f);  // ...and the kill healed the thrower
 }
 
+TEST_CASE("a badly wounded fighter hits harder: berserk mirrors a creature's enrage", "[sim]") {
+  // The player/NPC-side mirror of enrage — drop below 30% of your max HP and your blows land 1.5x.
+  // Two identical swings differing only in the attacker's health: the cornered one deals more. A
+  // full-HP fighter is unchanged (the guard is false), which is why every existing combat test with
+  // a hale attacker stays bit-identical.
+  const auto swing_damage = [](float attacker_hp) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk).health.current =
+        attacker_hp;  // hale or badly wounded (max 100)
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{1000.0f, 1000.0f, 0.0f});  // survives one hit
+    reg.emplace<eng::sim::Attributes>(foe);  // VIT 1 -> zero defence -> the raw blow reads clean
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};  // foe DEX 1 never dodges, atk LCK 1 never crits
+    eng::sim::perform_attack(reg, atk, rng);
+    return 1000.0f - reg.get<eng::sim::Stats>(foe).health.current;
+  };
+  const float hale = swing_damage(100.0f);    // full HP -> no berserk
+  const float wounded = swing_damage(20.0f);  // 20% of max, below the 30% line -> berserk
+  REQUIRE(hale > 0.0f);
+  REQUIRE(wounded > hale);                  // the cornered fighter hits harder...
+  REQUIRE(wounded == Approx(hale * 1.5f));  // ...by exactly the berserk factor
+}
+
 TEST_CASE("an NPC that fells a creature via npc_attack earns Valor (parity)", "[sim]") {
   // The parity claim through the NPC combat SYSTEM (not perform_attack directly): npc_attack
   // iterates the NPC view and, when a colonist's swing kills an adjacent hostile, credits it Valor
