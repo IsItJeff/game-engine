@@ -330,6 +330,8 @@ struct Poisoned {
   float remaining = 0.0f;          // seconds of venom left
   float damage_per_second = 0.0f;  // health chipped each second while it lasts
 };
+inline constexpr float kPoisonDuration = 3.0f;  // how long a fresh envenoming lingers (a knob),
+                                                // shared by the swarmer's bite and a venom weapon
 
 // Marks a character holding a GUARD (a raised block). While present, incoming creature blows are
 // softened to kBlockDamageFactor of their damage — but the guarded stance ROOTS you to
@@ -381,6 +383,11 @@ struct Pickup {
 struct Weapon {
   int strength_bonus = 4;      // + effective Strength while wielded (longer reach + harder hits)
   float move_penalty = 0.25f;  // the BANE: fraction of move speed lost while wielding (heft)
+  // If > 0 the blade is VENOMOUS: a landed hit also envenoms the foe (Poisoned), the player-side
+  // mirror of a swarmer's bite. "Gear grants a +aspect" (P5). A venom blade trades raw Strength for
+  // this lingering chip — a poison build. 0 = a plain blade (bit-identical for anyone not wielding
+  // one).
+  float venom_per_second = 0.0f;
 };
 
 // A dropped piece of ARMOUR — the first defensive item, the offense/defence counterpart of
@@ -404,6 +411,10 @@ struct Equipped {
   float move_penalty = 0.0f;
   float defence_bonus = 0.0f;
   float stamina_regen_penalty = 0.0f;
+  // A second WEAPON-slot field (logically pairs with strength_bonus/move_penalty), but placed LAST
+  // so the existing positional `Equipped{...}` initialisers keep their meaning — it just
+  // zero-fills.
+  float weapon_venom = 0.0f;  // the wielded blade's venom_per_second (0 = plain or unarmed)
 };
 
 // --- Stats system ---

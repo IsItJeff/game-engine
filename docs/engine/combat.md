@@ -304,6 +304,18 @@ blows, ditch to sprint clear of a swarm, then circle back and re-grab it (or let
 beat you to it). Equip↔Drop is a closed loop: the heft bane is a decision you can un-make, not
 a trap you're stuck in. A downed or bare-handed player can't drop (nothing to shed).
 
+**A second weapon type — the venom blade.** A sickly-green **venom weapon** on the field is a
+different *kind* of blade, not just a bigger one: its hits **envenom** the foe. If your `Equipped`
+carries `weapon_venom` (folded from the blade's `Weapon::venom_per_second`), `perform_attack` also
+applies a **`Poisoned`** to a struck creature — the *player-side* mirror of a swarmer's bite, reusing
+the exact same `Poisoned` + `tick_poison` (and `kPoisonDuration`) as the venom that has been chasing
+*you*. It's the design's *"gear grants a +aspect"* — and it pays for the proc: the venom blade is
+lighter (**less `strength_bonus`**, so weaker raw hits) and nimbler (less heft) than the steel sword.
+So the weapon choice is now a real build fork: the steel blade's **raw power** vs. the venom blade's
+**lingering chip + mobility** (soften, then let the poison finish). *ponytail:* dropping a venom
+blade sheds a plain one (the seed drops the def, not the instance); a renewable creature-loot source
+is the natural follow-up — the venomous swarmer's fang, the way the sentinel drops its armour.
+
 **A second slot — armour.** Gear is now a real offense-vs-defense *choice*, not just a weapon
 on/off. A dull-bronze **`Armour`** piece wears in its own slot alongside the weapon: it adds
 flat **defence** (folded into `defence_of`, so it softens *every* blow at both damage sites for

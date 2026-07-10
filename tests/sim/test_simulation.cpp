@@ -3064,6 +3064,52 @@ TEST_CASE("a wielded weapon slows the player (the heft bane)", "[sim]") {
   REQUIRE(armed < bare);  // heft: you trade speed for power
 }
 
+TEST_CASE("a venom weapon's hit envenoms the struck creature", "[sim]") {
+  // The player-side venom PROC: wielding a venom blade (Equipped.weapon_venom > 0) applies Poisoned
+  // to a struck enemy — the mirror of a swarmer's bite, reusing the same status. A plain or
+  // bare-handed swing does not. (Returns a VALUE, never a pointer into the local registry.)
+  const auto venom_dps_after_hit = [](float weapon_venom) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);
+    reg.emplace<eng::sim::Skills>(atk);
+    if (weapon_venom > 0.0f) {
+      reg.emplace<eng::sim::Equipped>(atk).weapon_venom = weapon_venom;  // a venom blade wielded
+    }
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});             // in reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});  // survives the hit
+    reg.emplace<eng::sim::Attributes>(foe);  // default DEX 1 -> never dodges
+    reg.emplace<eng::sim::Enemy>(foe);
+
+    std::mt19937 rng{1234};
+    eng::sim::perform_attack(reg, atk, rng);
+    const eng::sim::Poisoned* p = reg.try_get<eng::sim::Poisoned>(foe);
+    return p != nullptr ? p->damage_per_second : -1.0f;  // -1 sentinel = not poisoned
+  };
+  REQUIRE(venom_dps_after_hit(6.0f) == Approx(6.0f));   // a venom blade poisons at its dps...
+  REQUIRE(venom_dps_after_hit(0.0f) == Approx(-1.0f));  // ...a bare/plain swing leaves no poison
+}
+
+TEST_CASE("equipping a venom weapon folds its venom into the wielder", "[sim]") {
+  // The equip plumbing: equip_nearest_gear copies a venom blade's venom_per_second into the
+  // Equipped cache's weapon_venom, so perform_attack reads it from the cache (folded once, not per
+  // tick) — exactly as it folds strength_bonus and move_penalty.
+  entt::registry reg;
+  const entt::entity wearer = reg.create();
+  reg.emplace<eng::sim::Transform>(wearer, eng::Vec2{0.0f, 0.0f});
+  const entt::entity blade = reg.create();
+  reg.emplace<eng::sim::Transform>(blade, eng::Vec2{5.0f, 0.0f});  // within equip reach
+  reg.emplace<eng::sim::Weapon>(blade).venom_per_second = 6.0f;
+
+  eng::sim::equip_nearest_gear(reg, wearer);
+
+  const eng::sim::Equipped* eq = reg.try_get<eng::sim::Equipped>(wearer);
+  REQUIRE(eq != nullptr);
+  REQUIRE(eq->weapon_venom == Approx(6.0f));  // the venom folded into the wielder's cache
+}
+
 TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
   // The symmetric loot economy: a brute yields OFFENCE (a weapon), a swarmer SUSTAIN (a health
   // orb), a sentinel DEFENCE (armour) — each keyed on DropKind, resolving independently.
@@ -3147,14 +3193,16 @@ TEST_CASE("the Drop command sheds your wielded weapon at your feet", "[sim]") {
   world.step();
 
   REQUIRE_FALSE(world.registry().all_of<eng::sim::Equipped>(player));  // heft shed
-  // Exactly one Weapon now lies on the ground, where the player stood, with its mods intact.
-  int weapons = 0;
+  // A Weapon now lies where the player stood, with its mods intact. Find the one AT the feet (the
+  // opening scene seeds other weapons elsewhere, so match by position rather than assuming it's
+  // alone).
   entt::entity dropped = entt::null;
   for (const entt::entity e : world.registry().view<eng::sim::Weapon>()) {
-    ++weapons;
-    dropped = e;
+    if (glm::distance(world.registry().get<eng::sim::Transform>(e).position, ppos) < 0.5f) {
+      dropped = e;
+    }
   }
-  REQUIRE(weapons == 1);
+  REQUIRE((dropped != entt::null));  // extra parens: Catch2 can't decompose entity != entt::null
   REQUIRE(world.registry().get<eng::sim::Weapon>(dropped).strength_bonus == 4);  // faithful mods
   REQUIRE(world.registry().get<eng::sim::Transform>(dropped).position.x ==
           Approx(ppos.x));  // at feet
@@ -3176,9 +3224,10 @@ TEST_CASE("the Drop command sheds your wielded weapon at your feet", "[sim]") {
 TEST_CASE("a bare-handed Drop does nothing", "[sim]") {
   // Drop with no weapon wielded is a harmless no-op — no phantom weapon appears.
   eng::sim::World world;
+  const auto scene_weapons = world.registry().view<eng::sim::Weapon>().size();
   world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
   world.step();
-  REQUIRE(world.registry().view<eng::sim::Weapon>().size() == 0);  // nothing spawned
+  REQUIRE(world.registry().view<eng::sim::Weapon>().size() == scene_weapons);  // nothing spawned
   REQUIRE_FALSE(world.registry().all_of<eng::sim::Equipped>(world.player()));
 }
 
@@ -3186,6 +3235,7 @@ TEST_CASE("a downed player cannot drop its weapon", "[sim]") {
   // A helpless (Downed) player can't act — Drop is skipped, exactly like Equip and MovePlayer.
   eng::sim::World world;
   const entt::entity player = world.player();
+  const auto scene_weapons = world.registry().view<eng::sim::Weapon>().size();
   world.registry().emplace<eng::sim::Equipped>(player, eng::sim::Equipped{4, 0.25f});
   world.registry().emplace<eng::sim::Downed>(player);
 
@@ -3193,7 +3243,8 @@ TEST_CASE("a downed player cannot drop its weapon", "[sim]") {
   world.step();
 
   REQUIRE(world.registry().all_of<eng::sim::Equipped>(player));  // still wielding — couldn't drop
-  REQUIRE(world.registry().view<eng::sim::Weapon>().size() == 0);  // nothing hit the ground
+  REQUIRE(world.registry().view<eng::sim::Weapon>().size() ==
+          scene_weapons);  // nothing hit the ground
 }
 
 TEST_CASE("equipping a weapon then armour fills two independent slots", "[sim]") {
@@ -3283,6 +3334,8 @@ TEST_CASE("dropping a weapon keeps your armour (slot-aware Drop)", "[sim]") {
   // remove<Equipped> would silently strip the armour.
   eng::sim::World world;
   const entt::entity player = world.player();
+  const auto scene_weapons =
+      world.registry().view<eng::sim::Weapon>().size();  // the opening scene seeds some
   world.registry().emplace<eng::sim::Equipped>(player,
                                                eng::sim::Equipped{4, 0.25f, 6.0f, 0.30f});  // both
 
@@ -3294,13 +3347,15 @@ TEST_CASE("dropping a weapon keeps your armour (slot-aware Drop)", "[sim]") {
   REQUIRE(eq->strength_bonus == 0);  // ...the weapon slot was shed...
   REQUIRE(eq->move_penalty == Approx(0.0f));
   REQUIRE(eq->defence_bonus == Approx(6.0f));  // ...but the armour slot survived intact
-  REQUIRE(world.registry().view<eng::sim::Weapon>().size() == 1);  // and a weapon hit the ground
+  REQUIRE(world.registry().view<eng::sim::Weapon>().size() ==
+          scene_weapons + 1);  // and a weapon hit the ground
 }
 
 TEST_CASE("dropping with only armour worn is a no-op", "[sim]") {
   // No weapon to shed -> Drop does nothing (no phantom weapon, armour untouched).
   eng::sim::World world;
   const entt::entity player = world.player();
+  const auto scene_weapons = world.registry().view<eng::sim::Weapon>().size();
   world.registry().emplace<eng::sim::Equipped>(
       player, eng::sim::Equipped{0, 0.0f, 6.0f, 0.30f});  // armour only
 
@@ -3310,7 +3365,8 @@ TEST_CASE("dropping with only armour worn is a no-op", "[sim]") {
   const eng::sim::Equipped* eq = world.registry().try_get<eng::sim::Equipped>(player);
   REQUIRE(eq != nullptr);  // armour untouched...
   REQUIRE(eq->defence_bonus == Approx(6.0f));
-  REQUIRE(world.registry().view<eng::sim::Weapon>().size() == 0);  // ...and no phantom weapon
+  REQUIRE(world.registry().view<eng::sim::Weapon>().size() ==
+          scene_weapons);  // ...and no phantom weapon dropped
 }
 
 TEST_CASE("a player collects a pickup: heals and grows max HP", "[sim]") {
