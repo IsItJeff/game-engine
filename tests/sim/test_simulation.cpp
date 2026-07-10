@@ -280,6 +280,41 @@ TEST_CASE("a thirsty NPC steers toward the nearest water source", "[sim]") {
   REQUIRE(reg.get<eng::sim::Velocity>(sated).value.x == 0.0f);   // ...the sated one ignores it
 }
 
+TEST_CASE("a colonist seeks its more depleted need before the less urgent one", "[sim]") {
+  // Hunger is checked before thirst in the steer ladder, but a colonist dying of thirst shouldn't
+  // forage first just because of that order: it seeks whichever need is the more depleted (lower
+  // current/max). A food orb sits to the -x, a water source to the +x, both in reach; the
+  // colonist's steer direction says which need it chose.
+  const auto steer_x = [](float hunger, float water, bool has_well) {
+    entt::registry reg;
+    const entt::entity orb = reg.create();
+    reg.emplace<eng::sim::Transform>(orb, eng::Vec2{-100.0f, 0.0f});  // food to the -x
+    reg.emplace<eng::sim::Pickup>(orb);
+    if (has_well) {
+      const entt::entity well = reg.create();
+      reg.emplace<eng::sim::Transform>(well, eng::Vec2{100.0f, 0.0f});  // water to the +x
+      reg.emplace<eng::sim::WaterSource>(well, eng::sim::WaterSource{60.0f});
+    }
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);
+    auto& st = reg.emplace<eng::sim::Stats>(npc);
+    st.hunger.current = hunger;  // both below their 0.6 seek thresholds (max 100)...
+    st.water.current = water;    // ...so both needs bite; urgency decides which is sought
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(npc).value.x;
+  };
+  REQUIRE(steer_x(50.0f, 20.0f, true) >
+          0.0f);  // thirst more urgent (0.2 < 0.5) -> toward WATER (+x)
+  REQUIRE(steer_x(20.0f, 50.0f, true) <
+          0.0f);  // hunger more urgent (0.2 < 0.5) -> toward FOOD (-x)
+  // ...but an unreachable thirst must not block a reachable meal: thirstier, yet with NO well in
+  // range, the colonist forages the food it CAN reach rather than stalling on both needs.
+  REQUIRE(steer_x(50.0f, 40.0f, false) <
+          0.0f);  // water more depleted but no well -> toward FOOD (-x)
+}
+
 TEST_CASE("grazing a food plot refills hunger and depletes its stock", "[sim]") {
   // A FoodSource is the food twin of the pond, but FINITE: a grazer within reach eats (hunger up)
   // and the plot's stock falls. Someone outside the radius eats nothing.
