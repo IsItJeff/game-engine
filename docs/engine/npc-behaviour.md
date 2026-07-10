@@ -73,7 +73,10 @@ you gear). One load-bearing detail in the rescue rung, shared by this retreat ho
 within range holds position rather than steering, so it doesn't nudge itself back out before
 `handle_deaths` (later the same tick) hauls the ally up. And every steer speed is scaled
 down while the NPC is armed — the weapon's heft slows it, so the buff it wields is paid
-for exactly as the player pays (the item's bane bites both).
+for exactly as the player pays (the item's bane bites both) — **and** by exhaustion: a colonist
+that has drained its stamina to 0 by moving crawls at `kExhaustedMoveScale`, the same tireless-no-more
+rule the player pays, since NPCs drain and recover stamina through the identical `update_stamina`. A
+tired, armed colonist really trudges (the two stack).
 
 Two details carry the whole idea:
 

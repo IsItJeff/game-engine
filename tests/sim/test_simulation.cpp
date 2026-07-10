@@ -169,6 +169,31 @@ TEST_CASE("an exhausted player is slowed to a crawl", "[sim]") {
   REQUIRE(speed == Approx(320.0f * 0.4f).margin(0.5f));  // a crawl, not a sprint
 }
 
+TEST_CASE("an exhausted colonist crawls too: NPC steer speed drops at 0 stamina", "[sim]") {
+  // Parity with the player's exhaustion crawl: a colonist that has spent its stamina to 0 steers
+  // slower (kExhaustedMoveScale), so a tireless colony is no more. Same flee setup (a hazard
+  // nearby), differing only in stamina; the fled velocity is slower when spent, but never zero (it
+  // can limp).
+  const auto flee_speed = [](float stamina) {
+    entt::registry reg;
+    const entt::entity hazard = reg.create();
+    reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Hazard>(hazard);
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{50.0f, 0.0f});  // inside sense range -> flees
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Stats>(npc).stamina.current = stamina;
+    eng::sim::steer_npcs(reg);
+    return glm::length(reg.get<eng::sim::Velocity>(npc).value);
+  };
+  const float rested = flee_speed(100.0f);  // full stamina -> full flee speed...
+  const float spent = flee_speed(0.0f);     // ...spent -> a crawl
+  REQUIRE(rested > 0.0f);                   // it fled...
+  REQUIRE(spent > 0.0f);    // ...even spent it still limps away (never fully stopped)...
+  REQUIRE(spent < rested);  // ...but slower when exhausted
+}
+
 TEST_CASE("hunger drains over time and never self-recovers", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();
