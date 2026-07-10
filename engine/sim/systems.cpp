@@ -523,11 +523,11 @@ void regenerate_vitals(entt::registry& reg, float dt) {
     // ...nor on an empty canteen: dehydration gates healing the same way starvation does, so both
     // needs net health strictly downward (drain_water also runs before this system in step()). One
     // `||` clause, so the two survival needs compose rather than either special-casing the other.
-    // ...nor while POISONED: venom SUPPRESSES healing (the classic poison rule), so its chip lands
-    // in full instead of being cancelled by a fed character's regen — that's what makes the
-    // lingering bite a real threat. tick_poison runs before this system and reaps expired Poisoned,
-    // so the flag here means active venom. A tougher character resists via its bigger HP POOL
-    // (VIT), not regen.
+    // ...nor while POISONED: venom SUPPRESSES healing (the classic poison rule), so its chip can't
+    // be clawed back by a fed character's regen — that's what makes the lingering bite a real
+    // threat. tick_poison runs before this system and reaps expired Poisoned, so the flag here
+    // means active venom. Hardiness (VIT) still blunts the venom — but DIRECTLY, in tick_poison
+    // (which shaves the chip by Endurance), not here; this system only gates the regen off.
     if (s.hunger.current <= 0.0f || s.water.current <= 0.0f || reg.all_of<Poisoned>(e)) continue;
 
     // Tougher characters heal faster (VIT). No Attributes -> boost 1.0 (bit-identical to
@@ -1930,15 +1930,27 @@ void tick_poison(entt::registry& reg, float dt) {
   // Chip each poisoned entity's health by its venom, age the timer, and reap the status when spent.
   // Collect-then-remove: removing a component mid-view-walk invalidates the iterator (the ECS trap
   // decay_flashes/handle_deaths avoid). The chip routes through handle_deaths (reaps at 0), exactly
-  // like starvation/dehydration — so venom can be lethal, but a tougher character's regen (VIT)
-  // partly offsets it: an emergent resistance, no special case.
+  // like starvation/dehydration — so venom can be lethal. Regen can't claw it back
+  // (regenerate_vitals gates healing OFF while poisoned, like starvation), so hardiness resists
+  // venom DIRECTLY: VIT (Endurance) shaves the chip — the DoT counterpart of how it softens a BLOW
+  // via defence_of, so a tough constitution shrugs off both a hit and a poison.
+  constexpr float kResistPerVit = 0.05f;  // 5% less venom per Endurance level past the first...
+  constexpr float kResistCap = 0.75f;  // ...capped so a hardy body still takes at least a quarter
   std::vector<entt::entity> cured;
   auto view =
       reg.view<Poisoned, Stats>(entt::exclude<Downed>);  // a downed body is inert (invariant)
   for (const entt::entity e : view) {
     Poisoned& venom = view.get<Poisoned>(e);
     Vital& health = view.get<Stats>(e).health;
-    health.current -= venom.damage_per_second * dt;
+    // VIT resistance: level 1 (or no Attributes) resists 0, so an untrained or bare entity chips
+    // EXACTLY as before (bit-identical). Capped so venom is never fully negated — the DoT mirror of
+    // mitigate's 10% chip floor.
+    float resist = 0.0f;
+    if (const Attributes* attrs = reg.try_get<Attributes>(e)) {
+      resist = static_cast<float>(attrs->endurance.level - 1) * kResistPerVit;
+      if (resist > kResistCap) resist = kResistCap;
+    }
+    health.current -= venom.damage_per_second * (1.0f - resist) * dt;
     if (health.current < 0.0f) health.current = 0.0f;
     venom.remaining -= dt;
     if (venom.remaining <= 0.0f) cured.push_back(e);

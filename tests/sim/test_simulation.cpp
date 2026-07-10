@@ -2850,6 +2850,27 @@ TEST_CASE("poison chips health over time and then wears off", "[sim]") {
   REQUIRE_FALSE(reg.all_of<eng::sim::Poisoned>(e));  // ...then wore off (reaped)
 }
 
+TEST_CASE("a hardy constitution resists venom: VIT shaves the poison chip", "[sim]") {
+  // VIT (Endurance) now reduces poison damage directly — the DoT counterpart of how it softens a
+  // blow. A tough character loses less health to the same venom than a frail one, but venom is
+  // never fully negated. VIT 1 is unchanged from before (resists nothing).
+  const auto health_lost = [](int endurance_level) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Stats>(e);  // full health (100)
+    reg.emplace<eng::sim::Attributes>(e).endurance.level = endurance_level;
+    reg.emplace<eng::sim::Poisoned>(e, eng::sim::Poisoned{5.0f, 10.0f});  // 10/s venom, lasts > 1s
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::tick_poison(reg, dt);  // 1 second
+    return 100.0f - reg.get<eng::sim::Stats>(e).health.current;
+  };
+  const float frail = health_lost(1);   // resists nothing -> full chip
+  const float hardy = health_lost(11);  // 10 levels past 1 -> 50% resist
+  REQUIRE(frail > 0.0f);                // a frail body takes the full chip...
+  REQUIRE(hardy < frail);               // ...a hardy one takes less...
+  REQUIRE(hardy > 0.0f);                // ...but venom still bites (never fully negated)
+}
+
 TEST_CASE("a venomous creature's bite leaves the victim poisoned; a plain one doesn't", "[sim]") {
   // A landed blow from a venomous archetype (swarmers) applies Poisoned; a non-venomous one leaves
   // none. Fires for any victim — player or NPC — through the same resolve_creature_contacts
