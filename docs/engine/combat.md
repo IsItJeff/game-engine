@@ -413,8 +413,8 @@ spitter's spit landing), and the `DamagePlayer` command (a hit dealt straight th
 funnel) — the struck entity is stamped with a **`HitFlash`**, a tiny countdown. They all
 call the one shared `stamp_flash`, so every *discrete blow* blinks its victim. (The one
 deliberate exception is the venom DoT, `tick_poison`: it chips health every second, and
-pulsing white each tick would read as noise, not a hit — the lingering harm is shown by
-the poison instead.) The renderer mixes that dot toward white in proportion
+pulsing white each tick would read as noise, not a hit — the lingering harm gets its own
+steady cue instead, a **green poison tint**, below.) The renderer mixes that dot toward white in proportion
 to the time left, so a fresh hit blinks bright and fades over ~9 ticks. `decay_flashes`
 ages the timer each tick and drops it at zero.
 
@@ -434,6 +434,19 @@ becomes a legible health map: you can see which brute you've nearly worn down, w
 one hit from Downed — and, now that a veteran hits harder, watch that edge play out on screen.
 Like the flash it's read-only presentation (a renderer-side multiply on existing `Stats`); the
 sim never consults it.
+
+And a third colour cue, for the **venom** the DoT above deliberately doesn't flash: a `Poisoned` dot
+is tinted toward a **bilious acid-green** by `poison_tint_strength(damage_per_second)` — a pure
+function that greens the dot *more* the nastier the dose (a swarmer's 9/s over a spit's 5/s), capped
+(`kPoisonTintCap`) so even a heavy dose stays legible. The green is deliberately a yellow-acid,
+*distinct* from the friendly NPC green, so it reads on poisoned colonists — a prime venom victim —
+and not just on the blue player. It's a **status overlay**: mixed in *over* the personality hue (an
+active poison matters more than a personality tint) but *under* the hit-flash, so a fresh blow still
+pops white — **and** the target green is dimmed by the same `wounded_brightness` factor, so poison
+never re-brightens a near-dead dot: the health cue survives *under* the venom cue rather than fighting
+it. Now the whole venom subsystem — bite, blade, and spit — reads on the field: you can see who's
+envenomed and how badly, and watch the tint fade as the venom wears off (or deepen on a fresh bite).
+Read-only, drawing no RNG, like every other cue here.
 
 ### Where it sits in the tick
 

@@ -217,6 +217,20 @@ inline float wounded_brightness(float current, float max) {
   return kWoundedFloor + (1.0f - kWoundedFloor) * frac;
 }
 
+// Presentation-only: how strongly to tint a POISONED dot toward sickly green — the visual for the
+// venom subsystem (swarmer bite, venom blade, venom spit), so you can SEE who's envenomed. Returns
+// a 0..cap mix factor that GROWS with the venom's `damage_per_second` (a nastier dose glows
+// greener), linearly to kPoisonTintPerDps, capped at kPoisonTintCap so the dot never fully greens
+// out and stays readable. A pure function of the dps (the renderer reads the Poisoned component and
+// passes it in), so it's unit-testable and the sim never reads colour. 0 dps -> 0 (no tint).
+inline constexpr float kPoisonTintPerDps = 0.06f;  // green mix added per point of venom/second...
+inline constexpr float kPoisonTintCap = 0.6f;      // ...capped, so even a heavy dose stays legible
+inline float poison_tint_strength(float damage_per_second) {
+  const float s = damage_per_second * kPoisonTintPerDps;
+  if (s < 0.0f) return 0.0f;  // no negative venom, but guard the mix factor anyway
+  return s < kPoisonTintCap ? s : kPoisonTintCap;
+}
+
 // How saturated the personality tint gets at the ±100 extremes. A presentation KNOB — the
 // warm/cool ramp reads differently against the green base, enemy-red, player-blue, and the
 // window background, so it wants eyeballing in the live renderer, not just a unit test.

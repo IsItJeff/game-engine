@@ -2802,6 +2802,19 @@ TEST_CASE("wounded_brightness dims a dot toward the floor as health falls", "[si
           Approx(1.0f));  // no bar -> full, no divide-by-zero
 }
 
+TEST_CASE("poison_tint_strength greens a dot more with a stronger dose and then caps", "[sim]") {
+  // The venom visual, a pure function the renderer uses to tint a poisoned dot green: no venom = no
+  // tint, a nastier dose glows greener, but capped so the dot never fully greens out (stays
+  // legible).
+  REQUIRE(eng::sim::poison_tint_strength(0.0f) == 0.0f);  // no venom -> no tint
+  REQUIRE(eng::sim::poison_tint_strength(5.0f) > 0.0f);   // a spit's dose -> some green...
+  REQUIRE(eng::sim::poison_tint_strength(9.0f) >
+          eng::sim::poison_tint_strength(5.0f));  // ...a swarmer's, greener (monotonic)
+  REQUIRE(eng::sim::poison_tint_strength(1000.0f) ==
+          Approx(eng::sim::kPoisonTintCap));  // a huge dose -> capped, not runaway
+  REQUIRE(eng::sim::kPoisonTintCap < 1.0f);   // and the cap keeps the dot readable, never all green
+}
+
 TEST_CASE("personality_tint warms the brave and cools the coward, neutral untinted", "[sim]") {
   // Pure presentation helper: a colour multiplier so bravery reads on screen. Neutral is the
   // identity, the extremes shift red-vs-blue in mirror image, and green is never touched (so a

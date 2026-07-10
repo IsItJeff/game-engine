@@ -63,8 +63,8 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     const eng::Vec2 p = world_to_screen(blended, vp);
 
     // The dot's colour is layered from the base outward: personality tints it, health dims it,
-    // a fresh blow flashes it white. Each is a renderer-only cue the sim never reads, and each is
-    // optional (most entities have none), so each is a try_get guard on the base `rgb`.
+    // venom greens it, a fresh blow flashes it white. Each is a renderer-only cue the sim never
+    // reads, and each is optional (most entities have none), so each is a try_get guard on `rgb`.
     eng::Vec3 rgb = dot.color;
 
     // Personality tint: colour a colonist by its BRAVERY (warm = brave, cool = coward) so the
@@ -76,9 +76,25 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
 
     // Wounded dimming: darken the dot in proportion to its health, so the accumulated toll of a
     // fight reads at a glance (the steady twin of the hit-flash blink). Optional Stats (motes/
-    // pickups/weapons have none) — same try_get the debug panel uses.
+    // pickups/weapons have none) — same try_get the debug panel uses. Kept in `brightness` so the
+    // poison tint below can dim its green by the same factor (see there).
+    float brightness = 1.0f;
     if (const auto* st = world.registry().try_get<eng::sim::Stats>(e)) {
-      rgb *= eng::sim::wounded_brightness(st->health.current, st->health.max);
+      brightness = eng::sim::wounded_brightness(st->health.current, st->health.max);
+    }
+    rgb *= brightness;
+
+    // Poison: a venomed dot glows an ACID green while the venom lasts, deeper the stronger the dose
+    // (poison_tint_strength), so the poison you've spread — or taken — reads on the field. Bilious
+    // yellow-green, distinct from the friendly NPC green so it reads on colonists (a prime venom
+    // victim) as well as the blue player. A STATUS overlay over the personality hue (active harm
+    // matters more than the trait) but under the hit-flash, so a fresh blow still blinks white. The
+    // target green is scaled by the same wounded `brightness`, so poison NEVER re-brightens a
+    // dimmed, near-dead dot — the health cue survives under the venom cue. Optional (most aren't
+    // poisoned).
+    if (const auto* pois = world.registry().try_get<eng::sim::Poisoned>(e)) {
+      rgb = glm::mix(rgb, eng::Vec3{0.55f, 0.9f, 0.1f} * brightness,
+                     eng::sim::poison_tint_strength(pois->damage_per_second));
     }
 
     // Hit-flash: a freshly-struck entity blinks white and fades. remaining runs from
