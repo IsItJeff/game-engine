@@ -3715,6 +3715,71 @@ TEST_CASE("a wielded weapon slows the player (the heft bane)", "[sim]") {
   REQUIRE(armed < bare);  // heft: you trade speed for power
 }
 
+TEST_CASE("a weapon wears with use and shatters: durability reverts the wielder to unarmed",
+          "[sim]") {
+  // The design's "durability now, repair later" — a connecting hit on a hostile dulls the blade by
+  // one, and at 0 it SHATTERS: the weapon slot clears (strength, heft, venom). A
+  // near-indestructible foe survives the swings, so we watch the blade break rather than the foe.
+  const auto make_foe = [](entt::registry& reg) {
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});                 // in reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{10000.0f, 10000.0f, 0.0f});  // survives it
+    reg.emplace<eng::sim::Attributes>(foe).endurance.level = 1;
+    reg.emplace<eng::sim::Enemy>(foe);
+    return foe;
+  };
+
+  SECTION("a weapon-only wielder shatters to bare hands: the empty Equipped is removed") {
+    // With no armour, the shatter drops the now-empty cache entirely (mirroring the Drop command),
+    // so "unarmed" reads as gear == nullptr — which is what lets a shattered NPC re-seek and
+    // re-grab.
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);
+    reg.emplace<eng::sim::Skills>(atk);
+    eng::sim::Equipped eq{};
+    eq.strength_bonus = 4;
+    eq.move_penalty = 0.25f;
+    eq.weapon_durability = 2.0f;  // a nearly-spent blade: two connecting hits left
+    reg.emplace<eng::sim::Equipped>(atk, eq);
+    make_foe(reg);
+    std::mt19937 rng{1234};  // foe DEX 1 never dodges, atk LCK 1 never crits
+
+    eng::sim::perform_attack(reg, atk, rng);  // first hit: wears 2 -> 1, still armed
+    REQUIRE(reg.get<eng::sim::Equipped>(atk).weapon_durability == Approx(1.0f));
+    REQUIRE(reg.get<eng::sim::Equipped>(atk).strength_bonus == 4);
+
+    eng::sim::perform_attack(reg, atk, rng);             // second hit: wears 1 -> 0 -> SHATTERS
+    REQUIRE_FALSE(reg.all_of<eng::sim::Equipped>(atk));  // the empty cache is gone -> truly unarmed
+  }
+
+  SECTION("a weapon shattering with armour worn keeps the Equipped: only the weapon slot clears") {
+    // The two slots are independent: a shattered blade must not strip the plate you are also
+    // wearing.
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);
+    reg.emplace<eng::sim::Skills>(atk);
+    eng::sim::Equipped eq{};
+    eq.strength_bonus = 4;
+    eq.move_penalty = 0.25f;
+    eq.weapon_durability = 1.0f;  // one hit left...
+    eq.defence_bonus = 6.0f;      // ...but armour is also worn
+    eq.stamina_regen_penalty = 0.3f;
+    reg.emplace<eng::sim::Equipped>(atk, eq);
+    make_foe(reg);
+    std::mt19937 rng{1234};
+
+    eng::sim::perform_attack(reg, atk, rng);  // the one hit shatters the blade
+    const eng::sim::Equipped& after = reg.get<eng::sim::Equipped>(atk);  // still present (armour)
+    REQUIRE(after.strength_bonus == 0);                                  // weapon slot cleared...
+    REQUIRE(after.move_penalty == Approx(0.0f));
+    REQUIRE(after.defence_bonus == Approx(6.0f));  // ...but the armour slot is untouched
+  }
+}
+
 TEST_CASE("a venom weapon's hit envenoms the struck creature", "[sim]") {
   // The player-side venom PROC: wielding a venom blade (Equipped.weapon_venom > 0) applies Poisoned
   // to a struck enemy — the mirror of a swarmer's bite, reusing the same status. A plain or

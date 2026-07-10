@@ -424,6 +424,12 @@ struct Weapon {
   // this lingering chip — a poison build. 0 = a plain blade (bit-identical for anyone not wielding
   // one).
   float venom_per_second = 0.0f;
+  // How many connecting hits on a hostile the blade survives before it SHATTERS (the design's
+  // "durability now, repair later"): each such swing wears it by 1, and at 0 the weapon slot clears
+  // and the wielder is unarmed until it grabs another. It makes the item's tradeoff TEMPORAL — the
+  // bane you pay for the buff is now "and it won't last forever". Placed last so existing
+  // positional `Weapon{...}` initialisers keep their meaning.
+  float durability = 40.0f;
 };
 
 // A dropped piece of ARMOUR — the first defensive item, the offense/defence counterpart of
@@ -451,6 +457,12 @@ struct Equipped {
   // so the existing positional `Equipped{...}` initialisers keep their meaning — it just
   // zero-fills.
   float weapon_venom = 0.0f;  // the wielded blade's venom_per_second (0 = plain or unarmed)
+  // The wielded blade's REMAINING durability, copied from Weapon::durability on equip and worn down
+  // by each connecting hit on a hostile (perform_attack). 0 = no weapon (unarmed, or the blade
+  // shattered and cleared its slot). Placed last so existing positional `Equipped{...}`
+  // initialisers keep their meaning — a hand-built Equipped with no durability set is treated as a
+  // wear-free fixture (nothing to dull), which keeps the weapon-combat tests bit-identical.
+  float weapon_durability = 0.0f;
 };
 
 // --- Stats system ---

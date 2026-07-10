@@ -1235,7 +1235,7 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // design's "gear grants raw +Attribute"). One number feeds BOTH reach and damage below,
   // so a heavier blade reaches further AND hits harder. Bare-handed (no Equipped) it is just
   // your level — so this is bit-identical for anyone not wielding anything.
-  const Equipped* gear = reg.try_get<Equipped>(attacker);
+  Equipped* gear = reg.try_get<Equipped>(attacker);  // read for reach/damage/venom; worn by a hit
   const int effective_strength =
       attrs->strength.level + (gear != nullptr ? gear->strength_bonus : 0);
 
@@ -1466,6 +1466,34 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       cs->health.current -= mitigate(raw * kCleaveFraction, defence_of(reg, cleaved));
       if (cs->health.current < 0.0f) cs->health.current = 0.0f;
       stamp_flash(reg, cleaved);  // the cleaved foe blinks too, so the spillover reads
+    }
+  }
+
+  // WEAR: this connecting swing on a hostile dulls the blade by one. At 0 it SHATTERS — the weapon
+  // slot clears (strength, heft, and venom all gone), so the wielder is unarmed until it grabs
+  // another (the design's "durability now, repair later" — the item's tradeoff bane made TEMPORAL).
+  // Reached only past the mote/dodge/whiff returns, so this is a real hit on a hostile — the same
+  // scope venom/execute/cleave use, and the effect-less cruel strike (which returned earlier) never
+  // wears. A bare hand (no Equipped) or a wear-free fixture (weapon_durability 0) is bit-identical,
+  // and a fresh blade is unchanged until it actually breaks. Runs AFTER the venom/cleave above, so
+  // the breaking hit still lands its full blow and proc; only the NEXT swing is unarmed.
+  if (gear != nullptr && gear->weapon_durability > 0.0f) {
+    gear->weapon_durability -= 1.0f;
+    if (gear->weapon_durability <= 0.0f) {  // shattered — clear the weapon slot, keep any armour
+      gear->strength_bonus = 0;
+      gear->move_penalty = 0.0f;
+      gear->weapon_venom = 0.0f;
+      gear->weapon_durability = 0.0f;
+      // ...and if nothing else is worn, REMOVE the now-empty cache — exactly as the Drop command
+      // does (world.cpp). "Unarmed" must read as gear == nullptr everywhere: steer_npcs' arm-up
+      // rung and npc_equip both gate on Equipped PRESENCE, so a leftover all-zero cache would
+      // strand a shattered NPC bare-handed forever (never re-seeking or re-grabbing a blade) — a
+      // player==NPC parity break. `gear` dangles after this remove, but we return immediately
+      // below. Removing a component NOT in npc_attack's iterated view is view-safe, like the
+      // deed/bond emplaces above.
+      if (gear->defence_bonus == 0.0f && gear->stamina_regen_penalty == 0.0f) {
+        reg.remove<Equipped>(attacker);
+      }
     }
   }
   return entt::null;
@@ -1739,6 +1767,7 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
     eq.strength_bonus = wpn.strength_bonus;
     eq.move_penalty = wpn.move_penalty;
     eq.weapon_venom = wpn.venom_per_second;  // a venom blade folds its proc in with its other stats
+    eq.weapon_durability = wpn.durability;  // a fresh blade starts with its full life; hits wear it
   } else {
     const Armour& arm = armours.get<Armour>(nearest);
     eq.defence_bonus = arm.defence_bonus;
