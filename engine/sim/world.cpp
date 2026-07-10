@@ -458,8 +458,9 @@ void World::apply_command(const Command& cmd) {
         const PlayerControlled& pc = view.get<PlayerControlled>(e);
         if (pc.player != cmd.player) continue;
         if (registry_.all_of<Downed>(e)) continue;  // downed = helpless, input does nothing
-        float speed =
-            view.get<Stats>(e).stamina.current > 0.0f ? pc.move_speed : pc.move_speed * 0.4f;
+        float speed = view.get<Stats>(e).stamina.current > 0.0f
+                          ? pc.move_speed
+                          : pc.move_speed * kExhaustedMoveScale;
         // A wielded weapon's heft slows you — the equip tradeoff, felt on every step, and it
         // stacks with the exhaustion crawl (so a tired, heavily-armed player really trudges).
         if (const Equipped* gear = registry_.try_get<Equipped>(e); gear != nullptr) {

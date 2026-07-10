@@ -148,7 +148,15 @@ void steer_npcs(entt::registry& reg) {
     // both — parity). Every steer speed below is scaled by this, so an armed colonist flees,
     // rescues, and forages a touch slower. Unarmed = 1.0 (no change).
     const Equipped* gear = reg.try_get<Equipped>(n);
-    const float move_scale = gear != nullptr ? 1.0f - gear->move_penalty : 1.0f;
+    float move_scale = gear != nullptr ? 1.0f - gear->move_penalty : 1.0f;
+    // EXHAUSTION crawls an NPC too — parity with the player's MovePlayer crawl: a colonist that has
+    // spent its stamina to 0 (by moving) slows to kExhaustedMoveScale, so the tireless-no-more rule
+    // the player pays now applies to NPCs, who drain and recover stamina by the same
+    // update_stamina. Stacks with the heft above (a tired, armed colonist really trudges). Stats is
+    // always on an Npc; fetched once here and reused by the need/retreat rungs below. Full stamina
+    // -> no crawl (the common case), so a rested colony steers exactly as before (bit-identical).
+    const Stats* stats = reg.try_get<Stats>(n);
+    if (stats != nullptr && stats->stamina.current <= 0.0f) move_scale *= kExhaustedMoveScale;
 
     // Perception, priority 1 — danger: the single nearest hazard within sense range. How near a
     // hazard gets before this NPC senses (and so flees) it is shaped by its BRAVERY: a coward
@@ -270,7 +278,7 @@ void steer_npcs(entt::registry& reg) {
     // the fraction in [0.3, 0.9] — always < 1, so even a greedy NPC at FULL hunger isn't hungry.
     const float greed = pers != nullptr ? static_cast<float>(pers->greed) : 0.0f;
     const float seek_fraction = kHungerSeekFraction * (1.0f + greed / 200.0f);
-    const Stats* stats = reg.try_get<Stats>(n);
+    // `stats` was fetched at the top (for the exhaustion crawl) and is reused here.
     const bool hungry =
         stats != nullptr && stats->hunger.current < stats->hunger.max * seek_fraction;
     // URGENCY beats rung order: if a hungry colonist is ALSO thirsty and its WATER is more depleted
@@ -409,7 +417,10 @@ void steer_npcs(entt::registry& reg) {
       if (blade != entt::null) {
         const Vec2 toward = weapons.get<Transform>(blade).position - pos;
         const float len = glm::length(toward);
-        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kWeaponSeekSpeed;
+        // * move_scale like every other rung, so a tired colonist trudges to a weapon too (the
+        // exhaustion crawl is uniform). Unarmed -> heft is 1.0, so a rested NPC is bit-identical.
+        if (len > 0.0f)
+          npcs.get<Velocity>(n).value = (toward / len) * kWeaponSeekSpeed * move_scale;
         continue;  // heading for a weapon — an idle colonist would have fallen through to rally
       }
     }

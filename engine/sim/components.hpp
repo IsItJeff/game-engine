@@ -369,6 +369,11 @@ inline constexpr float kBlockDamageFactor =
     0.4f;  // fraction of a blow that gets through a raised guard
 inline constexpr float kGuardMoveScale = 0.35f;  // how much a guard slows you — the block's cost
 
+// How much an EXHAUSTED character (stamina drained to 0 by moving) is slowed — a crawl, not a stop,
+// so the spent can always limp to safety while stamina recovers. Shared so the player (MovePlayer)
+// and NPCs (steer_npcs) tire identically — the "the bane bites both" parity the codebase keeps.
+inline constexpr float kExhaustedMoveScale = 0.4f;
+
 // A projectile in flight — a thrown attack (perform_throw) made VISIBLE and given a travel time. It
 // HOMES on its `target`: advance_projectiles steers it there each tick and, on arrival, applies the
 // (already VIT-mitigated) `damage`, crediting `owner` with Valor on a killing hit. Homing (not
