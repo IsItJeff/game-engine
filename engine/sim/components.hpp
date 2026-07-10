@@ -519,6 +519,17 @@ inline float need_efficiency(const Stats& s) {
   return kNeedFloor + (1.0f - kNeedFloor) * (worst / kNeedPenaltyBelow);  // linear kNeedFloor..1.0
 }
 
+// How STARVED a character LOOKS, in [0, 1] — a renderer-only cue that EXACTLY tracks the combat
+// debuff, so a colonist that fights weaker also visibly wastes. Derived straight from
+// need_efficiency (the one source of truth, so the look and the penalty can never drift apart):
+// need_efficiency runs [kNeedFloor .. 1.0], so 2*(1 - eff) maps that to [0 .. 1] — 0 while a
+// colonist is fed (no pallor, an unchanged draw) up to 1 at empty. The renderer mixes the dot
+// toward a sallow grey by this much; the sim never reads it (presentation only, like
+// wounded_brightness).
+inline float need_pallor(const Stats& s) {
+  return 2.0f * (1.0f - need_efficiency(s));  // eff in [0.5, 1.0] -> pallor in [0, 1]
+}
+
 // A fixed drinking spot — a pond or well the `drink` system tops nearby thirsty characters up from,
 // WITHOUT being consumed (unlike a one-shot food orb). `radius` is how close you must be to drink.
 // The seed of the design's water economy (wells now, irrigated crops later); a thirsty NPC walks to
