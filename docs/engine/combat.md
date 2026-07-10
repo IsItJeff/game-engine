@@ -354,6 +354,21 @@ colonist steers to a dropped weapon ([`steer_npcs`](npc-behaviour.md)) and wield
 (`npc_equip`), hitting harder but moving slower, exactly as you do (the bane bites both).
 So the player and NPCs now *race* for a fallen brute's blade.
 
+**And the blade wears out.** Beyond the heft, a weapon carries a `durability` (40 connecting hits on
+a hostile), copied onto the wielder's `Equipped` at equip. Each such swing dulls it by one, and at 0
+it **shatters** — the weapon slot clears (strength, heft, *and* venom all gone), and if nothing else
+is worn the now-empty `Equipped` is **removed** (exactly as `Drop` does), so "unarmed" reads as
+`gear == nullptr` everywhere. That last part is load-bearing for **NPCs**: `steer_npcs`' arm-up rung
+and `npc_equip` both gate on `Equipped` *presence*, so removing the empty cache is what lets a
+shattered colonist re-seek and re-grab a fresh blade — the player and NPCs re-arm alike (armour worn
+alongside stays put; only the weapon pair clears). So the item's tradeoff isn't only *spatial*
+(power vs. speed) but
+**temporal**: a looted blade is a *consumable* you cycle through, not a permanent upgrade — the
+design's *"durability now, wear/repair later"* (repair and reforge are a later ring; for now you
+scavenge a fresh one from the next brute). Only a real hit on a hostile wears it — the same scope
+`venom`/`execute`/`cleave` use — so swatting a mote (training) or the effect-less cruel strike don't,
+and a bare hand never does. A fresh blade is bit-identical until it actually breaks.
+
 And the choice is **reversible**: press **`Q`** to **drop** what you're wielding (the `Drop`
 command, the inverse of `Equip`). It reconstructs the weapon on the ground where you stand —
 via the same `spawn_weapon` a brute uses, so a dropped blade is indistinguishable from a
