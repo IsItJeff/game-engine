@@ -1360,8 +1360,9 @@ TEST_CASE("standing weights each deed dimension by the design's signed factors",
 
 TEST_CASE("a deed drifts the actor's matching personality axis, bounded and clamped", "[sim]") {
   // The design's "you are what you do": recording a deed nudges the actor's matching Personality
-  // axis a bounded step — Valor hardens bravery, Charity softens toward compassion — so a character
-  // is reshaped by its deeds. The drift is small and CLAMPS at the ±100 axis bound.
+  // axis a bounded step — Valor hardens bravery, Charity softens toward compassion, Loyalty deepens
+  // the loyalty leaning — so a character is reshaped by its deeds. The drift CLAMPS at the ±100
+  // bound.
   entt::registry reg;
   const entt::entity n = reg.create();
   reg.emplace<eng::sim::Personality>(n, eng::sim::Personality{0, 0, 0, 0});
@@ -1374,6 +1375,10 @@ TEST_CASE("a deed drifts the actor's matching personality axis, bounded and clam
   eng::sim::record_deed(reg, n, eng::sim::Deed::Charity, 1);
   REQUIRE(reg.get<eng::sim::Personality>(n).compassion == 2);  // Charity -> compassion
   REQUIRE(reg.get<eng::sim::Personality>(n).bravery == 4);     // ...and leaves bravery alone
+
+  eng::sim::record_deed(reg, n, eng::sim::Deed::Loyalty, 1);
+  REQUIRE(reg.get<eng::sim::Personality>(n).loyalty == 2);     // Loyalty -> the loyalty axis...
+  REQUIRE(reg.get<eng::sim::Personality>(n).compassion == 2);  // ...and leaves compassion alone
 
   // A long heroic career CLAMPS at the axis bound rather than overflowing the int8.
   for (int i = 0; i < 100; ++i) eng::sim::record_deed(reg, n, eng::sim::Deed::Valor, 1);
@@ -1430,6 +1435,50 @@ TEST_CASE("rescuing a downed ally records a Charity deed on the rescuer", "[sim]
   const auto player_credit = rescue_then_standing(true);
   REQUIRE(npc_credit == 4);              // one Charity deed -> standing +4...
   REQUIRE(player_credit == npc_credit);  // ...identical for a player rescuer (parity)
+}
+
+TEST_CASE("rescuing a bonded ally is loyalty too: a friend save records both deeds", "[sim]") {
+  // The dormant Loyalty dimension lands on the rescue path. Hauling up a STRANGER is charity only,
+  // but hauling up someone the rescuer was ALREADY bonded to (affinity at/above the +10 bond floor)
+  // is also LOYALTY — standing by your own. Gated on the tie that existed BEFORE the rescue's own
+  // affinity nudge, so a first save of a stranger never counts as loyalty.
+  using eng::sim::BehaviorLedger;
+  using eng::sim::Deed;
+  const auto dim = [](const BehaviorLedger& l, Deed k) {
+    return l.dims[static_cast<std::size_t>(k)];
+  };
+
+  // Run one rescue where the rescuer starts with `prebond` affinity toward the fallen; return the
+  // rescuer's ledger afterward (same geometry as "a living ally revives a downed player in place").
+  const auto rescue_with_prebond = [](std::int8_t prebond) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{100.0f, 100.0f});
+    reg.emplace<eng::sim::PlayerControlled>(player);
+    reg.emplace<eng::sim::Velocity>(player);
+    reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // down
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally, eng::Vec2{110.0f, 100.0f});  // within revive reach
+    reg.emplace<eng::sim::Npc>(ally);
+    reg.emplace<eng::sim::Stats>(ally);
+    if (prebond != 0) eng::sim::nudge_affinity(reg, ally, player, prebond);  // a prior tie
+
+    const eng::Vec2 centre{640.0f, 360.0f};
+    eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // player goes Downed
+    eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // ally in reach -> revive + deeds
+    return reg.get<BehaviorLedger>(ally);
+  };
+
+  SECTION("a stranger save is charity only") {
+    const BehaviorLedger led = rescue_with_prebond(0);  // affinity 0 -> below the bond floor
+    REQUIRE(dim(led, Deed::Charity) == 1);
+    REQUIRE(dim(led, Deed::Loyalty) == 0);  // no prior bond -> no loyalty
+  }
+  SECTION("a bonded save is charity AND loyalty") {
+    const BehaviorLedger led = rescue_with_prebond(10);  // at the +10 bond floor (kBondPull)
+    REQUIRE(dim(led, Deed::Charity) == 1);
+    REQUIRE(dim(led, Deed::Loyalty) == 1);  // stood by a friend -> loyalty too
+  }
 }
 
 TEST_CASE("nudge_affinity forms one directed edge and deepens it, clamped", "[sim]") {

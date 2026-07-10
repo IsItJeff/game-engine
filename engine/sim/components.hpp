@@ -119,10 +119,11 @@ struct BehaviorLedger {
 // standing". Weights are the design's exact .8/1.0/.6/.6/-1.2/-.8 scaled ×5 — the smallest scale
 // that makes every one an integer (each is a multiple of 0.2) — so NO float enters the sim and
 // replay stays bit-identical; the unit is thus "fifths of a design-point". Charity/Valor lift you,
-// Cruelty/Violence sink you. Three deeds feed it so far — Charity and Valor lift, Cruelty (the
-// first villain deed) sinks it below zero — proving the signed formula in both directions; Honesty,
-// Loyalty and unjust Violence stay 0 until their deeds land. The formula was locked whole from the
-// start, so each new deed is a one-line add here, never a reshape.
+// Cruelty/Violence sink you. Four deeds feed it so far — Charity, Valor and Loyalty (rescuing a
+// bonded ally) lift, Cruelty (the first villain deed) sinks it below zero — proving the signed
+// formula in both directions; Honesty and unjust Violence stay 0 until their deeds land. The
+// formula was locked whole from the start, so each new deed is a one-line add here, never a
+// reshape.
 inline std::int32_t standing(const BehaviorLedger& led) {
   const auto d = [&](Deed k) { return led.dims[static_cast<std::size_t>(k)]; };
   return d(Deed::Charity) * 4 + d(Deed::Valor) * 5 + d(Deed::Honesty) * 3 + d(Deed::Loyalty) * 3 -
