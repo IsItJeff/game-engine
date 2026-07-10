@@ -2923,6 +2923,48 @@ TEST_CASE("a raised guard softens a creature's blow", "[sim]") {
   REQUIRE(hit_damage(true) < hit_damage(false));  // ...a raised guard softens it
 }
 
+TEST_CASE("a raised guard ripostes only while it has the stamina to spend", "[sim]") {
+  // The offence half of the block: a guarding defender bites back, so planting your guard wears the
+  // attacker down as well as softening its blows. But a riposte is an EXERTION — a WINDED guard
+  // softens but can't turn a blow. Same contact setup as the softening test; here we watch the FOE.
+  const auto foe_damage_taken = [](bool guarding, float victim_stamina) {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim).stamina.current = victim_stamina;
+    if (guarding) reg.emplace<eng::sim::Blocking>(victim);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});  // in contact
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});  // full HP
+
+    std::mt19937 rng{1234};
+    const float before = reg.get<eng::sim::Stats>(foe).health.current;
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return before - reg.get<eng::sim::Stats>(foe).health.current;
+  };
+  REQUIRE(foe_damage_taken(false, 100.0f) == 0.0f);  // an open stance leaves the attacker untouched
+  REQUIRE(foe_damage_taken(true, 100.0f) > 0.0f);  // a fresh guard ripostes a chip back into it...
+  REQUIRE(foe_damage_taken(true, 0.0f) == 0.0f);   // ...but a winded guard can only soften
+}
+
+TEST_CASE("a raised guard gives no second wind: no stamina recovery while blocking", "[sim]") {
+  // Bracing to turn blows is exertion, not rest — a still, guarding character doesn't recover
+  // stamina (the twin of the starvation gate), so a prolonged guard bleeds what its ripostes spend
+  // and can't be held risk-free forever. A non-guarding still character recovers as normal.
+  const auto rested_stamina = [](bool guarding) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Stats>(e).stamina = eng::sim::Vital{50.0f, 100.0f, 20.0f};
+    reg.emplace<eng::sim::Velocity>(e);  // zero velocity -> still (would recover, if not guarding)
+    if (guarding) reg.emplace<eng::sim::Blocking>(e);
+    for (int i = 0; i < 30; ++i) eng::sim::update_stamina(reg, 1.0f / 60.0f);
+    return reg.get<eng::sim::Stats>(e).stamina.current;
+  };
+  REQUIRE(rested_stamina(false) > 50.0f);          // open stance, still -> recovers
+  REQUIRE(rested_stamina(true) == Approx(50.0f));  // guarding -> no second wind, stays put
+}
+
 TEST_CASE("guarding slows the player's movement: the block's trade-off", "[sim]") {
   // The cost that keeps a guard from being free upside: a guarding player crawls. Driven through
   // the real MovePlayer command's `guard` flag, so the whole funnel is exercised.
