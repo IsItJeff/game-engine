@@ -2443,6 +2443,59 @@ TEST_CASE("attacking a creature whittles its HP by Strength vs its VIT", "[sim]"
   REQUIRE(strong_hit > weak_hit);  // Strength matters: the stronger swing deals more
 }
 
+TEST_CASE("need_efficiency saps a starving or parched fighter toward a floor", "[sim]") {
+  // The design's "an empty Need is an escalating inefficiency debuff", as a pure function of the
+  // sheet. Full (both needs topped) is 1.0 so a fed colony fights bit-identically; the WORST of
+  // hunger/water governs, ramping to a floor at empty (weakened, never toothless).
+  using eng::sim::need_efficiency;
+  using eng::sim::Stats;
+  Stats s;                                      // defaults: hunger and water both 100/100
+  REQUIRE(need_efficiency(s) == Approx(1.0f));  // well-fed and watered -> full power
+
+  s.hunger.current = 0.0f;                      // starving
+  REQUIRE(need_efficiency(s) == Approx(0.5f));  // bottoms out at the floor, not zero
+
+  s.hunger.current = 100.0f;  // fed again...
+  s.water.current = 0.0f;     // ...but now parched
+  REQUIRE(need_efficiency(s) ==
+          Approx(0.5f));  // the same floor from the OTHER need (worst governs)
+
+  // The penalty bites only in the last quarter: at exactly 25% of a need it is still full power...
+  s.water.current = 25.0f;
+  REQUIRE(need_efficiency(s) == Approx(1.0f));
+  // ...and half-way into that quarter it is half-way to the floor (a linear ramp).
+  s.water.current = 12.5f;  // worst frac 0.125, midway in [0, 0.25)
+  REQUIRE(need_efficiency(s) == Approx(0.75f));
+}
+
+TEST_CASE("a starving fighter hits softer: an empty need saps melee damage", "[sim]") {
+  // The survival Need debuff on the battlefield: two identical swings, the only difference the
+  // attacker's belly. The starving one deals the floor fraction (half) of the fed one's blow, so
+  // keeping the colony fed is now a combat concern too. The foe has VIT 1 (no defence) and a big
+  // pool, so the blow reads clean and it survives one hit.
+  const auto swing_damage = [](float hunger_current) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk).hunger.current = hunger_current;  // 100 fed, 0 starving
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});             // inside melee reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{200.0f, 200.0f, 0.0f});  // survives one hit
+    reg.emplace<eng::sim::Attributes>(foe);  // VIT 1 -> zero defence, so the raw blow reads clean
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};  // foe Dexterity 1 -> never dodges; attacker Luck 1 -> never crits
+    eng::sim::perform_attack(reg, atk, rng);
+    return 200.0f - reg.get<eng::sim::Stats>(foe).health.current;
+  };
+  const float fed = swing_damage(100.0f);
+  const float starving = swing_damage(0.0f);
+  REQUIRE(fed > 0.0f);
+  REQUIRE(starving < fed);                  // an empty belly weakens the blow...
+  REQUIRE(starving == Approx(fed * 0.5f));  // ...to the floor fraction (kNeedFloor)
+}
+
 TEST_CASE("landing the killing blow on a hostile earns the attacker Valor", "[sim]") {
   // The morality write-point's SECOND deed (after rescue -> Charity), proving it generalises across
   // dimensions: slaying a monster is Valor. Only the FATAL blow credits — a chip that leaves the

@@ -77,6 +77,13 @@ dealt = max( raw² / (raw + def),  0.1 × raw )
     gives `raw²/raw = raw` (full damage). This is the master plan's mitigation formula
     in miniature; the same shape will carry magical (INT-vs-WIS) damage later.
 
+An **empty belly saps the blow** before mitigation: `raw` is scaled by `need_efficiency` — `1.0`
+while both hunger and water sit at or above a quarter-full (so a fed fighter is bit-identical), ramping
+down to a **half** as the *worst* of the two needs empties. A starving or parched fighter hits
+softer (a floor, never zero), and a **throw scales by the same factor** — no ranged loophole — so
+keeping the colony fed and watered is a combat concern, not just a survival one. See
+[the stats system](stats-system.md).
+
 ### Lucky strikes — crits (Luck)
 
 On top of the STR-vs-VIT damage, a strike may **crit** for a burst of extra damage — the
