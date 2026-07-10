@@ -386,9 +386,14 @@ regen), so a just-killed thing can't heal back above 0 the same tick.
 
 A fight you can't *see* landing feels dead: dots silently lose health and vanish. So
 every blow now leaves a mark the eye catches. Wherever damage is applied —
-`resolve_contacts` (a mote), `resolve_creature_contacts` (a creature's swing), and
-`perform_attack` (your or an NPC's strike) — the struck entity is stamped with a
-**`HitFlash`**, a tiny countdown. The renderer mixes that dot toward white in proportion
+`resolve_contacts` (a mote), `resolve_creature_contacts` (a creature's swing),
+`perform_attack` (your or an NPC's strike), `advance_projectiles` (a thrown bolt or a
+spitter's spit landing), and the `DamagePlayer` command (a hit dealt straight through the
+funnel) — the struck entity is stamped with a **`HitFlash`**, a tiny countdown. They all
+call the one shared `stamp_flash`, so every *discrete blow* blinks its victim. (The one
+deliberate exception is the venom DoT, `tick_poison`: it chips health every second, and
+pulsing white each tick would read as noise, not a hit — the lingering harm is shown by
+the poison instead.) The renderer mixes that dot toward white in proportion
 to the time left, so a fresh hit blinks bright and fades over ~9 ticks. `decay_flashes`
 ages the timer each tick and drops it at zero.
 

@@ -958,17 +958,19 @@ float crit_chance(int luck_level) {
   return chance < kCap ? chance : kCap;
 }
 
+}  // namespace
+
 // Stamp a fresh hit-flash on an entity that just took a blow — presentation only, so
 // the renderer can blink it white (see components.hpp HitFlash). emplace_or_replace so
 // a rapid second blow refreshes the flash to full rather than stacking. Called AT the
 // damage sites, unconditionally on a landed hit — no roll, so it draws no RNG and the
 // seeded streams stay identical. Safe mid-view: HitFlash is in no view being walked at
-// any call site (the same reason Downed is safely emplaced during handle_deaths).
+// any call site (the same reason Downed is safely emplaced during handle_deaths). Public
+// so the systems damage sites AND the DamagePlayer command (world.cpp) share ONE
+// definition of "blink on a hit" — every damage source flashes its victim, no drift.
 void stamp_flash(entt::registry& reg, entt::entity e) {
   reg.emplace_or_replace<HitFlash>(e, HitFlash{kHitFlashSeconds});
 }
-
-}  // namespace
 
 entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt19937& rng) {
   constexpr float kBaseReach = 45.0f;                 // a little past contact range (15)
