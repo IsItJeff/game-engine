@@ -3393,6 +3393,29 @@ TEST_CASE("worn armour slows stamina recovery (its bane)", "[sim]") {
   REQUIRE(arm_sta < bare_sta);  // ...but the armour's bane held the armoured one back
 }
 
+TEST_CASE("a starving or parched character gets no second wind: stamina rest-recovery is gated",
+          "[sim]") {
+  // The stamina twin of the starvation heal-gate: an empty stomach OR canteen suppresses resting
+  // stamina recovery, so survival failure drains your reserves, not just your health (and, with the
+  // stamina==0 crawl, a fleeing starver tires to a crawl). A fed, watered rester recovers as
+  // before.
+  const auto rested_stamina = [](float hunger, float water) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    auto& st = reg.emplace<eng::sim::Stats>(e);
+    st.stamina = eng::sim::Vital{50.0f, 100.0f, 20.0f};  // current 50, recovers 20/s
+    st.hunger.current = hunger;
+    st.water.current = water;
+    reg.emplace<eng::sim::Velocity>(e);  // zero velocity -> resting
+    const float dt = 1.0f / 60.0f;
+    for (int i = 0; i < 30; ++i) eng::sim::update_stamina(reg, dt);  // half a second resting
+    return reg.get<eng::sim::Stats>(e).stamina.current;
+  };
+  REQUIRE(rested_stamina(100.0f, 100.0f) > 50.0f);         // fed & watered -> recovers (unchanged)
+  REQUIRE(rested_stamina(0.0f, 100.0f) == Approx(50.0f));  // starving -> no second wind
+  REQUIRE(rested_stamina(100.0f, 0.0f) == Approx(50.0f));  // dehydrated -> no second wind
+}
+
 TEST_CASE("dropping a weapon keeps your armour (slot-aware Drop)", "[sim]") {
   // Drop is slot-aware: it sheds only the weapon, leaving worn armour on — a blanket
   // remove<Equipped> would silently strip the armour.

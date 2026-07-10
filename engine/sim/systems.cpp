@@ -545,13 +545,23 @@ void update_stamina(entt::registry& reg, float dt) {
   // Stats, so the view skips them for free — only the player pays.
   auto view = reg.view<Stats, Velocity>();
   for (const entt::entity e : view) {
-    Vital& stamina = view.get<Stats>(e).stamina;
+    Stats& st = view.get<Stats>(e);
+    Vital& stamina = st.stamina;
     if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
       stamina.current -= kDrainPerSecond * dt;             // moving: spend it...
       if (stamina.current < 0.0f) stamina.current = 0.0f;  // ...never below empty
     } else {
-      // Resting: recover, faster the tougher you are. A no-Attributes entity just
-      // uses the base rate (boost 1.0).
+      // Resting: recover, faster the tougher you are — but NOT on an empty stomach or canteen. A
+      // starving or dehydrated character gets no second wind: the stamina twin of
+      // regenerate_vitals' starvation heal-gate, so survival failure saps your reserves too, not
+      // just your health. And, composed with the stamina==0 exhaustion crawl, a starver who flees
+      // tires to a crawl it can't shake off — the design's "escalating inefficiency" emerging from
+      // two systems, no new penalty. update_stamina runs just BEFORE drain_hunger/drain_water in
+      // step(), so this reads last tick's need level: a 1-frame lag, immaterial for a Need that
+      // empties over minutes. Creatures default hunger/water to full (100), so they're never gated
+      // here.
+      if (st.hunger.current <= 0.0f || st.water.current <= 0.0f) continue;
+      // A no-Attributes entity just uses the base rate (boost 1.0).
       const Attributes* attrs = reg.try_get<Attributes>(e);
       float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
                                                   kRecoveryPerEndurance
