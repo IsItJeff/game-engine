@@ -1498,6 +1498,34 @@ TEST_CASE("a cruel strike earns a personal grudge: the victim resents the strike
           0);  // ...but the striker forms no tie
 }
 
+TEST_CASE("felling a foe near an ally forges camaraderie: the witness bonds to the killer",
+          "[sim]") {
+  // The THIRD relationship-forming event ("fighting a common foe"), alongside the rescue-bond and
+  // the cruelty-grudge: a killing blow on a hostile bonds nearby colonists TO the killer
+  // (witness->killer), so the colony warms to a protector who fights beside it. An ally out of
+  // reach of the skirmish forms no tie.
+  const auto witness_affinity = [](float ally_x) {
+    entt::registry reg;
+    const entt::entity killer = reg.create();
+    reg.emplace<eng::sim::Transform>(killer, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(killer);
+    reg.emplace<eng::sim::Skills>(killer);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});         // within melee reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{3.0f, 3.0f, 0.0f});  // frail: one blow
+    reg.emplace<eng::sim::Enemy>(foe);                                     // ...and hostile
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally, eng::Vec2{ally_x, 0.0f});
+    reg.emplace<eng::sim::Npc>(ally);  // a peaceful colonist bystander (not the target)
+
+    std::mt19937 rng{42};
+    eng::sim::perform_attack(reg, killer, rng);  // fells the foe -> bonds nearby witnesses
+    return eng::sim::affinity_toward(reg, ally, killer);
+  };
+  REQUIRE(witness_affinity(30.0f) > 0);    // a nearby ally bonds to the killer...
+  REQUIRE(witness_affinity(500.0f) == 0);  // ...one far from the skirmish does not
+}
+
 TEST_CASE("a resented player is abandoned: a grudge-holder won't steer to the rescue", "[sim]") {
   // The abandonment reader in steer_npcs: a colonist that dislikes the downed player (a grudge past
   // the threshold) won't cross the field to save it, where a neutral one would.
