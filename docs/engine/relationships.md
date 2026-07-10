@@ -56,7 +56,12 @@ a new one — so the edge count is the number of *distinct partners*, never per-
 Pure integer add, clamped to `±100`, touching no view (safe mid-iteration).
 
 The negative event is the **cruel strike** in `perform_attack` (`nudge_affinity(victim, attacker,
-kCrueltyGrudge)` — the struck colonist resents its striker). The *second positive* one is
+kCrueltyGrudge)` — the struck colonist resents its striker). And that cruelty is **witnessed**: the
+same strike scans the nearby colonists (within `kCamaraderieRadius`, skipping the victim) and gives
+each a *smaller* `kWitnessGrudge` toward the striker — the negative mirror of camaraderie, so a
+reputation for cruelty **spreads**. One witnessed cruelty is milder than the victim's own grudge and
+won't cross the abandonment line, but a *pattern* of them will: hurt colonists in front of the colony
+and it stops trusting you, not just the ones you struck. The *second positive* one is
 **camaraderie**: the same killing blow that credits the attacker **Valor** also bonds nearby allies
 to them — `bond_witnesses` scans standing colonists within `kCamaraderieRadius` of the kill and
 `nudge_affinity(witness, killer, kCamaraderieAffinity)` for each. It's the design's *"fighting a
@@ -135,9 +140,9 @@ standing to choose stances (befriend / protect / exploit).
   lazy sparse edge list), placed beside `BehaviorLedger`/`standing`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `nudge_affinity` (the single write-point, the
   `record_deed` twin) and `affinity_toward` (its read-side counterpart); the bond formed at
-  `handle_deaths`' rescue branch, the grudge at `perform_attack`'s cruel-strike branch, and
-  `bond_witnesses` (camaraderie) at `perform_attack`'s AND `advance_projectiles`' killing-blow
-  branches; the bond-pull rung in
+  `handle_deaths`' rescue branch, the victim grudge **and** the witness-grudge spread (`kWitnessGrudge`)
+  at `perform_attack`'s cruel-strike branch, and `bond_witnesses` (camaraderie) at `perform_attack`'s
+  AND `advance_projectiles`' killing-blow branches; the bond-pull rung in
   `steer_npcs` (below the hero-rally), the grudge-veto in both rescue paths, and the
   affinity-discounted rescue reach on the `steer_npcs` rescue rung.
 - `tests/sim/test_simulation.cpp` — the write-point (find-or-update + clamp), the bond

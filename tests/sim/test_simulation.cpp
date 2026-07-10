@@ -1578,6 +1578,37 @@ TEST_CASE("a cruel strike earns a personal grudge: the victim resents the strike
           0);  // ...but the striker forms no tie
 }
 
+TEST_CASE("witnessed cruelty spreads: nearby colonists grudge the striker too", "[sim]") {
+  // The negative mirror of camaraderie's bond_witnesses: a cruel strike makes not just the VICTIM
+  // resent you but the bystanders who SAW it too (a smaller grudge), so cruelty earns a spreading
+  // bad reputation. A colonist far from the strike sees nothing. The witness is a SEPARATE colonist
+  // from the one struck.
+  const auto witness_affinity = [](float witness_x) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(player);
+    reg.emplace<eng::sim::Skills>(player);
+    reg.emplace<eng::sim::PlayerControlled>(player);
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{20.0f, 0.0f});  // in reach -> the struck one
+    reg.emplace<eng::sim::Stats>(victim, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(victim);
+    reg.emplace<eng::sim::Npc>(victim);
+    const entt::entity witness = reg.create();
+    reg.emplace<eng::sim::Transform>(witness, eng::Vec2{witness_x, 0.0f});  // a bystander
+    reg.emplace<eng::sim::Stats>(witness);
+    reg.emplace<eng::sim::Npc>(witness);
+
+    std::mt19937 rng{1234};
+    eng::sim::perform_attack(reg, player,
+                             rng);  // no hostile in reach -> a cruel strike on the victim
+    return eng::sim::affinity_toward(reg, witness, player);
+  };
+  REQUIRE(witness_affinity(60.0f) < 0);    // a bystander near the strike resents the striker...
+  REQUIRE(witness_affinity(500.0f) == 0);  // ...one far off saw nothing, so bears no grudge
+}
+
 TEST_CASE("felling a foe near an ally forges camaraderie: the witness bonds to the killer",
           "[sim]") {
   // The THIRD relationship-forming event ("fighting a common foe"), alongside the rescue-bond and
