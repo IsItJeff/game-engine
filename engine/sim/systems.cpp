@@ -28,6 +28,20 @@ constexpr std::int32_t kRescueCharity = 1;
 // tie — a playtest knob.
 constexpr std::int8_t kRescueAffinity = 20;
 
+// Rescuing someone you were ALREADY bonded to is more than charity — it's LOYALTY, standing by your
+// own. When the rescuer's affinity toward the fallen is already at/above kBondPull (a real, prior
+// bond), a rescue records this Loyalty deed too, on top of the Charity every rescue earns. standing
+// weights Loyalty x3 and Charity x4, so a save of a FRIEND reads as +7 vs a stranger's +4. Gated on
+// the bond that existed BEFORE this rescue's own +kRescueAffinity nudge, so a first save of a
+// stranger is charity only — loyalty is for a tie you already had, not one the save itself creates.
+constexpr std::int32_t kRescueLoyalty = 1;
+
+// The affinity floor at which a directed tie counts as a REAL bond, shared by two readers: the
+// bond-pull steer rung (an idle colonist drifts toward a friend at/above this) and the
+// loyalty-on-rescue gate above. One "a friendship starts at +10" line, so both agree what a bond
+// is.
+constexpr std::int8_t kBondPull = 10;
+
 // Landing the killing blow on a HOSTILE is a Valor deed of this size on the attacker — one atomic
 // deed unit, the offensive twin of a rescue's Charity. standing weights Valor ×5, so a slain
 // monster reads as +5 standing.
@@ -127,7 +141,9 @@ void steer_npcs(entt::registry& reg) {
   // to drifts toward a nearby FRIEND (a positive-affinity Relationship, e.g. the one it rescued).
   // Reuses kRallySpeed. Knobs.
   constexpr float kBondRadius = 220.0f;
-  constexpr std::int8_t kBondPull = 10;  // affinity floor below which a tie doesn't move you
+  // kBondPull (the affinity floor at which a tie is a real bond) is shared with the
+  // loyalty-on-rescue deed, so it lives with the deed constants at the top of the file rather than
+  // local here.
 
   // Nested loops: every NPC against every hazard / orb / fallen ally / weapon — O(n*m), fine
   // for a handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts
@@ -1703,14 +1719,18 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
   // one steer_npcs reads twice, a fighter visibly warms and holds its ground — a character arc from
   // deeds alone. `try_get`, NEVER get_or_emplace: an entity with no Personality (the player, every
   // creature) must STAY Personality-free, or the bit-identical absent-Personality world breaks.
-  // Only the two wired deeds drift; the other four wire themselves the day their deeds land. Pure
-  // integer math (no RNG), clamped in int before the int8 cast so a long career can't overflow.
+  // Only the three wired deeds drift; the other three wire themselves the day their deeds land.
+  // Pure integer math (no RNG), clamped in int before the int8 cast so a long career can't
+  // overflow.
   if (Personality* p = reg.try_get<Personality>(actor)) {
     std::int8_t* axis = nullptr;
     if (kind == Deed::Valor) {
       axis = &p->bravery;
     } else if (kind == Deed::Charity) {
       axis = &p->compassion;
+    } else if (kind == Deed::Loyalty) {
+      axis =
+          &p->loyalty;  // standing by your own hardens the loyalty leaning — "you are what you do"
     }
     if (axis != nullptr) {
       int v = static_cast<int>(*axis) + kDeedDriftStep;
@@ -1827,6 +1847,15 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
       // ledger doesn't disturb the players view being iterated (BehaviorLedger isn't one of its
       // components), the same reason the Downed emplace above is safe here.
       record_deed(reg, rescuer, Deed::Charity, kRescueCharity);
+      // ...and if the rescuer was ALREADY bonded to the one they saved (affinity at/above the
+      // shared kBondPull bond floor), the save is also LOYALTY — standing by your own, not mere
+      // charity to a stranger. Read affinity BEFORE the +kRescueAffinity nudge below, so this
+      // counts the tie that existed when the rescuer CHOSE to help; a first save of a stranger
+      // (affinity 0) is charity only. Same mid-iteration safety as the Charity deed (record_deed
+      // touches no iterated view, affinity_toward is a const read). This lands the dormant Loyalty
+      // dimension of standing.
+      if (affinity_toward(reg, rescuer, e) >= kBondPull)
+        record_deed(reg, rescuer, Deed::Loyalty, kRescueLoyalty);
       // ...and a personal BOND forms: the rescuer grows affinity TOWARD the one they saved (the P8
       // relationships seed's one forming event). Direction is rescuer->rescued deliberately: only
       // players go Downed, so `e` is a player that doesn't run steer_npcs — putting the edge on the
