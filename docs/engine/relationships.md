@@ -5,8 +5,8 @@
 The first trace of a character's **social ties** — who they've come to care about.
 [Personality](npc-behaviour.md) is who a colonist *is* and [morality](morality.md) is
 what they've *done*; relationships are who they're *bonded to* — or *against*. It is the seed of
-the design's P8 social layer, and it starts, deliberately, as one component and a pair of
-mirror-image events:
+the design's P8 social layer, and it starts, deliberately, as one component and a small handful of
+affinity-moving events:
 
 - **`Relation`** — one **directed** tie: `THIS entity → other`, carrying an `int8`
   **`affinity`** (`−100` dislike … `+100` like). Directed because A→B need not equal
@@ -14,16 +14,17 @@ mirror-image events:
 - **`Relationships`** — a lazy, sparse, append-ordered `std::vector<Relation>` on the
   subject: how *this* character regards others.
 - **`nudge_affinity(from, toward, delta)`** — the single write-point every affinity-moving
-  event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Two fire it today:
-  a **rescue** forms a bond, a **cruel strike** forms a grudge.
+  event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Three fire it today:
+  a **rescue** forms a bond, a **cruel strike** forms a grudge, and **felling a foe near allies**
+  forges *camaraderie* (nearby colonists warm to the killer).
 
 ## Why it matters
 
 This is the same three-part discipline the morality ledger shipped, and for the same
 reason — the *schema* is painful to retrofit, so it is locked from the first line:
 
-- a **single write-point** (so every future event — fighting side by side, sharing food,
-  a betrayal — is one `nudge_affinity` call, never new plumbing);
+- a **single write-point** (so each event — fighting side by side and a betrayal already, sharing
+  food still to come — is one `nudge_affinity` call, never new plumbing);
 - a **lazy component** (an entity earns a `Relationships` only on its first bond, so a
   never-bonding colonist — and the whole pre-relationships world — carries nothing and
   replays **bit-identically**);
@@ -35,8 +36,9 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
 
 ## How it works
 
-**Two events** move affinity today, one each way. The positive one lives at the **rescue** in
-`handle_deaths` — the same line that already credits the rescuer with **Charity**:
+**Three events** move affinity today — two that bond, one that grudges. The first positive one lives
+at the **rescue** in `handle_deaths` — the same line that already credits the rescuer with
+**Charity**:
 
 ```cpp
 record_deed(reg, rescuer, Deed::Charity, kRescueCharity);
@@ -52,6 +54,19 @@ that rationale needs a second look — noted at the call site.)
 bond, then **find-or-update** the edge toward the target — deepen an existing tie or append
 a new one — so the edge count is the number of *distinct partners*, never per-tick growth.
 Pure integer add, clamped to `±100`, touching no view (safe mid-iteration).
+
+The negative event is the **cruel strike** in `perform_attack` (`nudge_affinity(victim, attacker,
+kCrueltyGrudge)` — the struck colonist resents its striker). The *second positive* one is
+**camaraderie**: the same killing blow that credits the attacker **Valor** also bonds nearby allies
+to them — `bond_witnesses` scans standing colonists within `kCamaraderieRadius` of the kill and
+`nudge_affinity(witness, killer, kCamaraderieAffinity)` for each. It's the design's *"fighting a
+common foe"*, directed **witness → killer**, so it feeds the very readers below: the colony
+**clusters toward** (bond-pull) and **rescues from farther** (the graded rescue reach) a champion who
+fights beside it. Lighter than a rescue's `+20` (witnessing is a smaller thing than being saved), so
+devotion accrues over several shared victories. Because both player and NPC kills route through the
+shared `perform_attack`, a colonist earns camaraderie whether *you* or a fellow colonist lands the
+blow. *(ponytail: only MELEE kills bond today — the ranged `advance_projectiles` kill is the same
+event and is the noted follow-up.)*
 
 The affinity is **read two ways** — a positive draw and a negative repulsion, the two faces of a
 tie:
@@ -85,14 +100,14 @@ tie:
 
 ## The tradeoffs
 
-- **Two events, two readers.** No personality-match seeding (that's a later ring), no bond
+- **Three events, a few readers.** No personality-match seeding (that's a later ring), no bond
   *stages*, no decay — just the smallest struct those grow into. Exactly as the morality
   seed shipped a couple of deeds and let the rest wire themselves.
 - **The readers are still coarse.** A gentle gather, a rescue-veto, and now a graded rescue reach
   (a friend reached from farther); the *deeper* ones — fleeing *with* a friend, refusing to *fight*
   them, healing them *first* — are later work.
-- **Unbounded edge list.** Bounded in practice (ties form only on a rescue, only toward a
-  downed player), but formally open — a `ponytail:` comment names the `cap-N +
+- **Unbounded edge list.** Bounded in practice (ties form only on a rescue, a grudge, or a shared
+  kill — a finite set of triggers), but formally open — a `ponytail:` comment names the `cap-N +
   evict-weakest` upgrade so it's tracked debt, not silent.
 - **`int8`, not the ledger's `int32`.** Affinity *saturates into bands*; it doesn't
   accumulate over a life toward a gate the way `standing` does. So it takes the
@@ -106,11 +121,12 @@ trait-scaled-radius shape every other axis uses — so a loyal colonist crosses 
 near a bonded ally while a fickle one follows only a friend underfoot. **All six personality
 axes are now wired.**
 
-Beyond that, the write-point is the whole point: the negative half is already proven (a rescue
-bonds, a cruel strike grudges), so more events (fighting a common foe, a shared meal) each become
-one `nudge_affinity` call; `trust` appends as a second `Relation` field; the derived `bond_tier`
-names the ladder; and a **leaky decay** lets cold ties fade (and a grudge cool). Then the social
-`perceive` layer reads affinity *and* standing to choose stances (befriend / protect / exploit).
+Beyond that, the write-point is the whole point: three events already prove it out (a rescue bonds,
+a cruel strike grudges, a shared kill forges camaraderie), so each further event — a **shared meal**,
+a **ranged** kill (the melee camaraderie's twin) — is just one more `nudge_affinity` call; `trust`
+appends as a second `Relation` field; the derived `bond_tier` names the ladder; and a **leaky decay**
+lets cold ties fade (and a grudge cool). Then the social `perceive` layer reads affinity *and*
+standing to choose stances (befriend / protect / exploit).
 
 ## Key files
 
@@ -118,9 +134,10 @@ names the ladder; and a **leaky decay** lets cold ties fade (and a grudge cool).
   lazy sparse edge list), placed beside `BehaviorLedger`/`standing`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `nudge_affinity` (the single write-point, the
   `record_deed` twin) and `affinity_toward` (its read-side counterpart); the bond formed at
-  `handle_deaths`' rescue branch and the grudge at `perform_attack`'s cruel-strike branch; the
-  bond-pull rung in `steer_npcs` (below the hero-rally), the grudge-veto in both rescue paths, and
-  the affinity-discounted rescue reach on the `steer_npcs` rescue rung.
+  `handle_deaths`' rescue branch, the grudge at `perform_attack`'s cruel-strike branch, and
+  `bond_witnesses` (camaraderie) at `perform_attack`'s killing-blow branch; the bond-pull rung in
+  `steer_npcs` (below the hero-rally), the grudge-veto in both rescue paths, and the
+  affinity-discounted rescue reach on the `steer_npcs` rescue rung.
 - `tests/sim/test_simulation.cpp` — the write-point (find-or-update + clamp), the bond
   wired at a rescue, the bond-pull steering toward a friend (and the range gate), the
   stale-handle guard, and the grudge (a cruel strike resents the striker; a grudge-holder

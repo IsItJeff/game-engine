@@ -49,6 +49,17 @@ constexpr std::int32_t kCrueltyStrike = 1;
 constexpr std::int8_t kCrueltyGrudge = -25;
 constexpr std::int8_t kGrudgeThreshold = -20;
 
+// Felling a hostile near allies forges CAMARADERIE: each standing colonist within
+// kCamaraderieRadius of the killer gains kCamaraderieAffinity TOWARD them — the design's "fighting
+// a common foe" bond, the third way a tie forms (a rescue bonds the saved, a cruel strike grudges
+// the struck, and now a shared victory bonds the witnesses). Directed witness->killer, so it feeds
+// the readers that already exist: the colony clusters toward (bond-pull) and rescues from farther
+// (the graded rescue reach) a champion who fights beside them. Lighter than a rescue's +20
+// (witnessing < being saved), so devotion builds over several shared kills rather than one.
+// Playtest knobs.
+constexpr float kCamaraderieRadius = 120.0f;
+constexpr std::int8_t kCamaraderieAffinity = 5;
+
 // How far a single deed nudges the actor's matching PERSONALITY axis (deed-driven DRIFT). Small and
 // bounded on purpose — the design wants "the war changed him", not a wholly different person: at 2
 // per deed a full ±100 swing takes ~50 deeds, so a demo's handful gives a visible-but-partial
@@ -964,6 +975,22 @@ float crit_chance(int luck_level) {
   return chance < kCap ? chance : kCap;
 }
 
+// CAMARADERIE: a shared victory forges a tie. When `killer` (a player or an NPC) fells a hostile,
+// every standing colonist near it gains a little affinity TOWARD the killer — the design's
+// "fighting a common foe" bond (see the kCamaraderie constants). Directed witness->killer so it
+// feeds the existing bond-pull (cluster to a friend) and graded-rescue-reach readers. Skips the
+// killer itself and Downed bodies (a crumpled colonist isn't fighting alongside). nudge_affinity
+// emplaces Relationships — a component in NEITHER this scan's view nor npc_attack's view — so this
+// is safe at the kill site even though npc_attack calls perform_attack mid-iteration (same reason
+// the rescue bond and cruelty grudge are safe). Draws no RNG.
+void bond_witnesses(entt::registry& reg, entt::entity killer, Vec2 killer_pos) {
+  for (const entt::entity w : reg.view<Npc, Transform>(entt::exclude<Downed>)) {
+    if (w == killer) continue;  // you don't bond with yourself for your own kill
+    if (glm::distance(reg.get<Transform>(w).position, killer_pos) > kCamaraderieRadius) continue;
+    nudge_affinity(reg, w, killer, kCamaraderieAffinity);
+  }
+}
+
 }  // namespace
 
 // Stamp a fresh hit-flash on an entity that just took a blow — presentation only, so
@@ -1148,8 +1175,14 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
     // earlier and peaceful NPCs are never targeted here, so only slaying a monster counts — and
     // NPCs earn it too (npc_attack shares this perform_attack): a colonist who fells a creature is
     // brave.
-    if (was_alive && st->health.current <= 0.0f)
+    if (was_alive && st->health.current <= 0.0f) {
       record_deed(reg, attacker, Deed::Valor, kValorKill);
+      // ...and the shared victory forges CAMARADERIE: nearby colonists bond to the killer (the
+      // third relationship-forming event, after the rescue bond and the cruelty grudge). The
+      // skirmish happens within melee reach, so the attacker's own position (tf, non-null past the
+      // guard at the top) is its centre.
+      bond_witnesses(reg, attacker, tf->position);
+    }
     // A VENOM weapon's hit also ENVENOMS the foe — the player-side mirror of a swarmer's bite,
     // reusing Poisoned + tick_poison (and the same kPoisonDuration). Only a venomous blade
     // (gear->weapon_venom > 0) does this, so a bare-handed or plain-weapon swing is unchanged;
