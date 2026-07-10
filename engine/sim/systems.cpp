@@ -57,8 +57,16 @@ constexpr std::int8_t kGrudgeThreshold = -20;
 // (the graded rescue reach) a champion who fights beside them. Lighter than a rescue's +20
 // (witnessing < being saved), so devotion builds over several shared kills rather than one.
 // Playtest knobs.
-constexpr float kCamaraderieRadius = 120.0f;
+constexpr float kCamaraderieRadius = 120.0f;  // also the "how far a deed is witnessed" range below
 constexpr std::int8_t kCamaraderieAffinity = 5;
+
+// A cruel strike is WITNESSED: nearby colonists who saw it (within kCamaraderieRadius) form a small
+// grudge TOWARD the striker too — the negative mirror of camaraderie, so a reputation for cruelty
+// SPREADS through the community, not just the direct victim (who forms a larger grudge of their
+// own). Milder than the victim's kCrueltyGrudge (-25), so ONE witnessed cruelty won't cross the
+// kGrudgeThreshold rescue-abandonment line, but a PATTERN of them will (a colonist that keeps
+// seeing you hurt its fellows stops trusting you). Playtest knob.
+constexpr std::int8_t kWitnessGrudge = -8;
 
 // How far a single deed nudges the actor's matching PERSONALITY axis (deed-driven DRIFT). Small and
 // bounded on purpose — the design wants "the war changed him", not a wholly different person: at 2
@@ -1194,6 +1202,20 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
         // rescued by this colonist later — a targeted consequence that lands before global
         // villain-fear does.
         nudge_affinity(reg, victim, attacker, kCrueltyGrudge);
+        // ...and the cruelty is WITNESSED: nearby colonists who saw it form a SMALLER grudge toward
+        // the striker too, so a reputation for cruelty spreads (the negative mirror of
+        // camaraderie's bond_witnesses). Reuses the `colonists` view (Npc+Transform,
+        // exclude<Downed>); skips the victim (it already formed its own larger grudge above). The
+        // striker is always the PLAYER here (branch-gated) and so never appears in this Npc view —
+        // no self-grudge to guard. nudge_affinity emplaces Relationships, in neither `colonists`
+        // nor npc_attack's view, so it's safe mid-iteration. No RNG.
+        for (const entt::entity witness : colonists) {
+          if (witness == victim) continue;  // the victim's larger grudge is recorded above
+          if (glm::distance(origin, colonists.get<Transform>(witness).position) >
+              kCamaraderieRadius)
+            continue;
+          nudge_affinity(reg, witness, attacker, kWitnessGrudge);
+        }
       }
     }
     return entt::null;  // a whiff (or the cruel strike above) — nothing to hand back to destroy
