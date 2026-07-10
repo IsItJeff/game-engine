@@ -222,6 +222,12 @@ void spawn_weapon(entt::registry& reg, Vec2 pos);
 // (distinct render colour). Used to seed wearable armour into the opening scene. Draws no RNG.
 void spawn_armour(entt::registry& reg, Vec2 pos);
 
+// Spawn a VENOM blade on the ground at `pos` — the second weapon TYPE (a poison build: weaker,
+// nimbler hits that envenom the foe). The ONE canonical grounded venom-weapon entity, shared by a
+// slain spitter's drop (handle_deaths) and the opening scene (build_scene), so both look and behave
+// identically — the same no-drift discipline as spawn_weapon. Draws no RNG.
+void spawn_venom_weapon(entt::registry& reg, Vec2 pos);
+
 // Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
 // player overlaps restores its `heal` health (capped) AND permanently raises max HP by
 // its `bonus_max_hp`, then is consumed; an orb whose lifetime runs out fades away

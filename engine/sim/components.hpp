@@ -293,11 +293,14 @@ struct Hazard {
 // of discrete blows, not a per-tick grind. `chase_speed` is per-creature so archetypes
 // can differ — a slow tanky brute vs a fast fragile swarmer (see make_creature).
 // What a creature leaves behind when it dies — keyed on its archetype, so the drop is
-// DETERMINISTIC (no roll on the shared stream). The three make the loot economy symmetric: a
-// swarmer yields SUSTAIN (a health orb), a brute OFFENCE (a weapon), a sentinel DEFENCE (armour).
-// Exhaustive by design — handle_deaths switches on it with no default, so a fourth kind is a
-// compile error until it's handled (the same -Wswitch discipline as SkillId/AttrId/CommandKind).
-enum class DropKind : std::uint8_t { HealthOrb, Weapon, Armour };
+// DETERMINISTIC (no roll on the shared stream). The kinds keep the loot economy legible: a swarmer
+// yields SUSTAIN (a health orb), a brute raw OFFENCE (a steel weapon), a sentinel DEFENCE (armour),
+// and a spitter a VENOM fang (the poison-build blade) — so every archetype's kill pays out
+// something you'd arm up with, and the venom weapon gets a renewable battlefield source instead of
+// a single scene spawn. Exhaustive by design — handle_deaths switches on it with no default, so a
+// new kind is a compile error until it's handled (the same -Wswitch discipline as
+// SkillId/AttrId/CommandKind).
+enum class DropKind : std::uint8_t { HealthOrb, Weapon, Armour, VenomWeapon };
 
 struct Enemy {
   float attack_damage = 15.0f;

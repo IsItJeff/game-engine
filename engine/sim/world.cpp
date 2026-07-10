@@ -132,30 +132,18 @@ entt::entity make_swarmer(entt::registry& reg, Vec2 pos) {
 // Projectile primitive. Fragile (25 HP) and SLOW (chase 55, it hangs back) with only a feeble bite
 // (attack_damage 4), but it launches a homing spit from well out of your melee reach (spit_range
 // 250 > a swing's ~45) that chips you every ~1.5s. So it flips the usual pressure: you must CLOSE
-// on it (or throw back) to shut it down, rather than kite. ponytail: HP/speed/range/damage and its
-// 15% spawn share are balance knobs.
+// on it (or throw back) to shut it down, rather than kite. On death it drops its VENOM FANG (a
+// venom weapon) — closing on the caustic artillery arms you with a poison blade, giving the venom
+// weapon a renewable battlefield source (the spitter is the rare 15% spawn, so fangs don't flood
+// the field the way a swarmer drop would). ponytail: HP/speed/range/damage and its spawn share are
+// balance knobs.
 entt::entity make_spitter(entt::registry& reg, Vec2 pos) {
   const entt::entity e = make_creature(reg, pos, 25.0f, 55.0f, 4.0f, 1, Vec3{0.6f, 0.25f, 0.7f},
                                        7.0f);  // violet
   Enemy& enemy = reg.get<Enemy>(e);
   enemy.spit_range = 250.0f;
   enemy.spit_damage = 7.0f;
-  return e;
-}
-
-// A VENOM blade on the ground — a poison-build weapon, the second weapon TYPE. Lighter than the
-// default steel blade (less +Strength, less heft) but its hits ENVENOM the foe (perform_attack
-// applies Poisoned, reusing tick_poison) — trading raw power for a lingering chip and mobility. The
-// design's "gear grants a +aspect, with a bane". A sickly venom-green dot to tell it from steel.
-entt::entity make_venom_weapon(entt::registry& reg, Vec2 pos) {
-  const entt::entity e = reg.create();
-  reg.emplace<Transform>(e, pos);
-  reg.emplace<PrevTransform>(e, pos);
-  reg.emplace<RenderDot>(e, Vec3{0.4f, 0.8f, 0.35f}, 6.0f);  // venom green
-  Weapon& w = reg.emplace<Weapon>(e);
-  w.strength_bonus = 2;       // lighter/weaker than the steel blade's +4 — the trade for the proc
-  w.move_penalty = 0.15f;     // and nimbler than the steel blade's 0.25 heft
-  w.venom_per_second = 6.0f;  // its hits poison (health/sec); a knob
+  enemy.drop = DropKind::VenomWeapon;  // the poison-build blade's renewable source
   return e;
 }
 
@@ -365,8 +353,9 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   spawn_armour(reg, Vec2{kFieldWidth * 0.6f, kFieldHeight * 0.35f});
 
   // A VENOM blade (sickly-green dot) as a second weapon TYPE: E it for a poison build — weaker,
-  // nimbler hits that envenom the foe. A brute's steel drop is the raw-power alternative.
-  make_venom_weapon(reg, Vec2{center.x - 120.0f, center.y + 60.0f});
+  // nimbler hits that envenom the foe. A brute's steel drop is the raw-power alternative, and a
+  // slain spitter drops another of these, so the poison build has a renewable source too.
+  spawn_venom_weapon(reg, Vec2{center.x - 120.0f, center.y + 60.0f});
   return player;
 }
 

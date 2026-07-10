@@ -101,7 +101,7 @@ give waves texture:
 |---|---|---|---|---|---|
 | **Brute** (red) | 40 | 70 | 15 | 0% | slow, tanky, hits hard — wear it down, kite it |
 | **Swarmer** (orange) | 15 | 130 | 8 | ~21% | fast, fragile (~one strike), weak, *slippery*, and **venomous** — corners you in numbers, and its bite lingers |
-| **Spitter** (violet) | 25 | 55 | 4 | 0% | slow, fragile, feeble in melee — but **ranged**: plinks you with a homing spit from beyond your reach, so you must close on it or throw back |
+| **Spitter** (violet) | 25 | 55 | 4 | 0% | slow, fragile, feeble in melee — but **ranged**: plinks you with a homing spit from beyond your reach, so you must close on it or throw back; drops a **venom fang** when felled |
 
 The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips ~1 strike in
 5, its innate Dexterity) *and venomous*, and the spitter is **RANGED** — so they threaten you for
@@ -262,21 +262,25 @@ hardens you for good, *and* makes you deadlier, and *skill* keeps you alive, not
 respawning. An uncollected orb **fades after 20 s** so drops from far-off kills don't pile
 up.
 
-The loot economy is **symmetric across three drops** — sustain, offence, and defence:
+The loot economy spans **four keyed drops** — sustain, raw offence, defence, and a poison build:
 
 - a **swarmer** yields a **`Pickup`** (sustain, above);
-- a **brute** yields a **`Weapon`** (a steel-grey dot) — the harder kill pays out *offence*;
+- a **brute** yields a **`Weapon`** (a steel-grey dot) — the harder kill pays out raw *offence*;
 - a **sentinel** — the slow, heavily-plated slate-blue tank — yields a piece of **`Armour`**
   (a bronze dot) — *defence*. This is armour's **renewable battlefield source**: before, armour
   only appeared as two static pieces in the opening scene, so it left the run once grabbed.
+- a **spitter** yields a **venom fang** (a green venom `Weapon`) — closing on the ranged artillery
+  arms you with the *poison build*, and gives the venom blade its own renewable source (it only
+  seeded the opening scene before). The spitter is the rare ~15% spawn, so fangs stay scarce rather
+  than flooding the field the way a swarmer drop would.
 
-Which enemy you kill is a loot decision (offence vs defence vs sustain), and every drop feeds
-the same equip loop — you or a foraging colonist ([`npc_equip`](npc-behaviour.md)) can wear it.
-The split is keyed on the archetype (`Enemy::drop`, a `DropKind` enum set in
-`make_brute`/`make_sentinel`), so it's deterministic — no roll on the seeded stream — and the
-exhaustive `switch` in `handle_deaths` (no `default`) makes a fourth drop kind a compile error
-until it's handled. The spawner mixes the three from one seeded draw (a rare sentinel, the
-occasional brute, mostly swarmers).
+Which enemy you kill is a loot decision (sustain vs raw offence vs defence vs poison), and every
+drop feeds the same equip loop — you or a foraging colonist ([`npc_equip`](npc-behaviour.md)) can
+wear it. The split is keyed on the archetype (`Enemy::drop`, a `DropKind` enum set in
+`make_brute`/`make_sentinel`/`make_spitter`), so it's deterministic — no roll on the seeded stream —
+and the exhaustive `switch` in `handle_deaths` (no `default`) makes a new drop kind a compile error
+until it's handled. The spawner mixes the archetypes from one seeded draw (a rare sentinel, a
+spitter, the occasional brute, mostly swarmers).
 
 ### Gear — the first weapon (equip, with a bane)
 
@@ -312,9 +316,12 @@ the exact same `Poisoned` + `tick_poison` (and `kPoisonDuration`) as the venom t
 *you*. It's the design's *"gear grants a +aspect"* — and it pays for the proc: the venom blade is
 lighter (**less `strength_bonus`**, so weaker raw hits) and nimbler (less heft) than the steel sword.
 So the weapon choice is now a real build fork: the steel blade's **raw power** vs. the venom blade's
-**lingering chip + mobility** (soften, then let the poison finish). *ponytail:* dropping a venom
-blade sheds a plain one (the seed drops the def, not the instance); a renewable creature-loot source
-is the natural follow-up — the venomous swarmer's fang, the way the sentinel drops its armour.
+**lingering chip + mobility** (soften, then let the poison finish). And the poison build has its own
+**renewable source**: a slain **spitter** drops a venom fang (`DropKind::VenomWeapon`, above), the
+way a sentinel drops its armour — spawned through the one canonical `spawn_venom_weapon`, so a looted
+fang is identical to the one seeded in the opening scene. *ponytail:* dropping a venom blade still
+sheds a *plain* one (the drop reconstructs the default weapon, not the wielded instance's mods) —
+carry the wielder's cached mods into `Drop` once more than one weapon def exists.
 
 **A second slot — armour.** Gear is now a real offense-vs-defense *choice*, not just a weapon
 on/off. A dull-bronze **`Armour`** piece wears in its own slot alongside the weapon: it adds
@@ -329,12 +336,14 @@ it); with only armour worn, `Q` is a no-op. NPCs grab armour through the same sh
 (parity), though they only take the first piece they reach for now.
 
 !!! note "The minimal slice of P5, growing"
-    Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), two hardcoded
-    defs (a weapon, an armour), `+Attribute`/`+defence` + one distinct bane each. The rest of
-    the design's Equipment — armour as *creature loot* (an `armour_drops` mirror of the brute's
-    `weapon_drops`), NPC armour-*seeking*, `Item{def, quality, durability, traits[]}`, the
-    `+skill/+aspect` bonuses (which ride the [SkillDef](progression.md) seam), and wear/repair —
-    layer on top without reworking this plumbing.
+    Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), three hardcoded
+    defs (a steel weapon, a venom weapon, an armour) each pairing a boon
+    (`+Attribute`/`+defence`/`+venom`) with a bane — a move-heft on either weapon (heavier steel,
+    lighter venom) and a slower second wind on armour, so weapon and armour banes stay *distinct*
+    even as the two blades share a kind. Each archetype's kill already feeds this loop as *creature
+    loot* (the four `DropKind`s). The rest of the design's Equipment — NPC armour-*seeking*,
+    `Item{def, quality, durability, traits[]}`, the `+skill/+aspect` bonuses (which ride the
+    [SkillDef](progression.md) seam), and wear/repair — layer on top without reworking this plumbing.
 
 ### Dying — `handle_deaths` (Downed, then rescue or respawn)
 
