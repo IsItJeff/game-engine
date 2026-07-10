@@ -99,6 +99,24 @@ more crits → faster kills → more orbs.** It's the first stat you grow with y
 than your fists. (Creatures never collect loot, so their LCK stays 1 — they never crit,
 just as they never train.)
 
+### Kill vigor — health on a kill
+
+Felling a foe restores a little **health** to the killer (`kKillVigor`, 8 HP), so pressing the
+attack is its own reward — a comeback tool in a swarm. Winning already sustained you *indirectly* —
+but only a **swarmer** drops a health orb, only if you walk over it before it fades, so a brute or
+spitter kill paid no health at all. Kill vigor is the **direct, universal** on-kill heal: every
+kill, every killer, on the spot. It fires at the **same alive→dead transition** as the Valor credit,
+both for a melee killing blow and a
+killing throw (full player==NPC and melee==ranged parity), and it is **capped at max**, so a
+full-health killer is unchanged. Crucially it's a *direct* heal — a kill's adrenaline — **not** the
+passive mending `regenerate_vitals` blocks behind a full belly, so it lifts even a starving fighter:
+a kill's rush overrides the mending-gate the [need debuff](stats-system.md) imposes (the health orb
+heals un-gated too, but only a swarmer drops one). It stays a lifeline, not a heal-lock: one kill's 8
+HP won't out-heal a real fight, so you still have to win the exchange.
+
+(Not to be confused with the stamina **second wind** — `update_stamina`'s resting recovery, which
+*is* blocked while starving. Vigor is health from a kill; second wind is stamina from rest.)
+
 ### The enemy — a creature that fights back
 
 An `Enemy` is a real fight, not a throwaway mote. A handful of archetypes (from `make_creature`)

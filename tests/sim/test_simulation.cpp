@@ -2603,6 +2603,55 @@ TEST_CASE("landing the killing blow on a hostile earns the attacker Valor", "[si
   expect_valor(100000.0f, false);  // a foe that survives the swing -> no deed
 }
 
+TEST_CASE("a kill grants vigor: felling a foe heals the killer", "[sim]") {
+  // Combat's direct sustain axis: the fatal blow restores a little HEALTH to the killer (a comeback
+  // tool), capped at max. A full-health killer is unchanged (the heal clamps) — which is why every
+  // existing kill test, fought at full HP, stays bit-identical. Only the kill transition heals, not
+  // a chip.
+  const auto kill_and_read_health = [](float killer_hp) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).strength.level = 20;  // one-shots the frail foe
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk).health.current = killer_hp;  // wounded or full (max 100)
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{2.0f, 2.0f, 0.0f});  // frail -> dies in one
+    reg.emplace<eng::sim::Attributes>(foe).endurance.level = 1;
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};  // foe DEX 1 never dodges, atk LCK 1 never crits
+    eng::sim::perform_attack(reg, atk, rng);
+    REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == 0.0f);  // the foe fell
+    return reg.get<eng::sim::Stats>(atk).health.current;
+  };
+  REQUIRE(kill_and_read_health(50.0f) > 50.0f);  // a wounded killer gains health...
+  REQUIRE(kill_and_read_health(100.0f) ==
+          Approx(100.0f));  // ...but a full one is capped (unchanged)
+}
+
+TEST_CASE("a ranged kill grants vigor too: a killing throw heals the thrower", "[sim]") {
+  // Parity with the melee kill vigor — a killing THROW restores the same health to the owner, at
+  // the projectile-impact kill site.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk).dexterity.level = 20;  // throws hard enough to one-shot
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::Stats>(atk).health.current = 50.0f;  // wounded thrower (max 100)
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{100.0f, 0.0f});        // in throw range
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{2.0f, 2.0f, 0.0f});  // frail -> dies
+  reg.emplace<eng::sim::Attributes>(foe).endurance.level = 1;
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::perform_throw(reg, atk);
+  eng::sim::advance_projectiles(reg, 1.0f);  // the shot flies home and fells the frail foe
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == 0.0f);  // the foe fell...
+  REQUIRE(reg.get<eng::sim::Stats>(atk).health.current >
+          50.0f);  // ...and the kill healed the thrower
+}
+
 TEST_CASE("an NPC that fells a creature via npc_attack earns Valor (parity)", "[sim]") {
   // The parity claim through the NPC combat SYSTEM (not perform_attack directly): npc_attack
   // iterates the NPC view and, when a colonist's swing kills an adjacent hostile, credits it Valor
