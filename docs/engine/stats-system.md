@@ -106,10 +106,21 @@ hearthless world regenerates exactly as before.
 The same discipline now covers your **second wind**: `update_stamina` skips its resting recovery
 while `hunger <= 0` **or** `water <= 0`, so survival failure drains your stamina reserves too, not
 just your health. Composed with the empty-bar crawl below, this is the design's *escalating
-inefficiency* emerging from two systems rather than a bespoke debuff — a starver who keeps fleeing
+inefficiency* emerging from the sim's own systems rather than a bespoke debuff — a starver who keeps fleeing
 spends stamina it can no longer recover, tires to a crawl, and can't shake it off until it eats or
 drinks. (`update_stamina` runs just *before* `drain_hunger`/`drain_water`, so it reads last tick's
 need — a one-frame lag that's immaterial for a Need that empties over minutes.)
+
+A **third** consequence closes the loop into combat: `need_efficiency(stats)` saps how hard you
+*hit*. It stays `1.0` while both needs sit at or above a quarter-full — so a fed colony (and every
+full-fed combat test) fights bit-identically — then ramps **linearly to a half** as the *worst* of
+hunger/water falls to empty, scaling both the swing's `raw` (`perform_attack`, shared across its
+hostile/cruel/cleave branches) and the throw's own `raw` — no ranged loophole. A starving fighter is
+weakened, never toothless (a floor, like `mitigate`'s 10%
+chip); reading the *binding* need means topping off only one doesn't lift it — you must keep the
+colony both **fed and watered** to keep its blows at full strength. So an empty Need now costs you a
+third way (softer hits), alongside the stalled heal and the drained second wind — the design's
+escalating inefficiency, all of it emergent from the shared `Vital`/`Stats` sheet.
 
 Health also drops from *gameplay*, and that shows the other half of the rule.
 Touching a `Hazard` (a drifting mote) hurts whoever overlaps it — the player or an
@@ -236,11 +247,11 @@ here.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `WaterSource`, `FoodSource`, `Hearth`, `Hazard`, and the `Npc` marker.
+- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `need_efficiency` (the empty-Need combat debuff), `WaterSource`, `FoodSource`, `Hearth`, `Hazard`, and the `Npc` marker.
 - `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `graze` (the regrowing food plots), `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
 - `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the wandering NPCs, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
 - `game/app/main.cpp` — the health, stamina, hunger, and water bars and the "NPCs alive" counter in the debug panel; `world.cpp`'s `make_water_source` places the pond and `make_hearth` the hearth.
-- `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, hunger/starvation/eating, and permadeath tests.
+- `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, hunger/starvation/eating, the `need_efficiency` debuff (a starving fighter hits softer), and permadeath tests.
 
 ## Go deeper
 

@@ -1165,9 +1165,16 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // blade worth wildly more on a veteran). Keeps the "multiply only what you earned" invariant
   // honest and mirrors advance_progression, which scales the earned endurance.level - 1 alone.
   const int gear_strength = gear != nullptr ? gear->strength_bonus : 0;
-  const float raw = kBaseAttackDamage +
-                    static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength * veteran +
-                    static_cast<float>(gear_strength) * kDamagePerStrength;
+  // A hungry or thirsty fighter hits softer — the survival Need debuff folds into this ONE raw
+  // number every landing branch below shares (the hostile hit, the cruel-strike, AND the cleave all
+  // read `raw`), so keeping the colony fed and watered is now a combat concern too. No Stats, or
+  // full needs (the common case and every combat test), -> need_efficiency 1.0 -> bit-identical.
+  const Stats* atk_stats = reg.try_get<Stats>(attacker);
+  const float need_eff = atk_stats != nullptr ? need_efficiency(*atk_stats) : 1.0f;
+  const float raw = (kBaseAttackDamage +
+                     static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength * veteran +
+                     static_cast<float>(gear_strength) * kDamagePerStrength) *
+                    need_eff;
 
   // Find the nearest attackable target in reach — a fragile mote (Hazard) or a hostile
   // creature (Enemy). Strict < breaks ties by iteration order (deterministic).
@@ -1412,9 +1419,13 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   grant_skill_xp(*skills, *attrs, SkillId::Throwing, kThrowingPerHit, character);
 
   // DEX-vs-VIT damage: base + earned-Dexterity delta, softened by the target's VIT. No gear/veteran
-  // scaling and no crit — a throw is deliberately the simple, reliable option.
+  // scaling and no crit — a throw is deliberately the simple, reliable option. Scaled by the same
+  // need_efficiency the melee swing uses, so a starving thrower is weakened too (no ranged loophole
+  // around the survival debuff); full needs -> 1.0 -> bit-identical. `stats` is the attacker's
+  // sheet fetched above (non-null here).
   const float raw =
-      kBaseThrowDamage + static_cast<float>(attrs->dexterity.level - 1) * kDamagePerDexterity;
+      (kBaseThrowDamage + static_cast<float>(attrs->dexterity.level - 1) * kDamagePerDexterity) *
+      need_efficiency(*stats);
   const float applied = mitigate(raw, defence_of(reg, target));
 
   // The hit isn't dealt here — instead we LAUNCH a homing Projectile carrying that (already

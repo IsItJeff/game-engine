@@ -499,6 +499,26 @@ struct Stats {
   Vital water{100.0f, 100.0f, 0.0f};  // falls over time; 0 = dehydrating
 };
 
+// How hard a character can fight given how FED and WATERED it is — the design's "an empty Need is
+// an escalating inefficiency debuff", made concrete on the one number both a swing and a throw
+// already scale: raw damage. Efficiency stays 1.0 while BOTH needs sit above kNeedPenaltyBelow of
+// their max (the common case — and every full-fed combat test — so combat is bit-identical there),
+// then ramps down LINEARLY to kNeedFloor as the WORST (most-depleted) of hunger/water falls to
+// empty. The floor mirrors mitigate's 10% chip: a starving fighter is weakened, never toothless.
+// Reads the BINDING need (whichever is worse), so topping off only one doesn't lift the debuff —
+// you must keep the colony both fed AND watered to keep it at full strength. Pure (no RNG, no sim
+// state beyond the sheet), so combat stays deterministic and this is unit-testable like standing.
+inline float need_efficiency(const Stats& s) {
+  constexpr float kNeedPenaltyBelow = 0.25f;  // penalty bites only in the last quarter of a need
+  constexpr float kNeedFloor = 0.5f;          // bone-empty still swings at half strength, never 0
+  const float hunger_frac = s.hunger.max > 0.0f ? s.hunger.current / s.hunger.max : 1.0f;
+  const float water_frac = s.water.max > 0.0f ? s.water.current / s.water.max : 1.0f;
+  const float worst = hunger_frac < water_frac ? hunger_frac : water_frac;
+  if (worst >= kNeedPenaltyBelow)
+    return 1.0f;  // comfortable — bit-identical to the pre-debuff world
+  return kNeedFloor + (1.0f - kNeedFloor) * (worst / kNeedPenaltyBelow);  // linear kNeedFloor..1.0
+}
+
 // A fixed drinking spot — a pond or well the `drink` system tops nearby thirsty characters up from,
 // WITHOUT being consumed (unlike a one-shot food orb). `radius` is how close you must be to drink.
 // The seed of the design's water economy (wells now, irrigated crops later); a thirsty NPC walks to
