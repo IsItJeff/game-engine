@@ -138,7 +138,13 @@ envenoming spit from a distance you can't melee. (A slow, heavily-plated **senti
   it down. **VIT** (an `Attributes` component) softens the blows it takes.
 - **`chase_prey`** homes its velocity on the **nearest person** each tick — the player
   *or* an NPC — at the creature's own `chase_speed`, so a swarmer runs you down while a
-  brute lumbers.
+  brute lumbers. It **skips anyone sheltering in a `Hearth`** (`in_a_hearth`, the same reach
+  that speeds their heal): the fire breaks the **hunt**, so a beast bearing down on a colonist who
+  reaches it gives up the chase and re-targets whoever is still in the open — a *ward*, not a full
+  stop. It's chase-only, though: this is safe from being *hunted*, not blanket immunity — a
+  `resolve_creature_contacts` beast already on top of you gets its last swings as it drifts off, and a
+  `creature_spit` spitter still lobs venom from range (see the next two bullets), so the hearth buys
+  space, not invulnerability. See [the stats system](stats-system.md) for its healing half.
 - **`resolve_creature_contacts`** — on a cooldown (~0.8 s), a creature in contact deals
   its `attack_damage` to whoever it caught, *softened by that victim's VIT* (same
   `mitigate`), and trains their Toughness (via `train_on_damage`). Unlike a mote it is

@@ -69,7 +69,10 @@ a well is actually in reach — an unreachable thirst never blocks a meal it *ca
 dies of thirst standing next to a well just because hunger is checked first. Just below the needs
 sits a **retreat** rung: a *wounded* colonist (health below half) falls back to the nearest
 [`Hearth`](stats-system.md) to mend in its warmth, then **holds** once inside its radius — so the
-fire becomes a *used* landmark, wounded colonists gathering to recover. It ranks below the needs on
+fire becomes a *used* landmark, wounded colonists gathering to recover. And the retreat now *shakes
+the hunt*: creatures won't chase prey into the hearth's glow (`chase_prey`, see [combat](combat.md)),
+so a pursued colonist that reaches the fire loses its chaser — safe from being *hunted*, though a
+spitter or an already-adjacent beast can still land a hit, so it's breathing room, not full cover. It ranks below the needs on
 purpose (a starving colonist can't heal anyway, so it eats first) and above arming up (survive before
 you gear). One load-bearing detail in the rescue rung, shared by this retreat hold: an NPC *already*
 within range holds position rather than steering, so it doesn't nudge itself back out before

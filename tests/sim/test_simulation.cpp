@@ -4586,6 +4586,58 @@ TEST_CASE("a creature chases the nearest person, player or NPC", "[sim]") {
   REQUIRE(v.x == Approx(0.0f));   // not a whisker toward the far-off player
 }
 
+TEST_CASE("the hearth wards creatures: a beast leaves prey sheltering in the fire", "[sim]") {
+  // The fire's DEFENSIVE half (regenerate_vitals is its healing half): a creature won't hunt prey
+  // standing in a hearth's glow, so reaching the fire is a real escape — the same in_a_hearth reach
+  // both heals and hides. Same beast, same colonist; only a hearth around the prey differs.
+  const auto hunts = [](bool sheltered) {
+    entt::registry reg;
+    const entt::entity beast = reg.create();
+    reg.emplace<eng::sim::Transform>(beast, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(beast);
+    reg.emplace<eng::sim::Enemy>(beast).chase_speed = 100.0f;
+    reg.emplace<eng::sim::Stats>(beast, eng::sim::Vital{40.0f, 40.0f, 0.0f});  // full HP -> no limp
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{100.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    if (sheltered) {
+      const entt::entity hearth = reg.create();
+      reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{100.0f, 0.0f});  // right on the colonist
+      reg.emplace<eng::sim::Hearth>(hearth, eng::sim::Hearth{50.0f});     // radius covers it
+    }
+    eng::sim::chase_prey(reg);
+    return glm::length(reg.get<eng::sim::Velocity>(beast).value) > 0.0f;  // did it move to hunt?
+  };
+  REQUIRE(hunts(false));  // a colonist in the open is hunted...
+  REQUIRE_FALSE(
+      hunts(true));  // ...one in the fire's glow is left alone (the beast finds no target)
+
+  // And it's a WARD, not a full stop: a beast passes over a sheltered colonist to run down whoever
+  // is still exposed. A near colonist sits in a hearth to the +x; a farther one stands in the open
+  // to the -x. The beast skips the near-sheltered and chases the far-exposed (velocity heads -x),
+  // proving it RE-TARGETS rather than freezing whenever any prey is safe.
+  entt::registry reg;
+  const entt::entity beast = reg.create();
+  reg.emplace<eng::sim::Transform>(beast, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(beast);
+  reg.emplace<eng::sim::Enemy>(beast).chase_speed = 100.0f;
+  const entt::entity sheltered = reg.create();
+  reg.emplace<eng::sim::Transform>(sheltered, eng::Vec2{50.0f, 0.0f});  // near, +x
+  reg.emplace<eng::sim::Stats>(sheltered);
+  reg.emplace<eng::sim::Npc>(sheltered);
+  const entt::entity hearth = reg.create();
+  reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{50.0f, 0.0f});
+  reg.emplace<eng::sim::Hearth>(hearth, eng::sim::Hearth{30.0f});  // shelters the near colonist
+  const entt::entity exposed = reg.create();
+  reg.emplace<eng::sim::Transform>(exposed, eng::Vec2{-150.0f, 0.0f});  // far, -x, no fire
+  reg.emplace<eng::sim::Stats>(exposed);
+  reg.emplace<eng::sim::Npc>(exposed);
+  eng::sim::chase_prey(reg);
+  REQUIRE(reg.get<eng::sim::Velocity>(beast).value.x <
+          0.0f);  // passed the sheltered, ran at the exposed
+}
+
 TEST_CASE("a creature's blow harms an NPC too, not just the player", "[sim]") {
   // player == NPC parity: an NPC caught by a creature takes the same VIT-softened blow
   // and trains the same way, because both flow through the one prey path in
