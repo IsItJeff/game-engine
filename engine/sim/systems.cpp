@@ -62,6 +62,19 @@ constexpr float kKillVigor = 8.0f;
 // purpose.
 constexpr std::int32_t kCrueltyStrike = 1;
 
+// A cruel strike that KILLS its victim escalates from harm to VIOLENCE — the design's "unjust
+// violence", the SECOND villain deed. Cruelty is the blow; Violence is the death it deals. One
+// atomic unit like the others; standing weights Violence ×4, so a lethal cruel strike sinks you by
+// the Cruelty ×6 AND this ×4 (−10 total) — killing a colonist is dearer than merely wounding one
+// (−6). It also lands the last REACHABLE unfed ledger dimension (Honesty still waits on a truth
+// event), making the dominant-Violence deed_epithet "the Brutal" reachable at last. ponytail: the
+// design's "unjust" nuance (Violence counts only vs a standing>=0 victim — killing a bandit barely
+// dents you) is satisfied by CONSTRUCTION, not a literal check: this branch only ever strikes a
+// PEACEFUL colonist (hostiles are searched first and always win the target), so a bandit can't be
+// the victim. Add an explicit victim-standing gate the day a negative-standing colonist can be
+// nearest.
+constexpr std::int32_t kViolenceKill = 1;
+
 // A cruel strike also earns a personal GRUDGE — the negative mirror of a rescue's +kRescueAffinity
 // bond: the struck colonist loses this much affinity TOWARD the striker (hurt someone and they
 // resent you, exactly as saving someone endears you). A colonist whose affinity toward a player has
@@ -1642,12 +1655,22 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
         // victim like any other hit; the colonist takes the same STR-vs-VIT damage and
         // handle_deaths reaps it at 0 HP (NPC = permadeath — you can thin your own colony).
         grant_skill_xp(*skills, *attrs, SkillId::Striking, kStrikingPerHit, character);
+        bool lethal = false;  // did this blow drop the colonist? -> Violence on top of Cruelty
         if (Stats* st = reg.try_get<Stats>(victim); st != nullptr) {
           st->health.current -= mitigate(raw, defence_of(reg, victim));
           if (st->health.current < 0.0f) st->health.current = 0.0f;
           stamp_flash(reg, victim);
+          lethal = st->health.current <= 0.0f;  // the victim was a STANDING colonist (Downed
+                                                // excluded), so 0 HP here means THIS blow killed it
         }
         record_deed(reg, attacker, Deed::Cruelty, kCrueltyStrike);
+        // A cruel strike that KILLS escalates to VIOLENCE — the second villain deed, the death on
+        // top of the harm. Only when the blow felled the colonist, so a non-lethal cruel strike
+        // stays Cruelty-only and a world with no lethal cruelty is bit-identical. Sinks standing
+        // HARDER (Violence ×4 on top of Cruelty ×6) and lands the last reachable unfed ledger
+        // dimension. Same mid-iteration safety as the Cruelty deed above (record_deed touches no
+        // iterated view).
+        if (lethal) record_deed(reg, attacker, Deed::Violence, kViolenceKill);
         // The betrayal is also PERSONAL: the struck colonist forms a GRUDGE toward the striker (a
         // negative affinity edge, the mirror of a rescue's bond). A resented player won't be
         // rescued by this colonist later — a targeted consequence that lands before global

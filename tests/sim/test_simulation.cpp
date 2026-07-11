@@ -3224,6 +3224,36 @@ TEST_CASE("a player who strikes a peaceful colonist earns Cruelty and sinks thei
   REQUIRE(eng::sim::standing(*led) == -6);  // Cruelty ×6 -> the first negative standing
 }
 
+TEST_CASE("a lethal cruel strike escalates to Violence: killing a colonist sinks standing harder",
+          "[sim]") {
+  // The escalation from harm to death: Cruelty is the blow, Violence is the kill. A player who
+  // merely WOUNDS a colonist records Cruelty alone (-6); one who KILLS it records Cruelty AND
+  // Violence (-6 + -4 = -10), so a lethal betrayal sinks standing harder. The base swing is 12
+  // damage against 0-defence, so a frail 3-HP colonist dies while a 40-HP one survives — same act,
+  // the victim's fate is the only difference. This lands the last reachable unfed ledger dimension.
+  const auto standing_after_cruel_strike = [](float colonist_hp) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(player);
+    reg.emplace<eng::sim::Skills>(player);
+    reg.emplace<eng::sim::PlayerControlled>(player);  // only a player turns cruel
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{20.0f, 0.0f});  // inside reach
+    reg.emplace<eng::sim::Stats>(colonist, eng::sim::Vital{colonist_hp, colonist_hp, 0.0f});
+    reg.emplace<eng::sim::Attributes>(colonist);  // VIT 1 -> no defence
+    reg.emplace<eng::sim::Npc>(colonist);
+
+    std::mt19937 rng{1234};  // the cruel branch draws no RNG
+    eng::sim::perform_attack(reg, player, rng);
+    const eng::sim::BehaviorLedger* led = reg.try_get<eng::sim::BehaviorLedger>(player);
+    REQUIRE(led != nullptr);  // a cruel strike always records at least Cruelty
+    return eng::sim::standing(*led);
+  };
+  REQUIRE(standing_after_cruel_strike(40.0f) == -6);  // survivor -> Cruelty alone (the harm)
+  REQUIRE(standing_after_cruel_strike(3.0f) == -10);  // killed -> Cruelty AND Violence (the death)
+}
+
 TEST_CASE("a hostile in reach shields a nearby colonist: no accidental Cruelty mid-combat",
           "[sim]") {
   // The safety gate that makes cruelty a CHOICE, not a slip: hostiles are always searched first and
