@@ -2411,6 +2411,26 @@ std::int8_t affinity_toward(const entt::registry& reg, entt::entity from, entt::
   return 0;
 }
 
+int allies_of(const entt::registry& reg, entt::entity e) {
+  // Count the entities that regard `e` as a FRIEND — an incoming bond at/above kBondPull — the
+  // mirror of affinity_toward (which reads ONE directed tie). Scans every entity that carries a
+  // Relationships (only the bonded do, so a fresh world scans nothing) for an edge pointing at `e`.
+  // Skips `e` itself (no self-ally). A pure read used by the HUD; the sim never calls it. ponytail:
+  // O(bonded entities * their edges), fine for a colony — a reverse index only if a huge roster
+  // ever needs it.
+  int count = 0;
+  for (auto [other, rel] : reg.view<const Relationships>().each()) {
+    if (other == e) continue;  // an entity isn't its own ally
+    for (const Relation& edge : rel.edges) {
+      if (edge.other == e && edge.affinity >= kBondPull) {
+        ++count;  // one ally, however many edges it holds toward e (it holds at most one)
+        break;
+      }
+    }
+  }
+  return count;
+}
+
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // A zero-health entity meets one of two fates, and which one is the game's core rule
   // made concrete: a PLAYER goes DOWNED (helpless where they fell, then rescued-in-place

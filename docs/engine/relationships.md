@@ -36,7 +36,10 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
   split. Its edges reuse the **behavioural** thresholds so the name matches what the sim already does
   at that affinity: Acquaintance begins at `kBondPull` (+10, a tie that pulls you toward a friend),
   Rival at `kGrudgeThreshold` (−20, a grudge deep enough to abandon the resented); the debug HUD
-  reads out the player's **closest bond** by it. The deep bands **latch**: `bond_latched` (a Partner
+  reads out the player's **closest bond** by it — and, beside it, an **`allies`** count: how many
+  colonists have bonded *to* the player (`allies_of`, the incoming mirror of the closest outgoing
+  tie), which is exactly the set the [defend rung](npc-behaviour.md) will send rushing to your side.
+  The deep bands **latch**: `bond_latched` (a Partner
   `≥ +80` or a Nemesis `≤ −60`) marks a tie that **resists decay**, so the strongest bonds and grudges
   persist while casual ones fade (see the leak below).
 
@@ -207,17 +210,21 @@ standing to choose stances (befriend / protect / exploit).
 - `engine/sim/components.hpp` — `Relation` (one directed tie) and `Relationships` (the
   lazy sparse edge list), placed beside `BehaviorLedger`/`standing`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `nudge_affinity` (the single write-point, the
-  `record_deed` twin) and `affinity_toward` (its read-side counterpart); the bond formed at
+  `record_deed` twin), `affinity_toward` (its read-side counterpart), and `allies_of` (the incoming
+  count the HUD shows); the bond formed at
   `handle_deaths`' rescue branch, the victim grudge **and** the witness-grudge spread (`kWitnessGrudge`)
   at `perform_attack`'s cruel-strike branch, and `bond_witnesses` (camaraderie) at `perform_attack`'s
   AND `advance_projectiles`' killing-blow branches; the bond-pull rung in
-  `steer_npcs` (below the hero-rally), the grudge-veto in both rescue paths, and the
+  `steer_npcs` (below the hero-rally), the **defend** rung (charge to a bonded friend a creature
+  threatens, just below the downed-rescue), the grudge-veto in both rescue paths, and the
   affinity-discounted rescue reach on the `steer_npcs` rescue rung.
 - `tests/sim/test_simulation.cpp` — the write-point (find-or-update + clamp), the bond
   wired at a rescue, the bond-pull steering toward a friend (and the range gate), the
-  stale-handle guard, and the grudge (a cruel strike resents the striker; a grudge-holder
-  won't cross to rescue nor haul up the resented); and the graded rescue reach (a bond extends the
-  trek beyond the base radius, a mild dislike shortens it — isolated from the bond-pull rung).
+  stale-handle guard, the grudge (a cruel strike resents the striker; a grudge-holder
+  won't cross to rescue nor haul up the resented), the graded rescue reach (a bond extends the
+  trek beyond the base radius, a mild dislike shortens it — isolated from the bond-pull rung), the
+  defend charge (outranking hunger, isolated from bond-follow), and `allies_of` (the incoming-bond
+  count, floor + direction + self-exclusion).
 
 ## Go deeper
 

@@ -283,6 +283,11 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     }
     ImGui::Text("closest bond: %s", eng::sim::bond_tier(best));
   }
+  // Allies: how many colonists have bonded TO the player (the INCOMING mirror of the closest bond
+  // above) — the camaraderie you've earned fighting beside the colony, and exactly the allies the
+  // steer_npcs defend rung will send rushing to your side when a creature closes in. Shown even at
+  // 0 (you've won nobody over yet). A cheap whole-registry scan.
+  ImGui::Text("allies: %d", eng::sim::allies_of(world.registry(), player));
   if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
     // Show one learned skill's level + progress bar. Toughness only appears once the
     // player has taken a hit (it isn't in `owned` until then), so guard on find().

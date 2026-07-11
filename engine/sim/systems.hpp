@@ -239,6 +239,12 @@ void nudge_affinity(entt::registry& reg, entt::entity from, entt::entity toward,
 // readers.
 std::int8_t affinity_toward(const entt::registry& reg, entt::entity from, entt::entity toward);
 
+// How many entities regard `e` as a friend (an INCOMING bond at/above kBondPull) — the mirror of
+// the HUD's outgoing "closest bond", and the camaraderie payoff made legible: every colonist bonded
+// TO you is one ally the steer_npcs DEFEND rung will send rushing to your side. A read-only whole-
+// registry scan the HUD calls; the sim never reads it.
+int allies_of(const entt::registry& reg, entt::entity e);
+
 // Spawn a Weapon on the ground at `pos` — the one canonical grounded-weapon entity, shared by
 // a slain brute's drop (handle_deaths) and the player's Drop command so both look and behave
 // identically. Draws no RNG.
