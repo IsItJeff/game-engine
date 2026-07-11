@@ -53,6 +53,11 @@ void wrap_bounds(entt::registry& reg, Vec2 field_size);
 // Runs over exactly the entities that have a Stats component (players, NPCs).
 void regenerate_vitals(entt::registry& reg, float dt);
 
+// Slowly REPAIR worn equipment (weapon/armour durability) for any bearer resting in a Hearth's
+// warmth — the "repair later" the durability system promised, so gear is a managed resource (mend
+// it at the base) rather than a one-way trip to shattering. No hearth in reach -> a no-op.
+void mend_gear(entt::registry& reg, float dt);
+
 // Update stamina from movement: any entity with Stats and a non-zero Velocity
 // spends stamina; one standing still recovers it. (Motes have Velocity but no
 // Stats, so they're untouched.) This makes movement cost something — the
