@@ -464,6 +464,11 @@ void World::apply_command(const Command& cmd) {
         float speed = view.get<Stats>(e).stamina.current > 0.0f
                           ? pc.move_speed
                           : pc.move_speed * kExhaustedMoveScale;
+        // Starvation drags the player's legs too — parity with the NPC steer crawl: need_efficiency
+        // (the same debuff that saps your swing and greys the dot) scales move speed, so a starving
+        // or parched player trudges. Full needs -> 1.0 -> unchanged (the common case,
+        // bit-identical); the 0.5 floor keeps you moving so you can always limp to food or water.
+        speed *= need_efficiency(view.get<Stats>(e));
         // A wielded weapon's heft slows you — the equip tradeoff, felt on every step, and it
         // stacks with the exhaustion crawl (so a tired, heavily-armed player really trudges).
         if (const Equipped* gear = registry_.try_get<Equipped>(e); gear != nullptr) {
