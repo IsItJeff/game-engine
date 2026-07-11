@@ -517,7 +517,9 @@ regen), so a just-killed thing can't heal back above 0 the same tick.
 
 !!! note "A Downed body is inert — one invariant across every people-facing system"
     Once you're `Downed` you're not a participant, in *any* direction: you don't self-heal
-    (`regenerate_vitals`), you can't grab loot (`collect_pickups`) or act on input
+    (`regenerate_vitals`) or **mend your gear by the fire** (`mend_gear` — and that one *would*
+    persist past the down window, since a revive resets vitals and needs but not durability), you
+    can't grab loot (`collect_pickups`) or act on input
     (`MovePlayer`), an ally rescues you rather than the reverse (`handle_deaths`) — **and the
     fight ignores you**. Creatures re-target the living instead of camping your corpse
     (`chase_prey`), and neither a creature swing (`resolve_creature_contacts`) nor an ambient

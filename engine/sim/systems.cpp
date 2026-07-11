@@ -959,9 +959,13 @@ void mend_gear(entt::registry& reg, float dt) {
   // exact reach that heals, rests, and hides. Only a WORN slot (0 < durability < max) mends: a full
   // slot is capped (no over-repair past new) and an EMPTY slot (durability 0 = no weapon/armour) is
   // left alone — the fire can't conjure gear from nothing, only maintain what you carry. No hearth
-  // in reach -> untouched, so a hearthless world is bit-identical. Pure float, no RNG.
+  // in reach -> untouched, so a hearthless world is bit-identical. Pure float, no RNG. A DOWNED
+  // bearer is excluded (like regenerate_vitals' heal this parallels): a crumpled body on the floor
+  // isn't tending its kit, and — unlike the stamina/needs a revive resets — a durability gain would
+  // PERSIST past the down window, so an inert body must not repair. Keeps the "a Downed body is
+  // inert" invariant whole here too.
   constexpr float kMendPerSecond = 0.5f;  // durability points the fire restores per second (a knob)
-  for (const entt::entity e : reg.view<Equipped, Transform>()) {
+  for (const entt::entity e : reg.view<Equipped, Transform>(entt::exclude<Downed>)) {
     if (!in_a_hearth(reg, reg.get<Transform>(e).position)) continue;
     Equipped& eq = reg.get<Equipped>(e);
     if (eq.weapon_durability > 0.0f && eq.weapon_durability < kWeaponMaxDurability) {

@@ -4587,6 +4587,27 @@ TEST_CASE("the hearth mends worn gear: durability climbs back by the fire", "[si
   REQUIRE(mended(0.0f, true) == Approx(0.0f));      // an empty slot stays empty (no gear to mend)
 }
 
+TEST_CASE("a downed bearer's gear isn't mended by the fire: an inert body tends nothing", "[sim]") {
+  // The "a Downed body is inert" invariant reaches mend_gear too: a crumpled bearer resting in a
+  // hearth does NOT repair its worn gear. Unlike the stamina/needs a revive resets, a durability
+  // gain would PERSIST past the down window, so a helpless body mustn't quietly improve its kit on
+  // the floor. A STANDING bearer in the same fire mends normally (the control).
+  const auto mended = [](bool downed) {
+    entt::registry reg;
+    const entt::entity bearer = reg.create();
+    reg.emplace<eng::sim::Transform>(bearer, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Equipped>(bearer).weapon_durability = 10.0f;  // a worn blade
+    if (downed) reg.emplace<eng::sim::Downed>(bearer);
+    const entt::entity hearth = reg.create();
+    reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Hearth>(hearth, eng::sim::Hearth{50.0f});  // right on the bearer
+    for (int i = 0; i < 60; ++i) eng::sim::mend_gear(reg, 1.0f / 60.0f);
+    return reg.get<eng::sim::Equipped>(bearer).weapon_durability;
+  };
+  REQUIRE(mended(false) > 10.0f);          // a standing bearer mends by the fire...
+  REQUIRE(mended(true) == Approx(10.0f));  // ...but a crumpled (Downed) one does not
+}
+
 TEST_CASE("a weapon wears with use and shatters: durability reverts the wielder to unarmed",
           "[sim]") {
   // The design's "durability now, repair later" — a connecting hit on a hostile dulls the blade by
