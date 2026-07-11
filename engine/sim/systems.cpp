@@ -2253,6 +2253,18 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
       // later. (If NPCs ever go Downed, revisit that rationale.) Same view-safety as the
       // record_deed above.
       nudge_affinity(reg, rescuer, e, kRescueAffinity);
+      // ...and if the rescue was SEEN, the rescuer earns wider ADMIRATION: bond_witnesses bonds
+      // nearby colonists to the hero — the SAME "a public heroic act bonds those who watched"
+      // machinery a killing blow uses (camaraderie), now completing the witnessed-event set: a
+      // cruel strike spreads grudges, and a kill AND a rescue both spread bonds (the one heroism
+      // that used to go unwitnessed no longer does). Reusing bond_witnesses wholesale means a
+      // charismatic rescuer inspires MORE devotion (Charisma scales it) and a witnessed rescue
+      // trains the rescuer's Leadership -> Charisma too — leadership is public heroism of ANY kind,
+      // saving a life as much as felling a foe. Centred on the rescue spot (`pos`); bond_witnesses
+      // excludes the rescuer itself (w == killer) and the just-revived player isn't in its Npc
+      // view, so only true bystanders bond. No onlookers nearby -> a no-op, so a minimal rescue
+      // (rescuer + downed only, as every existing rescue test is) stays bit-identical.
+      bond_witnesses(reg, rescuer, pos);
     } else if (down->timer <= 0.0f) {
       // Unrescued: the humane fallback so a solo player isn't stuck down forever — respawn
       // whole at the field centre. A DELAYED, earned-back respawn, not the old instant one.
