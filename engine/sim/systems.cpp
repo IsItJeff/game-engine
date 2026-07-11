@@ -127,6 +127,27 @@ bool in_a_hearth(entt::registry& reg, Vec2 pos) {
   }
   return false;
 }
+
+// A BACKSTAB multiplier — kBackstabBonus if `target` (at target_pos, moving target_vel) has its
+// BACK to the attacker at from_pos, i.e. it's moving roughly AWAY (heading within ~60deg of the
+// from_pos->target_pos line); else 1.0. The single "don't turn your back" rule shared by BOTH
+// sides: the flank a fighter lands on a fleeing creature (perform_attack) AND the one a creature
+// lands on a fleeing victim (resolve_creature_contacts), so the two can never diverge. Pure
+// geometry, no RNG; a STATIONARY or FACING target — or one with no Velocity — is 1.0, so a still
+// target is bit-identical.
+float backstab_multiplier(Vec2 from_pos, Vec2 target_pos, const Velocity* target_vel) {
+  constexpr float kBackstabBonus = 1.4f;  // a hit from behind lands this much harder (a knob)...
+  constexpr float kBackstabCosine =
+      0.5f;  // ...when the target's heading is within ~60deg of "away"
+  if (target_vel == nullptr) return 1.0f;
+  const Vec2 to_target = target_pos - from_pos;
+  const float speed = glm::length(target_vel->value);
+  const float away = glm::length(to_target);
+  if (speed > 0.0f && away > 0.0f &&
+      glm::dot(target_vel->value / speed, to_target / away) > kBackstabCosine)
+    return kBackstabBonus;
+  return 1.0f;
+}
 }  // namespace
 
 void snapshot_previous(entt::registry& reg) {
@@ -1567,18 +1588,10 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // behind it. No RNG. A STATIONARY target (speed 0) or one closing on YOU (facing you down, dot <=
   // the cutoff) gets no bonus, so every still-foe combat test is bit-identical. Only Enemies reach
   // here (motes returned above); a target with no Velocity simply can't be flanked.
-  constexpr float kBackstabBonus = 1.4f;  // a hit from behind lands this much harder (a knob)
-  constexpr float kBackstabCosine =
-      0.5f;  // ...when the target's heading is within ~60deg of "away"
-  float backstab = 1.0f;
-  if (const Velocity* tv = reg.try_get<Velocity>(target); tv != nullptr) {
-    const Vec2 to_target = reg.get<Transform>(target).position - origin;
-    const float speed = glm::length(tv->value);
-    const float away = glm::length(to_target);
-    if (speed > 0.0f && away > 0.0f &&
-        glm::dot(tv->value / speed, to_target / away) > kBackstabCosine)
-      backstab = kBackstabBonus;
-  }
+  // (The facing geometry lives in the shared backstab_multiplier — one "don't turn your back" rule,
+  // the same one a creature uses on a fleeing victim in resolve_creature_contacts.)
+  const float backstab = backstab_multiplier(origin, reg.get<Transform>(target).position,
+                                             reg.try_get<Velocity>(target));
 
   // EXECUTE: a creature already worn below kExecuteThreshold of its HP takes MORE from the
   // finishing blow — the offensive MIRROR of enrage (resolve_creature_contacts), which is keyed on
@@ -2538,7 +2551,18 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
           stamp_flash(reg, c);  // the recoiling creature blinks too, so the riposte reads
         }
       }
-      const float applied = mitigate(attack_dmg, defence_of(reg, p));
+      // DON'T TURN YOUR BACK: a victim FLEEING this creature — moving away, its back turned — takes
+      // the flank harder (kBackstabBonus), the exact MIRROR of the backstab a fighter lands on a
+      // fleeing creature (perform_attack), through the SAME shared backstab_multiplier. So running
+      // from a beast is a real risk, not a free escape — a colonist the flee rung is carrying away
+      // from a hazard pays for its exposed back. Applied AFTER mitigate, exactly as perform_attack
+      // scales its final `dealt` — a flank finds the vital spot, so armour/VIT don't blunt the
+      // bonus, and the two sides stay symmetric. A STANDING or TURNING-TO-FIGHT victim (facing the
+      // creature, or with no Velocity) -> x1, so every still-victim contact test is bit-identical.
+      // No RNG.
+      float applied = mitigate(attack_dmg, defence_of(reg, p));
+      applied *=
+          backstab_multiplier(c_pos, prey.get<Transform>(p).position, reg.try_get<Velocity>(p));
       Vital& health = prey.get<Stats>(p).health;
       health.current -= applied;
       if (health.current < 0.0f) health.current = 0.0f;
