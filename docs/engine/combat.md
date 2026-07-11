@@ -500,8 +500,11 @@ plate more `+defence` (`equip_nearest_gear` scales the boon at equip; the `int` 
 a named ceiling). The **bane stays full**: quality lifts the *upside* only, so *shrinking* the bane is
 the ORTHOGONAL **mastery** track (Strength eases a weapon's heft, Endurance an armour's stamina bane —
 `eased_bane`). Two independent axes — quality is *how good the item is*, mastery *how well you wield
-it*. Everything spawned today is quality **1.0** (the baseline), so this is just the **seam**;
-per-source quality (finer loot from a tougher kill) and rolled quality + traits layer on next.
+it*. **Per-source quality now lands**: a slain brute drops FINE steel and a sentinel FINE plate
+(`kFineDropQuality` 1.25 → `+5 Strength`, `7.5 defence`), so felling a tough foe pays out better than
+the gear you start with — the first place quality is *visible in play*. What you *start* with, the
+venom fang, and a player's dropped blade stay quality **1.0** (baseline). Deterministic per drop
+source (no roll yet); **rolled** quality + traits layer on next.
 
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), three hardcoded

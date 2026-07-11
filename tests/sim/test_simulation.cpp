@@ -4882,7 +4882,9 @@ TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
 TEST_CASE("a sentinel's dropped armour is a real acquisition path: pick it up and wear it",
           "[sim]") {
   // Prove the loot seam is genuinely wearable, not just a spawn: a bare wearer standing on the
-  // dropped armour dons it (equip_nearest_gear folds its defence into the Equipped cache).
+  // dropped armour dons it (equip_nearest_gear folds its defence into the Equipped cache). The
+  // sentinel drops FINE plate (kFineDropQuality 1.25), so the worn defence is the baseline 6.0
+  // lifted by quality: 6.0 * 1.25 = 7.5 — a tough kill pays out better than the starting gear.
   entt::registry reg;
   const eng::Vec2 pos{50.0f, 50.0f};
   const entt::entity sentinel = reg.create();
@@ -4897,7 +4899,30 @@ TEST_CASE("a sentinel's dropped armour is a real acquisition path: pick it up an
 
   REQUIRE(reg.valid(grabbed));  // grabbed the grounded armour (entt::null would be invalid)...
   REQUIRE(reg.get<eng::sim::Equipped>(wearer).defence_bonus ==
-          Approx(6.0f));  // ...and wears its defence
+          Approx(7.5f));  // ...and wears its FINE defence (6.0 * 1.25)
+}
+
+TEST_CASE("a brute's dropped steel is finer than starting gear: the quality boon lands in offence",
+          "[sim]") {
+  // The offensive twin of the sentinel-plate test, and the whole POINT of per-source quality: a
+  // slain brute drops FINE steel (kFineDropQuality 1.25), so equipping it grants MORE strength than
+  // the +4 of a default-spawned blade. int(4 * 1.25) = int(5.0) = 5 — one better. The bane rides
+  // along unchanged (quality lifts only the upside): move_penalty stays the full 0.25.
+  entt::registry reg;
+  const eng::Vec2 pos{70.0f, 70.0f};
+  const entt::entity brute = reg.create();
+  reg.emplace<eng::sim::Transform>(brute, pos);
+  reg.emplace<eng::sim::Stats>(brute, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // dead
+  reg.emplace<eng::sim::Enemy>(brute).drop = eng::sim::DropKind::Weapon;
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f);
+
+  const entt::entity wearer = reg.create();
+  reg.emplace<eng::sim::Transform>(wearer, pos);  // standing on the dropped steel
+  const entt::entity grabbed = eng::sim::equip_nearest_gear(reg, wearer);
+
+  REQUIRE(reg.valid(grabbed));                                       // grabbed the steel...
+  REQUIRE(reg.get<eng::sim::Equipped>(wearer).strength_bonus == 5);  // ...finer than +4...
+  REQUIRE(reg.get<eng::sim::Equipped>(wearer).move_penalty == Approx(0.25f));  // ...same heft
 }
 
 TEST_CASE("the Equip command wields the nearest weapon in reach", "[sim]") {

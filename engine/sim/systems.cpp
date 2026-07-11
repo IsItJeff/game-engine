@@ -2306,23 +2306,23 @@ void spawn_pickup(entt::registry& reg, Vec2 pos) {
 // more than one Weapon def exists, Drop must pass the wielder's cached mods instead.
 // ponytail: no lifetime — a dropped weapon persists (brutes are the rarer kill, so they don't
 // pile up); add a fade like Pickup's if the field ever litters.
-void spawn_weapon(entt::registry& reg, Vec2 pos) {
+void spawn_weapon(entt::registry& reg, Vec2 pos, float quality) {
   const entt::entity e = reg.create();
   reg.emplace<Transform>(e, pos);
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<RenderDot>(e, Vec3{0.75f, 0.78f, 0.85f}, 6.0f);  // steel grey, a touch bigger
-  reg.emplace<Weapon>(e);
+  reg.emplace<Weapon>(e).quality = quality;  // finer than baseline when a tough kill drops it
 }
 
 // Spawn a piece of Armour on the ground at `pos` — the canonical grounded-armour entity, the
 // defensive counterpart of spawn_weapon. A distinct render colour (dull bronze) so you can
 // tell armour from a weapon on the field at a glance. Step near and press E to don it.
-void spawn_armour(entt::registry& reg, Vec2 pos) {
+void spawn_armour(entt::registry& reg, Vec2 pos, float quality) {
   const entt::entity e = reg.create();
   reg.emplace<Transform>(e, pos);
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<RenderDot>(e, Vec3{0.72f, 0.52f, 0.24f}, 6.0f);  // dull bronze, distinct from steel
-  reg.emplace<Armour>(e);
+  reg.emplace<Armour>(e).quality = quality;  // finer than baseline when a tough kill drops it
 }
 
 // Spawn a VENOM blade on the ground — the second weapon TYPE. Lighter than the default steel blade
@@ -2671,11 +2671,19 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
         drift_axis(mourners.get<Personality>(m).bravery, kGriefDrift);  // each lost friend a blow
     }
   }
+  // FINER loot from a TOUGHER kill: a brute's dropped steel and a sentinel's plate come out ABOVE
+  // baseline quality (a bigger boon), so felling a hard foe pays out better gear than you start
+  // with — the first thing item quality expresses in play. The venom fang stays baseline (its small
+  // +Strength would round the scale away, and it already trades raw power for venom). Deterministic
+  // per drop source, no roll. ponytail: keyed to the DropKind here (brute==Weapon, sentinel==Armour
+  // today); a per-archetype Enemy::drop_quality is the refinement if two archetypes ever share a
+  // DropKind, and ROLLED quality the follow-up once the drop path carries an RNG.
+  constexpr float kFineDropQuality = 1.25f;
   for (const entt::entity e : dead) reg.destroy(e);
-  for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);          // sustain from a swarmer
-  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos);       // offence from a brute
-  for (const Vec2& pos : armour_drops) spawn_armour(reg, pos);       // defence from a sentinel
-  for (const Vec2& pos : venom_drops) spawn_venom_weapon(reg, pos);  // poison build from a spitter
+  for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);                       // swarmer sustain
+  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos, kFineDropQuality);  // finer offence
+  for (const Vec2& pos : armour_drops) spawn_armour(reg, pos, kFineDropQuality);  // finer defence
+  for (const Vec2& pos : venom_drops) spawn_venom_weapon(reg, pos);  // poison build (baseline)
 }
 
 void collect_pickups(entt::registry& reg, float dt) {
