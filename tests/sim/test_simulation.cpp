@@ -979,6 +979,50 @@ TEST_CASE("sociability shapes how far an idle colonist travels to rally to a her
   REQUIRE(reg.get<eng::sim::Velocity>(loner).value.y == Approx(0.0f));
 }
 
+TEST_CASE("an idle sociable colonist gathers at the hearth but a loner keeps away", "[sim]") {
+  // Sociability's SECOND reader (its first is the rally radius): the lowest steer rung. A truly
+  // idle colonist — nothing to flee, forage, rally to, or a friend to follow — ambles to the
+  // nearest fire IF it's sociable. The gather radius is PROPORTIONAL to sociability, so a loner
+  // (negative radius) and a neutral colonist (zero radius) never seek it, which is also the
+  // bit-identity guard. All three sit the same 150 from a hearth whose OWN warmth radius (40)
+  // they're outside, so only the gather pull can move them.
+  entt::registry reg;
+  const entt::entity hearth = reg.create();
+  reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Hearth>(hearth,
+                                eng::sim::Hearth{40.0f});  // warmth 40 < the 150 they stand at
+
+  const entt::entity sociable = reg.create();
+  reg.emplace<eng::sim::Transform>(sociable, eng::Vec2{150.0f, 0.0f});  // 150 east of the fire
+  reg.emplace<eng::sim::Velocity>(sociable);
+  reg.emplace<eng::sim::Npc>(sociable);
+  reg.emplace<eng::sim::Personality>(
+      sociable, eng::sim::Personality{0, 0, 0, 0, 100});  // sociable -> radius 300
+
+  const entt::entity neutral = reg.create();
+  reg.emplace<eng::sim::Transform>(neutral, eng::Vec2{0.0f, 150.0f});  // also 150 off
+  reg.emplace<eng::sim::Velocity>(neutral);
+  reg.emplace<eng::sim::Npc>(neutral);  // NO Personality -> gather radius 0 -> never gathers
+
+  const entt::entity loner = reg.create();
+  reg.emplace<eng::sim::Transform>(loner, eng::Vec2{0.0f, -150.0f});  // also 150 off
+  reg.emplace<eng::sim::Velocity>(loner);
+  reg.emplace<eng::sim::Npc>(loner);
+  reg.emplace<eng::sim::Personality>(
+      loner, eng::sim::Personality{0, 0, 0, 0, -100});  // loner -> negative radius
+
+  eng::sim::steer_npcs(reg);
+
+  // The sociable one ambles toward the fire (west, -x)...
+  REQUIRE(reg.get<eng::sim::Velocity>(sociable).value.x < 0.0f);
+  // ...the neutral colonist (zero radius) stays put...
+  REQUIRE(reg.get<eng::sim::Velocity>(neutral).value.x == Approx(0.0f));
+  REQUIRE(reg.get<eng::sim::Velocity>(neutral).value.y == Approx(0.0f));
+  // ...and the loner (negative radius) keeps to itself.
+  REQUIRE(reg.get<eng::sim::Velocity>(loner).value.x == Approx(0.0f));
+  REQUIRE(reg.get<eng::sim::Velocity>(loner).value.y == Approx(0.0f));
+}
+
 TEST_CASE("bravery shapes how far an NPC will commit to a rescue", "[sim]") {
   // Bravery's SECOND read, exercising BOTH directions against the base rescue radius (300):
   //  - GROW: a brave NPC (+100 -> radius 450) at 350 rescues, where a NEUTRAL one (300) could not;

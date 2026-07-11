@@ -57,7 +57,9 @@ flowchart TD
   rally -->|yes| gather[rally: velocity toward the hero]
   rally -->|no| bond{a bonded friend<br/>in range?}
   bond -->|yes| gathb[bond: velocity toward the friend]
-  bond -->|no| drift[drift: leave velocity alone]
+  bond -->|no| fire{sociable AND<br/>hearth in range?}
+  fire -->|yes| gathf[gather: velocity toward the hearth]
+  fire -->|no| drift[drift: leave velocity alone]
 ```
 
 The first matching want wins and the NPC commits to it that tick (a `continue`), so a
@@ -166,7 +168,15 @@ A **fifth axis, `sociability`**, keeps that invariant true when the ladder grows
 renowned hero — that was at first trait-blind; sociability now scales *its* radius the same way,
 `kRallyRadius × (1 + sociability/200)`, so a **sociable** colonist
 crosses the field to join the throng while a **loner** stays put unless the champion is nearly
-underfoot. So the rule holds again: **every acting rung of the steer ladder reads a trait**. The
+underfoot. Sociability reads a **second time** on the ladder's new *last* rung — **hearth gather**:
+with no hero to rally to and no bonded friend to follow, a sociable colonist ambles to the nearest
+[`Hearth`](stats-system.md) to gather round the fire, so the hearth is a *peacetime* social hub, not
+only the field hospital the wounded-retreat rung makes it. Here the radius is **proportional** to
+sociability (`kHearthGatherRadius × sociability/100`), a deliberately different shape from the
+base-plus-offset rally/bond radii: a neutral, solitary, or personality-less colonist has a
+0-or-negative radius and so **never** seeks the fire — the indifferent keep to themselves, which is
+also what keeps the pre-gather world bit-identical. So the rule holds again: **every acting rung of
+the steer ladder reads a trait**. The
 opening four NPCs get a fixed bravery/greed/compassion/industry/sociability/loyalty spread — with
 sociability the *inverse* of industry (idle-socialites then keen-loners) and loyalty a reverse
 alternation — each a distinct six-axis combo, so the personalities read from frame one.
@@ -275,7 +285,7 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / drink / retreat-to-hearth / arm-up / avoid / rally / bond ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — and a lowest **bond** rung (below rally) pulls it toward a bonded friend it likes; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / drink / retreat-to-hearth / arm-up / avoid / rally / bond / hearth-gather ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius **and** (proportionally) the hearth-gather radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — a **bond** rung (below rally) pulls it toward a bonded friend it likes, and a lowest **hearth-gather** rung ambles a sociable idle colonist to the nearest fire; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
 - `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
 - `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player; a downed villain is neither feared nor rescued — the villain-veto, in both steer and `handle_deaths`), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally.
@@ -286,4 +296,4 @@ then act, is what stays.
 - [Entities and components](skeleton/ecs.md) — why an NPC is a component set, and how the view targets them.
 - [The stats system](stats-system.md) — the permadeath that fleeing tries to postpone.
 - [Morality](morality.md) — `standing` and the Cruelty deed that turns a player into the villain this flee rung now reads.
-- [Relationships](relationships.md) — the directed bonds the lowest steer rung (below the hero-rally) reads: an idle colonist drifts toward a friend it rescued.
+- [Relationships](relationships.md) — the directed bonds the bond-follow steer rung (below the hero-rally, above the hearth-gather) reads: an idle colonist drifts toward a friend it rescued.
