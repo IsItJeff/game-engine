@@ -956,9 +956,13 @@ void update_stamina(entt::registry& reg, float dt) {
       // Worn armour's BANE: plate slows your second wind. A fraction of recovery is lost while
       // armoured. ponytail/BALANCE: this bites only while RESTING (combat is spent moving), so
       // armour can feel near-free in a straight fight — a tuning knob; if it plays as pure
-      // upside, move the bane onto the drain-while-moving side instead. No/empty armour = 0.
+      // upside, move the bane onto the drain-while-moving side instead. No/empty armour = 0. VIT
+      // eases it (borne_regen_penalty): a hardy body BEARS armour better, so its Endurance shrinks
+      // the penalty up to half — the armour twin of STR's weapon carry. Reuses the `attrs` fetched
+      // for the recovery boost above; Endurance 1 or no Attributes -> the full bane ->
+      // bit-identical.
       const Equipped* eq = reg.try_get<Equipped>(e);
-      if (eq != nullptr) boost *= 1.0f - eq->stamina_regen_penalty;
+      if (eq != nullptr) boost *= 1.0f - borne_regen_penalty(eq->stamina_regen_penalty, attrs);
       // A HEARTH speeds your second wind too: resting in its warmth recovers stamina faster (the
       // stamina twin of regenerate_vitals' fireside health boost), so the fire is a place to FULLY
       // recover, not just heal. Needs the rester's position (the view lacks Transform); no

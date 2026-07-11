@@ -12,8 +12,10 @@ Eleven strands are wired end to end so far, across six attributes:
   Endurance by *blocking* a hit rather than *surviving* it), and **enduring venom** trains
   **Resistance** (`tick_poison`, Toughness's *poison* twin — keep shrugging off venom and you grow
   the very VIT that shaves it, immunity through exposure) — all five raise
-  **Endurance**, which grows your **max health and stamina**, *and* speeds how fast
-  stamina comes back;
+  **Endurance**, which grows your **max health and stamina**, speeds how fast
+  stamina comes back, softens the venom you take, *and* lets you **bear armour** better (a hardy body
+  shrugs off part of plate's stamina-recovery bane, `borne_regen_penalty` — the armour twin of
+  Strength's weapon carry);
 - **attacking** trains **Striking**, which mainly raises **Strength** (plus a little
   **Dexterity** — footwork), and Strength lengthens your
   **attack reach**, your **attack damage**, *and* how much of a wielded weapon's **heft** you
@@ -168,7 +170,7 @@ attribute → stat — is what stays as it widens into a full character sheet.
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
 - `game/app/main.cpp` — the endurance/strength/wisdom/charisma/character-level readout, each equipped item's remaining durability (hits/blows left), and the skill XP bars; the `J` = attack key.
 - `engine/sim/systems.cpp` — `bond_witnesses` (the camaraderie grant, called at both a kill and a rescue): Charisma scales a witness's devotion, and a witnessed heroic act trains Leadership → Charisma (the compounding social loop).
-- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more), collecting trains Scavenging → Luck (and a lucky scavenger mends more from an orb), leading trains Leadership → Charisma (and a charismatic champion is bonded harder AND witnessed from farther), blocking a blow trains Guarding → Endurance (but an open stance does not), enduring venom trains Resistance → Endurance (but an unpoisoned character does not), and Strength eases a weapon's heft up to a half floor (the carry mastery, on the player and NPCs alike).
+- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more), collecting trains Scavenging → Luck (and a lucky scavenger mends more from an orb), leading trains Leadership → Charisma (and a charismatic champion is bonded harder AND witnessed from farther), blocking a blow trains Guarding → Endurance (but an open stance does not), enduring venom trains Resistance → Endurance (but an unpoisoned character does not), and Strength eases a weapon's heft up to a half floor (the carry mastery, on the player and NPCs alike), and Endurance eases an armour's stamina bane up to a half floor (the armour twin, isolated from its recovery boost by the armoured-to-bare ratio).
 
 ## Go deeper
 

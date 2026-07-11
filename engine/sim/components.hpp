@@ -781,23 +781,40 @@ struct Attributes {
                        // the pools nor a fighter build — it grows the colony's bonds instead.
 };
 
-// STR = "carry": a strong wielder shrugs off part of a weapon's move-heft. This is the design's
-// mastery rule applied to the weapon BANE — "mastery shrinks a bane by about half but NEVER removes
-// it" — so each Strength level past the first relieves a slice of the penalty, capped at
-// kHeftReliefCap (half) so a wielded weapon ALWAYS costs some speed (the tradeoff survives to
-// endgame). A null Attributes, or Strength level 1 (the spawn default, and every existing armed
-// fixture), yields relief 0 — the FULL heft — so the pre-carry world is bit-identical. Returns the
-// EFFECTIVE penalty that BOTH the player (world.cpp MovePlayer) and NPCs (steer_npcs) fold into
-// move speed, so the relief is parity-shared through one function. Manual clamp, no <algorithm>
-// pulled in for one call (matching build_title above). It's the third Strength effect, beside reach
-// and damage.
-inline float carried_move_penalty(float base_penalty, const Attributes* attrs) {
-  if (attrs == nullptr) return base_penalty;  // no Strength known -> full heft
-  constexpr float kHeftReliefPerStr = 0.05f;  // ...relieved per Strength level past the first
-  constexpr float kHeftReliefCap = 0.5f;      // the bane persists: never shrink the heft past half
-  float relief = static_cast<float>(attrs->strength.level - 1) * kHeftReliefPerStr;
-  if (relief > kHeftReliefCap) relief = kHeftReliefCap;
+// The design's gear-mastery pillar as ONE curve: "mastery shrinks a bane by about half but NEVER
+// removes it." Given a gear BANE (a fraction of some stat lost while the item is worn) and the
+// level of the attribute that MASTERS that gear, return the eased penalty — each level past the
+// first relieves kBaneReliefPerLevel of it, capped at kBaneReliefCap (half) so a worn item ALWAYS
+// costs something (the tradeoff survives to endgame). Mastery level 1 (the spawn default, every
+// un-mastered fixture) yields relief 0 — the FULL bane — so the pre-mastery world is bit-identical.
+// Shared by the weapon-heft (STR) and armour-stamina (VIT) easers below, so both gear banes shrink
+// by the SAME rule. Manual clamp, no <algorithm> pulled in for one call (matching build_title
+// above).
+inline float eased_bane(float base_penalty, int mastery_level) {
+  constexpr float kBaneReliefPerLevel = 0.05f;  // each mastery level past 1 eases the bane 5%...
+  constexpr float kBaneReliefCap = 0.5f;        // ...up to half; a worn item always costs something
+  float relief = static_cast<float>(mastery_level - 1) * kBaneReliefPerLevel;
+  if (relief > kBaneReliefCap) relief = kBaneReliefCap;
   return base_penalty * (1.0f - relief);
+}
+
+// STR = "carry": a strong wielder shrugs off part of a weapon's move-heft (eased_bane by Strength)
+// — the third Strength effect beside reach and damage. Returns the EFFECTIVE move penalty that BOTH
+// the player (world.cpp MovePlayer) and NPCs (steer_npcs) fold into move speed, so the relief is
+// parity-shared through one function. A null Attributes or Strength level 1 -> the full heft.
+inline float carried_move_penalty(float base_penalty, const Attributes* attrs) {
+  return attrs != nullptr ? eased_bane(base_penalty, attrs->strength.level) : base_penalty;
+}
+
+// VIT = "hardiness": a hardy body BEARS armour better, so its stamina-regen bane bites less
+// (eased_bane by Endurance) — the armour twin of STR's weapon carry, closing the gap where the
+// weapon heft could be mastered but the armour bane could not. Endurance ALSO speeds base stamina
+// recovery (update_stamina), so a hardy character is resilient two coherent ways: quicker second
+// wind AND less slowed by the plate it wears. A null Attributes or Endurance level 1 -> the full
+// bane, so the pre-mastery world is bit-identical. Read where update_stamina folds the armour
+// penalty into the recovery boost.
+inline float borne_regen_penalty(float base_penalty, const Attributes* attrs) {
+  return attrs != nullptr ? eased_bane(base_penalty, attrs->endurance.level) : base_penalty;
 }
 
 // A BUILD-derived title — the "from build" half of the derived recognition the `standing_title`
