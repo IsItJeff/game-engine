@@ -1134,6 +1134,10 @@ const SkillDef& skill_def(SkillId id) {
   // allies watch, bond_witnesses). Main-only, no contributors — a pure social strand, off the
   // fighter tree.
   static const SkillDef kLeadership{AttrId::Charisma, {}};
+  // Guarding is Toughness's ACTIVE twin: where Toughness builds Endurance by SURVIVING a hit,
+  // Guarding builds it by TURNING one with a raised guard — the second VIT skill fed by defence,
+  // both main-only. So a guard-tank grows genuinely tougher by tanking.
+  static const SkillDef kGuarding{AttrId::Endurance, {}};
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -1153,6 +1157,8 @@ const SkillDef& skill_def(SkillId id) {
       return kForaging;
     case SkillId::Leadership:
       return kLeadership;
+    case SkillId::Guarding:
+      return kGuarding;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -2554,6 +2560,21 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // for the mobility it costs. Applies to anyone Blocking; only the player guards today.
       if (reg.all_of<Blocking>(p)) {
         attack_dmg *= kBlockDamageFactor;
+        // Turning a blow TRAINS you to guard: a raised guard under fire builds the Guarding skill
+        // -> Endurance (the design's VIT skill, Toughness's active twin — Toughness grows Endurance
+        // by SURVIVING a hit, Guarding by TURNING one). So blocking, the ONE combat action that
+        // used to train nothing, now grows a defensive build like every other — and Endurance is
+        // well spent: VIT already buys bigger pools AND softer blows (defence_of) AND
+        // poison-resist, so a guard-tank sharpens across the board. Reuses `attrs` (fetched for the
+        // dodge roll above) and guards on Skills too — a Blocking entity without the progression
+        // pair (none today but the player) just doesn't grow, so it's bit-identical for anyone not
+        // progressing. No RNG.
+        const Fixed kGuardingPerBlock =
+            Fixed::from_int(10);  // XP per blow turned (matches a swing)
+        if (Skills* gsk = reg.try_get<Skills>(p); gsk != nullptr && attrs != nullptr) {
+          grant_skill_xp(*gsk, *attrs, SkillId::Guarding, kGuardingPerBlock,
+                         reg.try_get<CharacterLevel>(p));
+        }
         // RIPOSTE: turning a blow bites back — but it's an EXERTION that spends
         // kRiposteStaminaCost, so it fires only while you have the vigor. A WINDED guard still
         // SOFTENS but can't riposte; and because a raised guard gives no second wind

@@ -659,6 +659,8 @@ enum class SkillId : std::uint16_t {
   Foraging,      // trained by grazing a food plot; main attribute Wisdom (the first WIS skill)
   Leadership,    // trained by public HEROISM with allies watching (a kill OR a rescue); main attr
                  // Charisma
+  Guarding,      // trained by turning a blow with a raised guard; main attribute Endurance (a VIT
+                 // skill)
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a

@@ -283,6 +283,13 @@ guard still softens but can't riposte, so you can never simply stand in a corner
 kill itself. The riposte routes through the creature's own `Stats`, so if it lands the last hit the
 creature dies through `handle_deaths` like any other — loot and all — though it credits **no Valor**
 (Valor rewards a strike *you* throw; a riposte is the beast breaking itself on your shield).
+
+And guarding, like every other combat action, now **trains** you: a blow turned on a raised guard
+builds the **Guarding** skill → **Endurance** (see [progression](progression.md#progression-skills-feed-attributes)),
+**Toughness's active twin** — one grows Endurance by *surviving* a hit, the other by *blocking* it.
+So a guard-tank grows genuinely tougher by tanking (Endurance buys bigger pools, softer blows, and
+poison-resist), and blocking is no longer the one combat action that taught nothing. It trains on
+*every* turned blow, winded or not (the grant isn't stamina-gated — only the riposte is).
 *ponytail:* `kRiposteDamage` / `kRiposteStaminaCost` are flat balance knobs (scale them with a
 Guarding skill or shield gear later).
 

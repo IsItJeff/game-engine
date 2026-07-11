@@ -3882,6 +3882,34 @@ TEST_CASE("a raised guard softens a creature's blow", "[sim]") {
   REQUIRE(hit_damage(true) < hit_damage(false));  // ...a raised guard softens it
 }
 
+TEST_CASE("a raised guard trains Guarding: blocking was the one action that taught nothing",
+          "[sim]") {
+  // Every combat action trains a skill — attacking Striking, facing a swing Evasion, taking a hit
+  // Toughness — but a raised guard used to build nothing. Now it trains Guarding -> Endurance (a
+  // VIT skill, Toughness's ACTIVE twin: Toughness grows Endurance by SURVIVING a hit, Guarding by
+  // TURNING one). A victim that BLOCKS a blow gains the Guarding skill; one that takes the same
+  // blow with an open stance does not (that path builds Toughness instead).
+  const auto trained_guarding = [](bool guarding) {
+    entt::registry reg;
+    std::mt19937 rng{42};
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);       // full health + stamina
+    reg.emplace<eng::sim::Skills>(victim);      // ...and the progression pair, so it CAN grow
+    reg.emplace<eng::sim::Attributes>(victim);  // DEX 1 -> never dodges, so the blow always lands
+    if (guarding) reg.emplace<eng::sim::Blocking>(victim);
+    const entt::entity beast = reg.create();
+    reg.emplace<eng::sim::Transform>(beast, eng::Vec2{0.0f, 0.0f});  // in contact, off cooldown
+    reg.emplace<eng::sim::Enemy>(beast);
+    reg.emplace<eng::sim::Stats>(beast, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return reg.get<eng::sim::Skills>(victim).find(eng::sim::SkillId::Guarding) != nullptr;
+  };
+  REQUIRE(trained_guarding(true));  // blocking a blow trained Guarding...
+  REQUIRE_FALSE(
+      trained_guarding(false));  // ...taking it open-stanced did not (that trains Toughness)
+}
+
 TEST_CASE("a raised guard ripostes only while it has the stamina to spend", "[sim]") {
   // The offence half of the block: a guarding defender bites back, so planting your guard wears the
   // attacker down as well as softening its blows. But a riposte is an EXERTION — a WINDED guard
