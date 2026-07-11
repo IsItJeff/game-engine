@@ -120,6 +120,14 @@ tie:
   target**: you don't flee a helpless body, you just don't help it (the rescue veto already covers
   that), which also keeps the abandonment rung byte-identical.
 
+Beyond those steering reads, a bond is read one more place — at **death**. When a colonist a
+survivor was bonded to at **Friend or above** (`kBondFriendAt`) is slain, `handle_deaths` drifts the
+survivor's **bravery down** a step (`kGriefDrift`) — **grief**, the [morality drift](morality.md#drift-deeds-reshape-character)
+path reaching the *living*, the negative mirror of a Valor deed's bravery-*up*. So a positive tie has
+a price the day it breaks: **permadeath marks those left behind**, not just an empty slot (a rattled
+mourner flees a hazard sooner). Only a real friend-bond grieves — a mere acquaintance, or a dead
+rival, is no loss — the gate that keeps the pre-bond world bit-identical.
+
 ## The tradeoffs
 
 - **Three events, a few readers.** No personality-match seeding (that's a later ring) and no

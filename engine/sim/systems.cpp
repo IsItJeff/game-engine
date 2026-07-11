@@ -96,6 +96,23 @@ constexpr std::int8_t kWitnessGrudge = -8;
 // per deed a full ±100 swing takes ~50 deeds, so a demo's handful gives a visible-but-partial
 // shift. A tuning knob.
 constexpr int kDeedDriftStep = 2;
+
+// A bereaved survivor's nerve slips this far when a bonded friend is lost (GRIEF, handle_deaths) —
+// the negative MIRROR of a Valor deed's +kDeedDriftStep: fighting monsters hardens you, watching
+// one of your own fall shakes you. Same small magnitude, so one lost friend costs about one brave
+// deed's worth of nerve. A tuning knob.
+constexpr int kGriefDrift = -kDeedDriftStep;
+
+// Nudge a bounded personality axis by a signed step, clamped to [-100, 100]. The single write
+// behind BOTH a deed's drift (record_deed) and a bereavement's grief (handle_deaths), so the two
+// paths can never clamp differently. Pure int math (widened before the clamp so a long career can't
+// overflow the int8), no RNG.
+void drift_axis(std::int8_t& axis, int step) {
+  int v = static_cast<int>(axis) + step;
+  if (v > 100) v = 100;
+  if (v < -100) v = -100;  // symmetric clamp — positive for deeds, negative for grief
+  axis = static_cast<std::int8_t>(v);
+}
 }  // namespace
 
 void snapshot_previous(entt::registry& reg) {
@@ -2018,12 +2035,7 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
       axis =
           &p->loyalty;  // standing by your own hardens the loyalty leaning — "you are what you do"
     }
-    if (axis != nullptr) {
-      int v = static_cast<int>(*axis) + kDeedDriftStep;
-      if (v > 100) v = 100;
-      if (v < -100) v = -100;  // symmetric clamp — drift is positive today, ready for future deeds
-      *axis = static_cast<std::int8_t>(v);
-    }
+    if (axis != nullptr) drift_axis(*axis, kDeedDriftStep);  // shared clamp — grief uses it too
   }
 }
 
@@ -2193,6 +2205,32 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
           venom_drops.push_back(pos);
           break;
       }
+    }
+  }
+  // GRIEF: permadeath lands on the LIVING too. Before the dead are swept away (they are still valid
+  // here — destroy is the next line), any survivor who held a real BOND (affinity at or above the
+  // shared kBondFriendAt friend floor) to one of the fallen takes it to heart: their bravery drifts
+  // DOWN a step (kGriefDrift), the exact negative mirror of a Valor deed's bravery-UP — fighting
+  // monsters hardens you, watching one of your own fall shakes you. A rattled mourner then flees a
+  // hazard sooner (steer_npcs reads bravery), so a lost friend leaves a visible mark on those left
+  // behind — the "NPCs are people, and people change" pillar reaching past the one who died. Only
+  // friend-and-above ties grieve: you don't mourn a mere acquaintance, and a dead RIVAL/Nemesis
+  // (negative affinity) is no loss. The corpse must be a PERSON (Npc + health <= 0), never a slain
+  // creature — no one mourns a monster (and creatures never accrue friend-affinity anyway, but the
+  // Npc guard makes that explicit). Runs only on a death tick (dead empty -> nothing bonded is a
+  // corpse -> untouched); pure int math, no RNG. No Personality/Relationships, or no friend-bond to
+  // a fresh corpse, keeps the pre-bond world bit-identical. ponytail: O(survivors x their few
+  // edges) but only when someone dies; a reverse bond-index is the upgrade if death ticks ever get
+  // crowded.
+  auto mourners = reg.view<Personality, Relationships>();
+  for (const entt::entity m : mourners) {
+    if (const Stats* ms = reg.try_get<Stats>(m); ms != nullptr && ms->health.current <= 0.0f)
+      continue;  // a corpse (or a mourner falling this same tick) doesn't grieve
+    for (const Relation& edge : mourners.get<Relationships>(m).edges) {
+      if (edge.affinity < kBondFriendAt || !reg.valid(edge.other)) continue;  // not a real friend
+      const Stats* es = reg.try_get<Stats>(edge.other);
+      if (es != nullptr && es->health.current <= 0.0f && reg.all_of<Npc>(edge.other))
+        drift_axis(mourners.get<Personality>(m).bravery, kGriefDrift);  // each lost friend a blow
     }
   }
   for (const entt::entity e : dead) reg.destroy(e);
