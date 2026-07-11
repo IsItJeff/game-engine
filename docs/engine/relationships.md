@@ -79,6 +79,12 @@ blow. A **ranged** kill counts too: `advance_projectiles` calls the same `bond_w
 felling shot, centred on the **shooter** (the one who fought), not the distant impact — so a
 throw earns the same regard as a swing.
 
+How *much* devotion a shared victory earns is scaled by the killer's **Charisma** (see
+[progression](progression.md)): `kCamaraderieAffinity` grows by `1 + (CHA − 1) × 0.1`, capped at ×2,
+so a **charismatic champion** inspires a deeper bond per kill than a plain fighter — and because
+leading those kills *trains* Charisma, the effect **compounds** (lead more → higher CHA → allies bond
+harder). At CHA 1 (the spawn default) it is exactly ×1, so the pre-Charisma world is byte-identical.
+
 The affinity is **read two ways** — a positive draw and a negative repulsion, the two faces of a
 tie:
 

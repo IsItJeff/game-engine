@@ -4,7 +4,7 @@
 
 Characters grow by *doing*. A **skill** improves with the activity that trains it,
 skills roll up into broad **attributes**, and attributes shape what you feel in play.
-Eight strands are wired end to end so far, across five attributes:
+Nine strands are wired end to end so far, across six attributes:
 
 - staying active trains **Conditioning**, **surviving damage** trains **Toughness**,
   and **resting to recover** spent stamina trains **Recovery** — all three raise
@@ -27,7 +27,14 @@ Eight strands are wired end to end so far, across five attributes:
   **danger awareness** (a wider flee sense radius in `steer_npcs`, a distinct source from bravery's
   nerve). So the design's WIS = *nature + awareness*: a seasoned forager both gathers more and spots
   trouble sooner. It's the loot loop's survival twin (gather food → Foraging → Wisdom → forage faster
-  *and* stay alert), and Wisdom doesn't grow the pools or a fighter build.
+  *and* stay alert), and Wisdom doesn't grow the pools or a fighter build;
+- **leading a kill with allies watching** trains **Leadership**, which raises **Charisma**, the
+  second *non-combat* attribute (the design's **social** stat) — each level deepens the
+  **camaraderie** a witness feels toward you per shared victory (the `bond_witnesses` grant, see
+  [relationships](relationships.md)), up to a ×2 cap. So Charisma **compounds**: a champion who fells
+  foes beside its colony forges ever-deeper bonds the more it leads (fight together → Leadership →
+  Charisma → allies bond harder), the social mirror of a striker building Strength by hitting. Like
+  Wisdom it grows neither the pools nor a fighter build — it grows the colony's *bonds*.
 
 The player and NPCs run the identical machinery — progression *and* combat — so a
 long-lived NPC that has moved, been hurt, and fought grows genuinely tougher and
@@ -137,12 +144,13 @@ attribute → stat — is what stays as it widens into a full character sheet.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck, Wisdom), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`, `Throwing`, `Foraging`).
+- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck, Wisdom, Charisma), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`, `Throwing`, `Foraging`, `Leadership`).
 - `engine/sim/systems.cpp` (anon namespace) — the `SkillDef` table, `attr_ref`, and `grant_skill_xp` (the one funnel every skill→attribute XP grant flows through: main + contributors).
 - `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression` (movement→Conditioning / resting→Recovery), `update_stamina` (Endurance speeds recovery), `train_on_damage` (the damage → Toughness feeder), `perform_attack` (the shared swing resolver) and `npc_attack` (NPCs fight too).
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
-- `game/app/main.cpp` — the endurance/strength/wisdom/character-level readout, each equipped item's remaining durability (hits/blows left), and the skill XP bars; the `J` = attack key.
-- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more).
+- `game/app/main.cpp` — the endurance/strength/wisdom/charisma/character-level readout, each equipped item's remaining durability (hits/blows left), and the skill XP bars; the `J` = attack key.
+- `engine/sim/systems.cpp` — `bond_witnesses` (the camaraderie grant): Charisma scales a witness's devotion, and a witnessed kill trains Leadership → Charisma (the compounding social loop).
+- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more), leading trains Leadership → Charisma (and a charismatic champion is bonded harder).
 
 ## Go deeper
 

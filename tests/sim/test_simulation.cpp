@@ -1888,6 +1888,77 @@ TEST_CASE("felling a foe near an ally forges camaraderie: the witness bonds to t
   REQUIRE(witness_affinity(500.0f) == 0);  // ...one far from the skirmish does not
 }
 
+TEST_CASE("a charismatic champion inspires more devotion: Charisma deepens a witnessed bond",
+          "[sim]") {
+  // The first Charisma EFFECT: bond_witnesses scales the camaraderie a witness feels by the
+  // KILLER's Charisma, so a charismatic champion earns a deeper bond per shared victory than a
+  // plain fighter. CHA 1 is x1 (the bit-identical floor); CHA 11 hits the x2 devotion cap. Only the
+  // killer's CHA differs between the two runs, so the bond gap is Charisma alone.
+  const auto witness_affinity = [](int charisma_level) {
+    entt::registry reg;
+    const entt::entity killer = reg.create();
+    reg.emplace<eng::sim::Transform>(killer, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(killer).charisma.level = charisma_level;
+    reg.emplace<eng::sim::Skills>(killer);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});  // within melee reach
+    reg.emplace<eng::sim::Stats>(foe,
+                                 eng::sim::Vital{3.0f, 3.0f, 0.0f});  // frail: one blow fells it
+    reg.emplace<eng::sim::Enemy>(foe);                                // ...and hostile
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally,
+                                     eng::Vec2{30.0f, 0.0f});  // inside the 120 camaraderie range
+    reg.emplace<eng::sim::Npc>(ally);                          // a watching colonist
+
+    std::mt19937 rng{42};
+    eng::sim::perform_attack(reg, killer, rng);  // fells the foe -> bonds the watching ally
+    return eng::sim::affinity_toward(reg, ally, killer);
+  };
+  const std::int8_t plain = witness_affinity(1);         // CHA 1 -> the base camaraderie (x1)
+  const std::int8_t charismatic = witness_affinity(11);  // CHA 11 -> the x2 devotion cap
+  REQUIRE(plain > 0);  // a plain fighter still bonds its witness...
+  REQUIRE(charismatic >
+          plain);  // ...but a charismatic one bonds it harder, from the very same kill
+}
+
+TEST_CASE("leading trains Leadership into Charisma: a witnessed kill builds a following", "[sim]") {
+  // The Charisma STRAND, closing the loop: felling a foe with an ally WATCHING trains Leadership ->
+  // Charisma (the social mirror of Striking -> Strength). A LONE kill, with no one to lead, trains
+  // no Charisma at all — leadership is inspiring others, not merely killing.
+  const auto charisma_after_kills = [](bool witnessed) {
+    entt::registry reg;
+    const entt::entity killer = reg.create();
+    reg.emplace<eng::sim::Transform>(killer, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(killer);
+    reg.emplace<eng::sim::Skills>(killer);
+    reg.emplace<eng::sim::Stats>(killer);     // full health -> no berserk; and advance_progression
+    reg.emplace<eng::sim::Velocity>(killer);  // ...needs Stats+Velocity+CharacterLevel to level it
+    reg.emplace<eng::sim::CharacterLevel>(killer);
+    if (witnessed) {
+      const entt::entity ally = reg.create();
+      reg.emplace<eng::sim::Transform>(ally, eng::Vec2{30.0f, 0.0f});
+      reg.emplace<eng::sim::Npc>(ally);  // a standing witness to every kill
+    }
+    std::mt19937 rng{42};
+    // A dozen kills: Leadership grants 10 XP each, and Charisma needs 100 to reach level 2, so a
+    // witnessed run clears the bar. Spawn -> fell -> reap -> level, one fresh foe at a time (only
+    // an alive->dead TRANSITION fires bond_witnesses, so the corpse must be cleared before the
+    // next).
+    for (int i = 0; i < 12; ++i) {
+      const entt::entity foe = reg.create();
+      reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});
+      reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{3.0f, 3.0f, 0.0f});
+      reg.emplace<eng::sim::Enemy>(foe);
+      eng::sim::perform_attack(reg, killer, rng);  // fell it (bonds+trains if witnessed)
+      eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f);  // reap the corpse
+      eng::sim::advance_progression(reg);                         // turn accrued XP into levels
+    }
+    return reg.get<eng::sim::Attributes>(killer).charisma.level;
+  };
+  REQUIRE(charisma_after_kills(true) > 1);    // led a dozen victories -> Charisma grew...
+  REQUIRE(charisma_after_kills(false) == 1);  // ...but killing alone builds no following
+}
+
 TEST_CASE("a resented player is abandoned: a grudge-holder won't steer to the rescue", "[sim]") {
   // The abandonment reader in steer_npcs: a colonist that dislikes the downed player (a grudge past
   // the threshold) won't cross the field to save it, where a neutral one would.
