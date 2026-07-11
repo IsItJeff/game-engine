@@ -815,6 +815,34 @@ TEST_CASE("no revive for a villain: handle_deaths leaves a downed villain on the
   REQUIRE(still_downed(true));  // ...but a marked villain is left on the ground (the revive veto)
 }
 
+TEST_CASE("the colony rushes to a fallen hero: fame reaches a downed champion from farther",
+          "[sim]") {
+  // The positive standing MIRROR of the villain-veto: a downed HERO (standing >= kKnownAt) is worth
+  // crossing the field for even by a stranger — its distance is discounted (kHeroReachDiscount), so
+  // the colony reaches it from FARTHER than a neutral fallen. A colonist sits at 400 — beyond the
+  // base rescue radius (300) but inside the hero-discounted reach (300 / 0.6 = 500) — so it steers
+  // to save a hero but leaves a neutral out of reach. Only the fallen's standing differs.
+  const auto rescue_x = [](bool hero) {
+    entt::registry reg;
+    const entt::entity fallen = reg.create();
+    reg.emplace<eng::sim::Transform>(fallen, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(fallen);
+    reg.emplace<eng::sim::Downed>(fallen);
+    if (hero)
+      eng::sim::record_deed(reg, fallen, eng::sim::Deed::Valor, 10);  // standing +50, a hero
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(
+        colonist, eng::Vec2{400.0f, 0.0f});  // past base reach, within hero reach
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(rescue_x(false) ==
+          Approx(0.0f));           // a NEUTRAL fallen at 400 is out of reach -> not sought...
+  REQUIRE(rescue_x(true) < 0.0f);  // ...but a HERO is worth the longer trek -> steered toward (-x)
+}
+
 TEST_CASE("an idle colonist rallies to a renowned hero: the twin of villain-fear", "[sim]") {
   // The inverted mirror of the flee: a colonist with nothing urgent to do drifts TOWARD a player
   // whose deeds have earned "Known"+ standing (>= +kKnownAt), gathering around its champion — the

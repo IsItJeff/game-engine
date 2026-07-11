@@ -341,27 +341,36 @@ void steer_npcs(entt::registry& reg) {
       // reader, the mirror of the bond-pull; neutral/liked fallen are unaffected (0 > threshold).
       const std::int8_t aff = affinity_toward(reg, n, f);
       if (aff <= kGrudgeThreshold) continue;
-      // ...and NOBODY crosses the field for a famous VILLAIN: if the fallen's own deeds mark them
-      // (standing at or below -kKnownAt, the Suspect line villain-fear uses) the whole colony
-      // leaves them down — the GLOBAL counterpart of the personal grudge above. Kept in LOCKSTEP
-      // with the same veto in handle_deaths so a colonist never crosses the field to someone it
-      // would then refuse to lift. No ledger, or standing above the line (the common case) -> not
-      // shunned -> bit-identical. Only players go Downed and only a player can turn villain
-      // (Cruelty is player-gated), so this bites exactly a downed villain PLAYER.
-      if (const BehaviorLedger* fallen_led = reg.try_get<BehaviorLedger>(f);
-          fallen_led != nullptr && standing(*fallen_led) <= -kKnownAt)
-        continue;
+      // The fallen's OWN STANDING drives two mirror readers here — a VILLAIN veto (skip) and a HERO
+      // reach-boost (below) — so fetch it once (0 for no ledger, the common case). Only players go
+      // Downed and only a player can turn villain/hero (deeds are player-gated), so both bite
+      // exactly a downed PLAYER.
+      const BehaviorLedger* fallen_led = reg.try_get<BehaviorLedger>(f);
+      const std::int32_t fallen_standing = fallen_led != nullptr ? standing(*fallen_led) : 0;
+      // ...and NOBODY crosses the field for a famous VILLAIN: marked by its deeds (standing at or
+      // below -kKnownAt, the Suspect line villain-fear uses), the whole colony leaves it down — the
+      // GLOBAL counterpart of the personal grudge above, kept in LOCKSTEP with the same veto in
+      // handle_deaths so a colonist never crosses the field to someone it would then refuse to
+      // lift.
+      if (fallen_standing <= -kKnownAt) continue;
       // FRIENDSHIP grades the trek above that hard cutoff: a bonded ally (one this NPC has saved
       // before, so its affinity has grown) FEELS closer — its distance is discounted on the same
       // /200 shape the other rungs use — so the colonist crosses a LONGER real field for a dear
       // friend, while a mild dislike (still above the grudge line) feels a touch farther and is
-      // dropped sooner. The graded positive mirror of the grudge cutoff, and the loop that closes
-      // the bond: save an ally -> affinity climbs -> you reach them from farther next time. The
-      // discount only weights the CHOICE of whom to save; the steer below uses real geometry.
-      // Neutral 0 -> real distance (bit-identical). ponytail: the /200 reach knob is a tuning
-      // value.
-      const float d = glm::distance(pos, downed.get<Transform>(f).position) *
-                      (1.0f - static_cast<float>(aff) / 200.0f);
+      // dropped sooner. The discount only weights the CHOICE of whom to save; the steer below uses
+      // real geometry. Neutral 0 -> real distance (bit-identical). ponytail: the /200 reach knob.
+      float d = glm::distance(pos, downed.get<Transform>(f).position) *
+                (1.0f - static_cast<float>(aff) / 200.0f);
+      // ...and FAME grades it too: a famous HERO (standing at or above +kKnownAt, the same Known
+      // line the hero-rally uses) is worth crossing the field for even by a STRANGER — its distance
+      // is discounted, so the colony RUSHES to a downed champion from farther. The positive
+      // standing MIRROR of the villain veto (villain: no rescue; hero: reached from farther;
+      // neutral: real distance -> bit-identical) and the public-fame twin of the personal affinity
+      // discount — they STACK, so a bonded hero is worth the longest trek of all. Binary at the
+      // Known line, like the fear/rally reads, so standing acts consistently.
+      constexpr float kHeroReachDiscount =
+          0.6f;  // a hero feels this fraction as far (worth the trek)
+      if (fallen_standing >= kKnownAt) d *= kHeroReachDiscount;
       if (d < nearest_fallen) {
         nearest_fallen = d;
         fallen = f;

@@ -125,7 +125,10 @@ tie:
   above the grudge line) is dropped *sooner*. The reader is a smooth dial from "cross the whole map
   for my dearest friend" down through neutral to the hard "abandon the resented" floor. It closes a
   small loop: **save an ally → its affinity climbs → you reach it from farther next time**, so a
-  colonist becomes a devoted protector of those it has saved.
+  colonist becomes a devoted protector of those it has saved. **Public fame** grades the same reach in
+  parallel: a downed **hero** (`standing ≥ +kKnownAt`) is discounted too, so the colony rushes to a
+  fallen champion from farther *even without a personal bond* (the [morality](morality.md) villain-veto's
+  bright mirror). Affinity and standing **stack** — a bonded hero is worth the longest trek of all.
 - **Avoidance** (negative, active) — the grudge's *active* completion, the negative twin of
   bond-pull. Where a friend draws an idle colonist **toward** it, a resented one (affinity at/below
   `kGrudgeThreshold`) pushes it **away**: a new `steer_npcs` rung, just above the gather rungs, steers
