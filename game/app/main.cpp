@@ -243,6 +243,13 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     const std::int32_t standing_value = led != nullptr ? eng::sim::standing(*led) : 0;
     ImGui::Text("standing: %d (%s)", static_cast<int>(standing_value),
                 eng::sim::standing_title(standing_value));
+    // Epithet: what you're KNOWN FOR — your most-repeated deed once it crosses kEpithetAt (the
+    // Slayer / Savior / Butcher ...). The third derived-recognition axis beside standing and build;
+    // nullptr = no line until one deed kind is repeated enough to earn a name, so a fresh or
+    // never-acting player shows nothing.
+    if (led != nullptr) {
+      if (const char* epithet = eng::sim::deed_epithet(*led)) ImGui::Text("known as: %s", epithet);
+    }
   }
   // Build: which trained Attribute dominates names what KIND of fighter you are (Warrior /
   // Skirmisher / Bulwark / Chancer) — the "from build" half of the derived-recognition titles,

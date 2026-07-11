@@ -339,6 +339,52 @@ inline const char* standing_title(std::int32_t standing_value) {
   return "Unproven";
 }
 
+// How many of a SINGLE deed kind you must accrue before it becomes the thing you're KNOWN FOR —
+// you've done a thing OFTEN enough to be named for it, not just once by fluke. Each record_deed
+// adds 1, so this is "three of the same kind". Deliberately smaller than kKnownAt (which gates the
+// signed, weighted standing scalar) because this counts RAW repetitions of ONE dimension, not a
+// signed sum.
+inline constexpr std::int32_t kEpithetAt = 3;
+
+// A DEED-derived EPITHET — the THIRD axis of the design's derived recognition, orthogonal to its
+// two siblings above: standing_title says how GOOD or BAD you are (the collapsed signed scalar),
+// build_title says what kind of FIGHTER you are (your dominant trained attribute), and this says
+// what you are KNOWN FOR (your most-repeated DEED). The ledger has always tracked all six Deed
+// kinds SEPARATELY, but until now only the collapsed standing() scalar read them — this is the
+// first reader of a single dimension, surfacing exactly the "the Butcher" the standing_title
+// comment promised. A pure query over the ledger (never a stored slot), so it always matches the
+// deeds behind it; the HUD shows it and the sim never reads it, so it can't affect replay. Returns
+// nullptr when no single kind has reached kEpithetAt — an epithet is a badge you've earned or you
+// haven't, unlike the always-present band titles, so the HUD simply omits the line. A never-acting
+// entity carries no ledger at all and is handled at the call site with the same try_get the
+// standing readout uses. Ties break in fixed Deed-enum order (the earliest-declared kind wins), so
+// an equal tally of Cruelty and Valor brands you the Butcher over the Slayer — infamy sticks — and
+// the pick is deterministic.
+inline const char* deed_epithet(const BehaviorLedger& led) {
+  std::size_t top = 0;  // index of the dominant deed kind so far; strict-> below keeps the earliest
+  for (std::size_t i = 1; i < led.dims.size(); ++i) {
+    if (led.dims[i] > led.dims[top]) top = i;
+  }
+  if (led.dims[top] < kEpithetAt) return nullptr;  // no kind repeated enough to earn a name yet
+  switch (static_cast<Deed>(top)) {
+    case Deed::Valor:
+      return "the Slayer";  // many hostiles felled
+    case Deed::Charity:
+      return "the Savior";  // many downed allies hauled back up
+    case Deed::Loyalty:
+      return "the Faithful";  // stood by bonded allies when it counted
+    case Deed::Cruelty:
+      return "the Butcher";  // many peaceful colonists cut down
+    case Deed::Violence:
+      return "the Brutal";  // unjust violence (band ready; its deed is unfed)
+    case Deed::Honesty:
+      return "the Honest";  // truth kept (band ready; its deed is unfed)
+    case Deed::Count:
+      break;  // sentinel, never a real dimension
+  }
+  return nullptr;  // unreachable — top always indexes a real dim; satisfies -Wreturn-type
+}
+
 // Marks an entity as dangerous to touch. An entity with a Hazard deals `damage`
 // to any player it overlaps and is then consumed — destroyed (see the
 // resolve_contacts system). The drifting motes have this: touch one, take a hit,

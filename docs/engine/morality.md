@@ -190,13 +190,20 @@ record nothing.
 
 ## Where it goes next
 
-Two **titles** are already here, both pure queries — the design's "titles are derived queries,
-never stored slots". `standing_title(standing)` names your *repute* from **deeds** — *Unproven* →
-*Known* → *Renowned*, and its villain mirror *Suspect* → *Notorious* that Cruelty deeds now reach
-(strike your own and the title falls). Its twin `build_title(attributes)` names your *build* from
-what you've **trained** — a *Warrior* (STR), *Skirmisher* (DEX), *Bulwark* (VIT) or *Chancer* (LCK),
-*Greenhorn* until one leads — so the HUD shows *what you've done* beside *what you are*. The richer
-ones (*Master Smith*, *Dragonslayer* — from specific skills and gear) hang off the same idea.
+Three **titles** are already here, all pure queries — the design's "titles are derived queries,
+never stored slots" — and they read three *orthogonal* things about you. `standing_title(standing)`
+names your *repute* from **deeds** — *Unproven* → *Known* → *Renowned*, and its villain mirror
+*Suspect* → *Notorious* that Cruelty deeds now reach (strike your own and the title falls). Its twin
+`build_title(attributes)` names your *build* from what you've **trained** — a *Warrior* (STR),
+*Skirmisher* (DEX), *Bulwark* (VIT) or *Chancer* (LCK), *Greenhorn* until one leads. The third,
+`deed_epithet(ledger)`, names what you're **known for** — your single *most-repeated* deed once you've
+done it enough (`kEpithetAt`) to earn the name: *the Slayer* (Valor), *the Savior* (Charity), *the
+Faithful* (Loyalty), *the Butcher* (Cruelty), with *the Brutal* / *the Honest* bands ready for the
+two deeds still unfed. It's the first reader of a **single** ledger dimension — the six were only ever
+summed into `standing` before — so how good you are, what you fight as, and what you're famous *for*
+are three separate labels. Unlike the always-present band titles it returns nothing until a kind
+crosses the threshold, so the HUD only shows *known as* once you've truly earned a reputation. The
+richer ones (*Master Smith*, *Dragonslayer* — from specific skills and gear) hang off the same idea.
 
 The write-point is the whole point: the remaining deeds (unjust Violence, Honesty)
 each become one `record_deed` call at their event, exactly as Cruelty and Loyalty just did. `standing`'s
@@ -222,8 +229,9 @@ bit-identical to before decay existed.
 
 - `engine/sim/components.hpp` — `Deed` (the six dimensions), `BehaviorLedger` (the
   earned counterpart of `Personality`, plus its `decay_ticks` leak counter), the pure `standing`
-  function, `renown_scale` (the presentation twin of `personality_tint`), and the two derived titles
-  `standing_title` (from deeds) and `build_title` (from trained attributes).
+  function, `renown_scale` (the presentation twin of `personality_tint`), and the three derived titles
+  `standing_title` (repute from deeds), `build_title` (from trained attributes), and `deed_epithet`
+  (what you're known for — the dominant single ledger dimension, past `kEpithetAt`).
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point,
   which also **drifts** the actor's matching `Personality` axis via the shared `drift_axis` clamp);
   `decay_standing` (the slow leak toward neutral, run each `step()`); the Charity credit and the
@@ -234,9 +242,11 @@ bit-identical to before decay existed.
   a just-reaped colonist (`kBondFriendAt`-gated) loses a step of bravery.
 - `game/app/main.cpp` — `draw_entities` scales a dot's radius by `renown_scale(standing(...))`
   so standing reads on screen *both ways* (heroes swell, villains shrink), and the debug HUD
-  shows the player's `standing` number and both titles (`standing_title` and `build_title`).
+  shows the player's `standing` number and all three titles (`standing_title`, `build_title`, and
+  the `known as` epithet, shown only once a deed kind crosses `kEpithetAt`).
 - `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired deeds with
-  player==NPC parity, the lazy no-deed-no-ledger path, and `renown_scale`.
+  player==NPC parity, the lazy no-deed-no-ledger path, `renown_scale`, and `deed_epithet` (threshold,
+  dominant-dimension pick, and the fixed tie order).
 
 ## Go deeper
 
