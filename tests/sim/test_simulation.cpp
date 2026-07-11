@@ -1831,6 +1831,26 @@ TEST_CASE("nudge_affinity forms one directed edge and deepens it, clamped", "[si
   REQUIRE(reg.get<eng::sim::Relationships>(a).edges[1].affinity == 100);  // clamped on append
 }
 
+TEST_CASE("allies_of counts the colonists bonded to an entity: the camaraderie payoff", "[sim]") {
+  // The INCOMING-bond count, the mirror of affinity_toward's single-tie read (and of the HUD's
+  // OUTGOING closest bond). Every colonist bonded TO the player (affinity >= kBondPull) is one ally
+  // the defend rung will send rushing to its side. A lukewarm liker (below the bond floor), the
+  // player's own OUTGOING bond, and the player itself must NOT inflate the count.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  const entt::entity a = reg.create();
+  const entt::entity b = reg.create();
+  const entt::entity c = reg.create();
+  REQUIRE(eng::sim::allies_of(reg, player) == 0);  // nobody bonded yet -> no allies
+
+  eng::sim::nudge_affinity(reg, a, player, 30);  // a real ally (>= kBondPull 10)...
+  eng::sim::nudge_affinity(reg, b, player, 10);  // ...another, exactly at the floor...
+  eng::sim::nudge_affinity(reg, c, player, 5);   // ...but c only mildly likes the player (< floor)
+  eng::sim::nudge_affinity(reg, player, a, 50);  // the player's OWN outgoing bond doesn't count
+
+  REQUIRE(eng::sim::allies_of(reg, player) == 2);  // a and b, not c, not the self-directed edge
+}
+
 TEST_CASE("the public hero-rally still beats a personal bond", "[sim]") {
   // The gating claim that keeps the public rally byte-identical: the bond-pull sits BELOW the
   // hero-rally, so when a renowned hero is present it claims the rung first. A colonist with a
