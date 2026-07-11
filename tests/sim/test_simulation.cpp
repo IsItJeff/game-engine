@@ -4354,6 +4354,48 @@ TEST_CASE("a wielded weapon slows the player (the heft bane)", "[sim]") {
   REQUIRE(armed < bare);  // heft: you trade speed for power
 }
 
+TEST_CASE("Strength eases a weapon's heft but never removes it: the carry mastery", "[sim]") {
+  // STR = carry: the design's "mastery shrinks a bane by ~half but never removes it" applied to the
+  // weapon move-heft. The pure helper first (math + null + cap), then the wiring through
+  // steer_npcs.
+  eng::sim::Attributes attrs{};  // all level 1
+
+  // No Attributes -> the full heft (an entity that never trained); STR 1 -> relief 0 -> full heft
+  // (the spawn default, so every existing armed fixture stays bit-identical).
+  REQUIRE(eng::sim::carried_move_penalty(0.25f, nullptr) == Approx(0.25f));
+  REQUIRE(eng::sim::carried_move_penalty(0.25f, &attrs) == Approx(0.25f));
+
+  // Each Strength level past 1 relieves 0.05 of the penalty: STR 6 -> relief 0.25 -> 0.75x heft.
+  attrs.strength.level = 6;
+  REQUIRE(eng::sim::carried_move_penalty(0.25f, &attrs) == Approx(0.25f * 0.75f));
+
+  // ...but the relief CAPS at half: a titan (STR 100) still pays half the heft — the bane persists.
+  attrs.strength.level = 100;
+  REQUIRE(eng::sim::carried_move_penalty(0.25f, &attrs) == Approx(0.25f * 0.5f));
+  REQUIRE(eng::sim::carried_move_penalty(0.25f, &attrs) > 0.0f);  // never free
+
+  // Wiring: a STRONG armed NPC flees faster than a WEAK armed one (same weapon), yet both remain
+  // slower than bare — the relief bites the heft without erasing it. (Mirrors the player MovePlayer
+  // path; steer_npcs scales its flee speed by the same carried_move_penalty.)
+  const auto flee_speed = [](int str_level, bool armed) {
+    entt::registry reg;
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Attributes>(npc).strength.level = str_level;
+    if (armed) reg.emplace<eng::sim::Equipped>(npc, eng::sim::Equipped{4, 0.25f});
+    const entt::entity hazard = reg.create();
+    reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{50.0f, 0.0f});  // a close threat to flee
+    reg.emplace<eng::sim::Hazard>(hazard);
+    eng::sim::steer_npcs(reg);
+    return glm::length(reg.get<eng::sim::Velocity>(npc).value);
+  };
+  REQUIRE(flee_speed(6, true) > flee_speed(1, true));  // the strong shrug off some heft...
+  REQUIRE(flee_speed(6, true) <
+          flee_speed(1, false));  // ...but stay slower than bare (bane persists)
+}
+
 TEST_CASE("the hearth mends worn gear: durability climbs back by the fire", "[sim]") {
   // The "repair later" the durability system promised. Durability used to only ever FALL (wear ->
   // shatter); now the base MENDS it — a worn weapon regains durability while its bearer rests in a

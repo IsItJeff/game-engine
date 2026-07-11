@@ -471,9 +471,12 @@ void World::apply_command(const Command& cmd) {
         // bit-identical); the 0.5 floor keeps you moving so you can always limp to food or water.
         speed *= need_efficiency(view.get<Stats>(e));
         // A wielded weapon's heft slows you — the equip tradeoff, felt on every step, and it
-        // stacks with the exhaustion crawl (so a tired, heavily-armed player really trudges).
+        // stacks with the exhaustion crawl (so a tired, heavily-armed player really trudges). STR
+        // eases the heft (carry): carried_move_penalty shrinks it by Strength, capped at half so
+        // the bane never vanishes. STR 1 (default) -> full heft -> bit-identical.
         if (const Equipped* gear = registry_.try_get<Equipped>(e); gear != nullptr) {
-          speed *= 1.0f - gear->move_penalty;
+          speed *=
+              1.0f - carried_move_penalty(gear->move_penalty, registry_.try_get<Attributes>(e));
         }
         // A raised GUARD roots you (the block's cost) and marks you Blocking so
         // resolve_creature_contacts softens the blows you take. Set/cleared every tick from the
