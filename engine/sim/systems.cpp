@@ -1243,6 +1243,11 @@ const SkillDef& skill_def(SkillId id) {
   // very VIT that shaves the venom (tick_poison), an immunity-through-exposure loop. Main-only, the
   // third VIT skill.
   static const SkillDef kResistance{AttrId::Endurance, {}};
+  // Athletics is Conditioning's BURST twin: Conditioning builds Endurance from steady movement,
+  // Athletics builds Dexterity from a SPRINT — so a character that dashes and kites a lot grows the
+  // agility (DEX) that sharpens its dodge and aim. Main-only, a DEX skill beside Evasion and
+  // Throwing.
+  static const SkillDef kAthletics{AttrId::Dexterity, {}};
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -1266,6 +1271,8 @@ const SkillDef& skill_def(SkillId id) {
       return kGuarding;
     case SkillId::Resistance:
       return kResistance;
+    case SkillId::Athletics:
+      return kAthletics;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -1307,6 +1314,10 @@ void advance_progression(entt::registry& reg) {
   // Resting to recover spent stamina trains Recovery a touch slower than moving
   // trains Conditioning (15 XP/sec vs 20) — resting is easier than exerting.
   const Fixed kRecoveryPerTick = Fixed::from_ratio(15, 60);
+  // Sprinting trains Athletics at the same rate moving trains Conditioning (20 XP/sec) — a
+  // full-tilt dash is exertion in the AGILITY domain, granted ON TOP of Conditioning (you're moving
+  // too).
+  const Fixed kAthleticsPerTick = Fixed::from_ratio(20, 60);
 
   // NB: CharacterLevel is required here, so any new progression-capable entity must
   // be spawned WITH it (see world.cpp: player + NPC) — miss it and that entity
@@ -1326,6 +1337,14 @@ void advance_progression(entt::registry& reg) {
     if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
       grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Conditioning, kConditioningPerTick,
                      &character);
+      // ...and a SPRINT (the burst stance, set by MovePlayer before this system runs) trains
+      // Athletics -> Dexterity ON TOP: dashing and kiting build agility, the DEX mirror of steady
+      // movement building Endurance. Only a SPRINTING mover trains it, so a walker — and any NPC,
+      // which never sprints — is bit-identical (no Sprinting stance -> no grant), exactly like the
+      // sprint stamina drain in update_stamina. Player-triggered like Throwing/Guarding.
+      if (reg.all_of<Sprinting>(e))
+        grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Athletics, kAthleticsPerTick,
+                       &character);
     } else if (const Vital& stamina = view.get<Stats>(e).stamina; stamina.current < stamina.max) {
       grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Recovery, kRecoveryPerTick, &character);
     }
@@ -1338,10 +1357,11 @@ void advance_progression(entt::registry& reg) {
     for (auto& entry : view.get<Skills>(e).owned) apply_levels(entry.second.level, entry.second.xp);
     apply_levels(endurance.level, endurance.xp);
     apply_levels(attrs.strength.level, attrs.strength.xp);
-    apply_levels(attrs.dexterity.level, attrs.dexterity.xp);  // fed by Evasion at the dodge site
-    apply_levels(attrs.luck.level, attrs.luck.xp);            // fed by Scavenging at the loot site
-    apply_levels(attrs.wisdom.level, attrs.wisdom.xp);        // fed by Foraging at the graze site
-    apply_levels(attrs.charisma.level, attrs.charisma.xp);    // fed by Leadership at bond_witnesses
+    apply_levels(attrs.dexterity.level,
+                 attrs.dexterity.xp);  // fed by Evasion (dodge), Throwing (aim), Athletics (sprint)
+    apply_levels(attrs.luck.level, attrs.luck.xp);          // fed by Scavenging at the loot site
+    apply_levels(attrs.wisdom.level, attrs.wisdom.xp);      // fed by Foraging at the graze site
+    apply_levels(attrs.charisma.level, attrs.charisma.xp);  // fed by Leadership at bond_witnesses
     apply_levels(character.level, character.xp);
 
     // 3. Attributes shape derived stats: each Endurance level past the first adds to

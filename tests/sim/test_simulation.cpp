@@ -3889,6 +3889,27 @@ TEST_CASE("enduring venom trains Resistance: the poison twin of Toughness", "[si
   REQUIRE_FALSE(trained_resistance(false));  // ...an unpoisoned one has nothing to endure
 }
 
+TEST_CASE("sprinting trains Athletics: the burst twin of Conditioning", "[sim]") {
+  // A SPRINT (the burst stance) trains Athletics -> Dexterity ON TOP of Conditioning, the DEX
+  // mirror of steady movement building Endurance — so a character that dashes and kites grows the
+  // agility that sharpens its dodge and aim. Only a SPRINTING mover trains it; a plain walker (no
+  // Sprinting stance) does not, so a non-sprinting world is bit-identical.
+  const auto trained_athletics = [](bool sprinting) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Velocity>(e, eng::Vec2{10.0f, 0.0f});  // moving -> trains Conditioning
+    reg.emplace<eng::sim::Skills>(e);
+    reg.emplace<eng::sim::Attributes>(e);
+    reg.emplace<eng::sim::Stats>(e);
+    reg.emplace<eng::sim::CharacterLevel>(e);
+    if (sprinting) reg.emplace<eng::sim::Sprinting>(e);
+    eng::sim::advance_progression(reg);
+    return reg.get<eng::sim::Skills>(e).find(eng::sim::SkillId::Athletics) != nullptr;
+  };
+  REQUIRE(trained_athletics(true));         // a sprinter builds agility...
+  REQUIRE_FALSE(trained_athletics(false));  // ...a walker does not
+}
+
 TEST_CASE("a venomous creature's bite leaves the victim poisoned; a plain one doesn't", "[sim]") {
   // A landed blow from a venomous archetype (swarmers) applies Poisoned; a non-venomous one leaves
   // none. Fires for any victim — player or NPC — through the same resolve_creature_contacts
