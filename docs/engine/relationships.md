@@ -114,7 +114,11 @@ tie:
   — **the resented are abandoned.** Because one strike (`−25`) clears the threshold (`−20`), it is a
   *personal, earlier* consequence than the global [villain-fear](morality.md) (which needs several
   strikes to push `standing` past the Suspect line): hurt one colonist and *that* colonist won't
-  save you, long before the whole colony fears you.
+  save you, long before the whole colony fears you. That global line now has its own rescue veto: a
+  colonist crossed the Suspect line (`standing ≤ −kKnownAt`) is **abandoned by the whole colony** —
+  the [villain-veto](morality.md), checked beside this affinity read in *both* rescue paths. So the
+  fallen are left down two ways: **personally** (a grudge from someone you wronged) and **globally**
+  (infamy the whole colony shuns) — affinity and standing, the same abandonment from two scales.
   Above that hard cutoff the same `affinity_toward` read now **grades the rescue reach**: the
   fallen's distance is discounted by affinity (the `/200` shape the other rungs use), so a bonded
   ally — its affinity grown by past saves — is worth a *longer* field, while a mild dislike (still

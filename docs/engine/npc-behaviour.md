@@ -131,7 +131,9 @@ grades the same reach: the fallen's distance is discounted by the rescuer's `aff
 so a **bonded** ally (one it has saved before) is worth a longer trek while a mild dislike shortens
 it — down to the hard grudge cutoff where the resented are abandoned outright (see
 [Relationships](relationships.md)). Bravery is *who* the colonist is; affinity is *who the fallen
-is to them*.
+is to them*. And a third, blunter cutoff sits alongside: a fallen **villain** (`standing ≤ −kKnownAt`)
+is abandoned by *everyone*, grudge or no — the [villain-veto](morality.md), checked here and again at
+the actual haul-up in `handle_deaths` so a colonist never approaches one it would then refuse to lift.
 
 A **second axis, `greed`**, proves `Personality` bends to more than one *shape* of decision. It
 reads the **forage** rung — not a radius but a **need threshold**: the effective "am I hungry?"
@@ -204,8 +206,10 @@ bites.
 
 It reuses the machinery already there: the villain competes with hazards for the *nearest* threat,
 and the same **bravery**-scaled radius applies — a brave colonist lets a villain get closer before
-bolting. A downed villain is excluded (a helpless body is no threat — and, standing-blind for now,
-the colony will even move to *rescue* it). Three deliberate limits keep it honest, all noted in the
+bolting. A downed villain is excluded from *this* rung (a helpless body is no threat, so fear yields)
+— but it is no longer saved either: the **rescue** rung now reads standing and **abandons** a downed
+villain (the [villain-veto](morality.md), above), so the colony neither flees nor lifts it. Three
+deliberate limits keep the *fear* read honest, all noted in the
 code: it is **player-only** (only a player can turn villain today, since Cruelty is player-gated), a
 **binary** flee (the design's graded *perceive* — wariness scaling to flight by standing *and* the
 onlooker's own might — is a later ring), and a threshold set at *Suspect* so a few cruel strikes
@@ -272,7 +276,7 @@ then act, is what stays.
 - `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / drink / retreat-to-hearth / arm-up / avoid / rally / bond ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — and a lowest **bond** rung (below rally) pulls it toward a bonded friend it likes; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
 - `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
-- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player, a downed villain is skipped), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally.
+- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player; a downed villain is neither feared nor rescued — the villain-veto, in both steer and `handle_deaths`), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally.
 
 ## Go deeper
 

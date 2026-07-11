@@ -341,6 +341,16 @@ void steer_npcs(entt::registry& reg) {
       // reader, the mirror of the bond-pull; neutral/liked fallen are unaffected (0 > threshold).
       const std::int8_t aff = affinity_toward(reg, n, f);
       if (aff <= kGrudgeThreshold) continue;
+      // ...and NOBODY crosses the field for a famous VILLAIN: if the fallen's own deeds mark them
+      // (standing at or below -kKnownAt, the Suspect line villain-fear uses) the whole colony
+      // leaves them down — the GLOBAL counterpart of the personal grudge above. Kept in LOCKSTEP
+      // with the same veto in handle_deaths so a colonist never crosses the field to someone it
+      // would then refuse to lift. No ledger, or standing above the line (the common case) -> not
+      // shunned -> bit-identical. Only players go Downed and only a player can turn villain
+      // (Cruelty is player-gated), so this bites exactly a downed villain PLAYER.
+      if (const BehaviorLedger* fallen_led = reg.try_get<BehaviorLedger>(f);
+          fallen_led != nullptr && standing(*fallen_led) <= -kKnownAt)
+        continue;
       // FRIENDSHIP grades the trek above that hard cutoff: a bonded ally (one this NPC has saved
       // before, so its affinity has grown) FEELS closer — its distance is discounted on the same
       // /200 shape the other rungs use — so the colonist crosses a LONGER real field for a dear
@@ -2226,8 +2236,20 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
     // one happens by; the forage "seek nearest X" pattern is the seed of making it deliberate.
     entt::entity rescuer = entt::null;  // the ally who reaches them — and the deed's actor
     const Vec2 pos = players.get<Transform>(e).position;
+    // GLOBAL villain veto: the colony abandons a famous VILLAIN. If the fallen's own deeds have
+    // marked them (standing at or below -kKnownAt, the SAME "Suspect" line villain-fear flees) then
+    // NOBODY hauls them up — the global counterpart of the personal grudge-veto below: a grudge is
+    // one colonist you wronged refusing you, this is the WHOLE colony turning its back on infamy,
+    // even those with no personal grudge. Read the DOWNED player's OWN standing once (it doesn't
+    // depend on the rescuer). No ledger, or standing above the villain line (every non-villain, and
+    // the common case) -> not shunned -> rescued exactly as before, so a non-villain world is
+    // bit-identical. The mirror of the hero being reached from FARTHER (the graded rescue reach): a
+    // hero is worth crossing the field for, a villain not worth crossing the room.
+    const BehaviorLedger* fallen_led = reg.try_get<BehaviorLedger>(e);
+    const bool shunned_villain = fallen_led != nullptr && standing(*fallen_led) <= -kKnownAt;
     auto allies = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
     for (const entt::entity a : allies) {
+      if (shunned_villain) break;  // a marked villain is abandoned — no ally will haul it up
       if (a == e || allies.get<Stats>(a).health.current <= 0.0f)
         continue;  // self / a corpse can't help
       // GRUDGE: an ally that resents the fallen (affinity <= kGrudgeThreshold, e.g. one this player
