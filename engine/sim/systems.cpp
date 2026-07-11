@@ -1638,6 +1638,12 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   constexpr float kBaseAttackDamage = 12.0f;          // a swing's raw damage before Strength
   constexpr float kDamagePerStrength = 4.0f;          // each Strength level past 1 hits harder
   const Fixed kStrikingPerHit = Fixed::from_int(10);  // XP for a strike that connects
+  // A swing SPENDS stamina — the melee echo of the throw's kThrowStaminaCost, cheaper (7 vs 15)
+  // since it's the faster primary attack. An exhausted fighter (stamina below the cost) can't swing
+  // at all, exactly as an exhausted thrower can't throw and an exhausted mover crawls: 0 stamina =
+  // disengage and recover, the "manage your wind" loop that keeps a fight from being a free
+  // stand-and-win. A full 100-bar sustains ~14 swings. Knob.
+  constexpr float kMeleeStaminaCost = 7.0f;
 
   // A swinger needs a position (to reach from) and the progression pair to train.
   const Transform* tf = reg.try_get<Transform>(attacker);
@@ -1703,6 +1709,24 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
                      static_cast<float>(gear_strength) * kDamagePerStrength) *
                     need_eff * berserk;
 
+  // STAMINA — a CONNECTING swing costs it, and an empty bar can't lift the weapon. too_winded()
+  // fizzles (returns true, spends nothing) when a Stats-bearing fighter is below the cost; else it
+  // SPENDS the cost and returns false. It is called at each LANDING site (a hostile/mote hit, or
+  // the cruel strike) — NOT on a targetless whiff, mirroring perform_throw (only a connecting throw
+  // pays). Charging a whiff would be a real bug: npc_attack POLLS perform_attack every tick for
+  // every NPC regardless of a target, so a per-whiff charge would drain every idle colonist ~7/tick
+  // and pin the colony near-empty. A Stats-less dummy has no stamina system (returns false, swings
+  // freely) — the same reason need_eff/berserk default to 1.0 without Stats. An exhausted fighter
+  // fizzles the swing (no XP, no damage, no cost); 0 stamina means disengage and recover. Gates the
+  // player and NPCs alike (both route through here). `atk_stats` was fetched above for the
+  // need/berserk reads.
+  const auto too_winded = [&]() {
+    if (atk_stats == nullptr) return false;                           // no Stats -> swings freely
+    if (atk_stats->stamina.current < kMeleeStaminaCost) return true;  // winded -> the swing dies
+    atk_stats->stamina.current -= kMeleeStaminaCost;  // a connecting swing spends it
+    return false;
+  };
+
   // Find the nearest attackable target in reach — a fragile mote (Hazard) or a hostile
   // creature (Enemy). Strict < breaks ties by iteration order (deterministic).
   entt::entity target = entt::null;
@@ -1746,6 +1770,8 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
         }
       }
       if (victim != entt::null) {
+        if (too_winded())
+          return entt::null;  // too tired to land even a cruel blow (spends nothing)
         // A cruel strike lands plainly — no dodge, no crit (an unsuspecting colonist doesn't slip a
         // betrayal, and there's no "lucky" cruelty), so this branch draws NO RNG and leaves the
         // seeded stream untouched. It still trains Striking (a swing that connects) and blinks the
@@ -1791,6 +1817,10 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
     }
     return entt::null;  // a whiff (or the cruel strike above) — nothing to hand back to destroy
   }
+
+  // A target IS in reach — this swing connects, so it spends stamina (or fizzles if the fighter is
+  // winded, before any XP/damage). A targetless whiff above never reached here, so it stayed free.
+  if (too_winded()) return entt::null;
 
   // A connecting strike trains Striking -> Strength (a lot) + Dexterity (a little), whatever
   // it hits: swinging a weapon mostly builds power, and a touch of the reflex behind it.
@@ -1947,17 +1977,17 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
 
 void perform_throw(entt::registry& reg, entt::entity attacker) {
   // The player's RANGED option — hurl something at the nearest hostile far out of melee reach,
-  // chipping an approaching swarm before it closes. Two things set it apart from a melee swing:
-  //   - it draws NO RNG (no dodge, no crit, no execute) — a plain, reliable, MODEST hit, so ranged
-  //     trades melee's burst potential for range and certainty; and
-  //   - it COSTS STAMINA. A standing character out-regenerates a slow plink, but throwing fast, or
-  //   on
-  //     the move (kiting drains far more than regen), empties the bar and drops you to the same
-  //     exhausted crawl a sprint causes (update_stamina's gate). So the cost keeps range honest:
-  //     you can soften an approach but can't burst a swarm down or kite one forever for free.
-  // The hit isn't dealt HERE — this LAUNCHES a homing Projectile that advance_projectiles flies to
-  // the target and lands on arrival (so a throw has a visible travel time, and is wasted if the
-  // target dies first). Player-only for now: there is no npc_throw, so NPCs still only melee (a
+  // chipping an approaching swarm before it closes. What sets it apart from a melee swing: it draws
+  // NO RNG (no dodge, no crit, no execute) — a plain, reliable, MODEST hit, so ranged trades
+  // melee's burst potential for range and certainty. Like a swing it COSTS STAMINA
+  // (kThrowStaminaCost, dearer than melee's kMeleeStaminaCost — a bigger wind-up): a standing
+  // character out-regenerates a slow plink, but throwing fast, or on the move (kiting drains far
+  // more than regen), empties the bar and drops you to the same exhausted crawl a sprint causes
+  // (update_stamina's gate), and an empty bar can't throw at all. So the cost keeps range honest:
+  // you can soften an approach but can't burst a swarm down or kite one forever for free. The hit
+  // isn't dealt HERE — this LAUNCHES a homing Projectile that advance_projectiles flies to the
+  // target and lands on arrival (so a throw has a visible travel time, and is wasted if the target
+  // dies first). Player-only for now: there is no npc_throw, so NPCs still only melee (a
   // creature-ranged AI, reusing the same Projectile, is a later ring).
   constexpr float kThrowRange = 350.0f;       // vastly longer than a melee swing's ~45 reach
   constexpr float kThrowStaminaCost = 15.0f;  // each connecting throw spends this

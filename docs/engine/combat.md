@@ -40,9 +40,12 @@ One function resolves *every* swing, whoever throws it — the player's `Attack`
 ```mermaid
 flowchart TD
   a[attacker swings] --> reach{nearest target<br/>within reach?}
-  reach -->|nothing| miss[a whiff — no XP]
-  reach -->|a mote| pop[destroy it outright<br/>+ train Striking]
-  reach -->|a creature| train[train Striking] --> dodge{creature<br/>dodges? DEX}
+  reach -->|nothing| miss[a whiff — free, no XP]
+  reach -->|a target| stam{stamina ≥ cost?<br/>if it has a Stats sheet}
+  stam -->|no| winded[winded — the swing fizzles, free]
+  stam -->|yes| kind{spend stamina —<br/>a mote or a creature?}
+  kind -->|a mote| pop[destroy it outright<br/>+ train Striking]
+  kind -->|a creature| train[train Striking] --> dodge{creature<br/>dodges? DEX}
   dodge -->|yes| whiff[no damage — but Striking still trained]
   dodge -->|no| dmg[deal STR-vs-VIT damage to HP]
   dmg --> dead{HP ≤ 0?}
@@ -51,6 +54,15 @@ flowchart TD
 ```
 
 - **Reach** grows with Strength: `45 + (Strength − 1)·6` world units.
+- **Stamina** — a **connecting** swing spends `kMeleeStaminaCost` (7, cheaper than the 15-cost throw
+  since melee is the faster primary attack), and a fighter below the cost **can't land the blow** —
+  the swing fizzles (no XP, no damage, no cost), the melee echo of the throw's stamina gate and the
+  reason 0 stamina means *disengage and recover*, not stand and win. Only a swing that *connects*
+  pays: a **targetless whiff is free** — load-bearing, because `npc_attack` polls `perform_attack`
+  every tick for every NPC regardless of a target, so charging a whiff would drain every idle
+  colonist. It bites only an attacker with a `Stats` sheet (a real fighter tires; a bare test dummy
+  has no stamina and swings freely), and it gates the player and NPCs alike (both route through
+  `perform_attack`).
 - **Target** is the nearest *attackable* thing in reach — a `Hazard` mote **or** a
   hostile `Enemy`. A mote is fragile (one hit); a creature has HP and takes several.
 - Any **connecting** swing trains **Striking → Strength**, whatever it hits — *even a
@@ -311,7 +323,8 @@ is the player's first way to hit at a distance — `perform_throw` hurls at the 
 `kThrowRange` (350, vastly further than a swing) and chips its HP. Its job is to **soften an
 approaching swarm before it reaches you**, not to replace melee, and two rules keep it in that lane:
 
-- **It costs stamina.** Each connecting throw spends `kThrowStaminaCost` (15). A *standing* character
+- **It costs stamina** — *more* than a swing does. Each connecting throw spends `kThrowStaminaCost`
+  (15, versus melee's 7, a bigger wind-up). A *standing* character
   regenerates stamina (~20/s), so a patient, stationary plink lives off that regen — but it roots you
   in the swarm's path and, at low Dexterity, barely dents a brute. Throw *faster* than regen can
   refill, or throw *on the move* — kiting drains ~40/s, far more than regen — and the bar empties and

@@ -2788,6 +2788,53 @@ TEST_CASE("an exhausted thrower fizzles: a throw needs stamina in hand", "[sim]"
   REQUIRE(reg.get<eng::sim::Stats>(atk).stamina.current == Approx(5.0f));  // stamina untouched
 }
 
+TEST_CASE("an exhausted fighter can't swing but a whiff is free: melee costs stamina like a throw",
+          "[sim]") {
+  // The melee echo of the throw's stamina gate: a CONNECTING swing SPENDS kMeleeStaminaCost, and an
+  // empty bar can't lift the weapon. A RESTED fighter connects and spends; a WINDED one (below the
+  // cost) fizzles, leaving the foe unhurt and no stamina spent. And a TARGETLESS whiff spends
+  // NOTHING (mirroring a held throw) — the load-bearing case, since npc_attack POLLS perform_attack
+  // every tick for every NPC regardless of a target, so charging a whiff would drain every idle
+  // colonist. (A Stats-less attacker has no stamina system and swings freely — the reason every
+  // combat test without Stats is unchanged.)
+  const auto struck = [](float attacker_stamina) {
+    entt::registry reg;
+    const entt::entity attacker = reg.create();
+    reg.emplace<eng::sim::Transform>(attacker, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(attacker);
+    reg.emplace<eng::sim::Skills>(attacker);
+    reg.emplace<eng::sim::Stats>(attacker).stamina.current = attacker_stamina;  // rested or winded
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});  // within melee reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(foe);  // DEX 1 -> never dodges, so a swing lands
+    reg.emplace<eng::sim::Enemy>(foe);
+
+    std::mt19937 rng{1234};
+    eng::sim::perform_attack(reg, attacker, rng);
+    return std::pair{reg.get<eng::sim::Stats>(foe).health.current,
+                     reg.get<eng::sim::Stats>(attacker).stamina.current};
+  };
+  const auto [rested_foe_hp, rested_stamina] = struck(100.0f);
+  REQUIRE(rested_foe_hp < 100.0f);                            // a rested fighter connects...
+  REQUIRE(rested_stamina < 100.0f);                           // ...and the swing spent stamina
+  const auto [winded_foe_hp, winded_stamina] = struck(3.0f);  // stamina 3 < the ~7 melee cost
+  REQUIRE(winded_foe_hp == Approx(100.0f));  // a winded fighter's swing fizzles -> foe unhurt
+  REQUIRE(winded_stamina == Approx(3.0f));   // ...and no stamina is spent on a fizzle
+
+  // A TARGETLESS whiff (nothing in reach) spends NOTHING — so npc_attack polling every tick can't
+  // drain an idle colonist that has nothing to swing at. A full-bar swinger at empty air keeps 100.
+  entt::registry reg;
+  const entt::entity lone = reg.create();
+  reg.emplace<eng::sim::Transform>(lone, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(lone);
+  reg.emplace<eng::sim::Skills>(lone);
+  reg.emplace<eng::sim::Stats>(lone).stamina.current = 100.0f;  // full bar, nothing in reach
+  std::mt19937 rng{1234};
+  eng::sim::perform_attack(reg, lone, rng);
+  REQUIRE(reg.get<eng::sim::Stats>(lone).stamina.current == Approx(100.0f));  // a whiff is free
+}
+
 TEST_CASE("a throw only targets creatures: a peaceful colonist is never hit", "[sim]") {
   // The Enemy-only filter that sets a throw apart from a melee swing: unlike perform_attack's
   // cruel-strike branch, perform_throw never targets an Npc, so a colonist standing in range is
