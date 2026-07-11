@@ -131,9 +131,11 @@ grades the same reach: the fallen's distance is discounted by the rescuer's `aff
 so a **bonded** ally (one it has saved before) is worth a longer trek while a mild dislike shortens
 it — down to the hard grudge cutoff where the resented are abandoned outright (see
 [Relationships](relationships.md)). Bravery is *who* the colonist is; affinity is *who the fallen
-is to them*. And a third, blunter cutoff sits alongside: a fallen **villain** (`standing ≤ −kKnownAt`)
+is to them*. And **standing** grades the trek too, both ways: a fallen **villain** (`standing ≤ −kKnownAt`)
 is abandoned by *everyone*, grudge or no — the [villain-veto](morality.md), checked here and again at
-the actual haul-up in `handle_deaths` so a colonist never approaches one it would then refuse to lift.
+the actual haul-up in `handle_deaths` so a colonist never approaches one it would then refuse to lift —
+while a fallen **hero** (`standing ≥ +kKnownAt`) is *discounted the other way* (`kHeroReachDiscount`),
+so the colony rushes to a downed champion from farther, even a stranger. Fame reaches; infamy is left.
 
 A **second axis, `greed`**, proves `Personality` bends to more than one *shape* of decision. It
 reads the **forage** rung — not a radius but a **need threshold**: the effective "am I hungry?"
