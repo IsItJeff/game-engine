@@ -413,6 +413,18 @@ inline constexpr float kBlockDamageFactor =
     0.4f;  // fraction of a blow that gets through a raised guard
 inline constexpr float kGuardMoveScale = 0.35f;  // how much a guard slows you — the block's cost
 
+// The offensive twin of the guard stance: a SPRINT. Held from the MovePlayer command's `sprint`
+// flag (a key), it BOOSTS move speed by kSprintMoveScale — a burst to close a gap or break a chase
+// — but burns stamina FASTER (update_stamina adds kSprintDrainBonus while Sprinting + moving), so
+// it's a short dash that ends in the exhaustion crawl, not a free faster pace. Guard takes
+// precedence (you can't sprint with your guard up), and an exhausted player (0 stamina) can't
+// sprint at all. Like Blocking it's an active, input-driven stance, so today only the player
+// sprints. No Sprinting component / no sprint flag -> bit-identical.
+struct Sprinting {};
+inline constexpr float kSprintMoveScale = 1.6f;  // how much faster a sprint moves you...
+inline constexpr float kSprintDrainBonus =
+    40.0f;  // ...and the EXTRA stamina/sec it burns (2x total)
+
 // How much an EXHAUSTED character (stamina drained to 0 by moving) is slowed — a crawl, not a stop,
 // so the spent can always limp to safety while stamina recovers. Shared so the player (MovePlayer)
 // and NPCs (steer_npcs) tire identically — the "the bane bites both" parity the codebase keeps.

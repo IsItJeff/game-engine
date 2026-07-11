@@ -880,7 +880,12 @@ void update_stamina(entt::registry& reg, float dt) {
     Stats& st = view.get<Stats>(e);
     Vital& stamina = st.stamina;
     if (glm::length(view.get<Velocity>(e).value) > 0.0f) {
-      stamina.current -= kDrainPerSecond * dt;             // moving: spend it...
+      stamina.current -= kDrainPerSecond * dt;  // moving: spend it...
+      // ...and a SPRINT burns it FASTER (kSprintDrainBonus on top of the base rate), so a dash is a
+      // short burst that ends in the exhaustion crawl, not a free faster pace. Sprinting is set by
+      // the same-tick MovePlayer command (before this system runs), exactly like Blocking below;
+      // only a moving sprinter pays it, and no Sprinting stance -> the base drain -> bit-identical.
+      if (reg.all_of<Sprinting>(e)) stamina.current -= kSprintDrainBonus * dt;
       if (stamina.current < 0.0f) stamina.current = 0.0f;  // ...never below empty
     } else {
       // Resting: recover, faster the tougher you are — but NOT on an empty stomach or canteen. A

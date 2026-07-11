@@ -453,12 +453,18 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // move slower. A held stance rather than a one-shot action, so it rides the per-tick MovePlayer
     // command (below) rather than an edge event — it lasts exactly as long as the key is down.
     const bool guard = !imgui_wants_keys && keys[SDL_SCANCODE_K];
+    // Hold SHIFT to SPRINT — faster, but it burns stamina (see Sprinting), a short dash that ends
+    // in the exhaustion crawl. Also a held stance on the per-tick MovePlayer command; guard wins if
+    // both.
+    const bool sprint =
+        !imgui_wants_keys && (keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT]);
 
     // --- advance the simulation in fixed steps ---
     const int steps = paused ? 0 : timestep.advance(frame_seconds);
     for (int i = 0; i < steps; ++i) {
       // One input Command per tick — the client's only way to affect the world.
-      transport.send(eng::net::Message{eng::sim::move_player(eng::sim::kLocalPlayer, dir, guard)});
+      transport.send(
+          eng::net::Message{eng::sim::move_player(eng::sim::kLocalPlayer, dir, guard, sprint)});
       server.tick();
     }
 

@@ -172,6 +172,38 @@ TEST_CASE("moving drains the player's stamina", "[sim]") {
   REQUIRE(world.registry().get<eng::sim::Stats>(player).stamina.current < start);
 }
 
+TEST_CASE("a sprint moves faster but burns stamina: the dash tradeoff", "[sim]") {
+  // SHIFT sprints — a burst that outpaces a walk (kSprintMoveScale) at the cost of stamina it
+  // drains FASTER (kSprintDrainBonus), so a dash ends in the exhaustion crawl, not a free pace.
+  // Guard takes precedence: you can't sprint with your guard up. dir {1,0} is a unit vector, so
+  // velocity.x IS the speed. A fresh World's player spawns full-stamina (so the sprint gate
+  // passes).
+  const auto step_speed = [](bool sprint, bool guard) {
+    eng::sim::World world;
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}, guard, sprint));
+    world.step();
+    return world.registry().get<eng::sim::Velocity>(world.player()).value.x;
+  };
+  const float walk = step_speed(false, false);
+  const float dash = step_speed(true, false);
+  const float guarded_sprint = step_speed(true, true);  // both held -> guard wins
+  REQUIRE(dash > walk);                                 // a sprint outpaces a walk...
+  REQUIRE(dash == Approx(walk * 1.6f));                 // ...by exactly kSprintMoveScale
+  REQUIRE(guarded_sprint < walk);  // ...but a raised guard suppresses it (guard wins)
+
+  // And it costs: over the same span, a sprint empties the bar faster than a walk.
+  const auto stamina_left = [](bool sprint) {
+    eng::sim::World world;
+    for (int i = 0; i < eng::sim::kTicksPerSecond / 2; ++i) {  // half a second of holding it
+      world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, {1.0f, 0.0f}, false, sprint));
+      world.step();
+    }
+    return world.registry().get<eng::sim::Stats>(world.player()).stamina.current;
+  };
+  REQUIRE(stamina_left(true) <
+          stamina_left(false));  // the dash drains stamina faster than the walk
+}
+
 TEST_CASE("an exhausted player is slowed to a crawl", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

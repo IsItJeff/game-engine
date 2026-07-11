@@ -480,11 +480,25 @@ void World::apply_command(const Command& cmd) {
         // held key, so the stance lasts exactly as long as you hold guard. Blocking isn't in this
         // view, so emplacing/removing it mid-iteration is safe.
         if (cmd.guard) speed *= kGuardMoveScale;
+        // A SPRINT boosts speed — a burst to close a gap or break a chase. Gated on stamina (an
+        // exhausted player can't dash) and on NOT guarding (you can't sprint with your guard up, so
+        // guard wins). The extra stamina COST is charged in update_stamina (kSprintDrainBonus while
+        // Sprinting + moving), so a dash ends in the exhaustion crawl — the tradeoff that keeps it
+        // a burst, not a free faster pace. Stacks over the gear heft like the guard scale does.
+        const bool sprinting =
+            cmd.sprint && !cmd.guard && view.get<Stats>(e).stamina.current > 0.0f;
+        if (sprinting) speed *= kSprintMoveScale;
         view.get<Velocity>(e).value = dir * speed;
         if (cmd.guard) {
           registry_.emplace_or_replace<Blocking>(e);
         } else {
           registry_.remove<Blocking>(e);
+        }
+        // Mark the Sprinting stance (like Blocking) so update_stamina can charge the extra drain.
+        if (sprinting) {
+          registry_.emplace_or_replace<Sprinting>(e);
+        } else {
+          registry_.remove<Sprinting>(e);
         }
       }
       break;

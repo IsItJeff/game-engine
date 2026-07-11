@@ -131,6 +131,15 @@ spends stamina it can no longer recover, tires to a crawl, and can't shake it of
 drinks. (`update_stamina` runs just *before* `drain_hunger`/`drain_water`, so it reads last tick's
 need — a one-frame lag that's immaterial for a Need that empties over minutes.)
 
+Stamina isn't only *drained* by moving — it can be **spent for speed**. Hold **SHIFT** to **sprint**:
+the `MovePlayer` command's `sprint` flag sets a `Sprinting` stance (the offensive twin of the `Blocking`
+guard), which `apply_command` reads to *boost* move speed by `kSprintMoveScale` (1.6×) and
+`update_stamina` reads to *burn* stamina `kSprintDrainBonus` faster (2× the base rate). So a sprint is
+a **short dash** — close a gap, break a chase, reach a downed ally — that **ends in the exhaustion
+crawl**, not a free faster pace. Gated two ways: an exhausted player (0 stamina) can't dash, and a
+**raised guard wins** (you can't sprint with your guard up). No sprint flag → no `Sprinting` stance →
+bit-identical, exactly like the guard.
+
 A **third** consequence closes the loop into combat: `need_efficiency(stats)` saps how hard you
 *hit*. It stays `1.0` while both needs sit at or above a quarter-full — so a fed colony (and every
 full-fed combat test) fights bit-identically — then ramps **linearly to a half** as the *worst* of
