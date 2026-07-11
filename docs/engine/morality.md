@@ -150,7 +150,13 @@ becomes a **threat colonists flee**; a player who crosses the mirror *Known* lin
 they rally to**. `steer_npcs` folds a villain into its top-priority danger rung (turn on the colony
 and it recoils from you like a hazard) and a hero into its bottom-priority rally rung (idle
 colonists gather around their champion). Villainy repels, heroism attracts — the two faces of one
-scalar (see [NPC behaviour](npc-behaviour.md)). The *richer* readers — graded wariness, protecting
+scalar (see [NPC behaviour](npc-behaviour.md)). And a fallen villain earns no mercy: the rescue rung
+reads standing too, so **the colony abandons a downed villain** — nobody crosses the field to save
+one whose deeds marked it, nor lifts it at point-blank (both the steer rescue-seek *and* the
+`handle_deaths` revive check it, in lockstep). It's the **global** counterpart of the personal
+[grudge-veto](relationships.md) (a grudge is one colonist you wronged; this is the *whole* colony
+turning its back on infamy) and the dark mirror of a hero reached from *farther*. The *richer*
+readers — graded wariness, protecting
 the weak, befriending — are a later ring, but the "believed standing changes behaviour" seam is now
 real on both sides. Under the hood it is pinned by tests: a rescuer's ledger gains Charity, a
 monster-slayer's gains Valor, a player who cuts down a colonist gains Cruelty and goes negative
@@ -160,8 +166,9 @@ record nothing.
 
 ## The tradeoffs
 
-- **`standing`'s gameplay readers are still coarse.** There are TWO, mirror images: colonists
-  flee a villain and rally to a hero (`steer_npcs`). Both are *binary* at a single threshold — the
+- **`standing`'s gameplay readers are still coarse.** There are THREE: colonists **flee** a villain
+  and **rally** to a hero (`steer_npcs`), and the colony **abandons** a downed villain (no rescue, in
+  `steer_npcs` *and* `handle_deaths`). All are *binary* at a single threshold — the
   design's graded *perceive* (the pull/push scaling with standing *and* the onlooker's own
   bravery/might, plus richer stances: befriend, protect the weak, exploit) is a later ring. The
   signed formula shipped in full before any of this was needed, so wiring Cruelty, the fear read,

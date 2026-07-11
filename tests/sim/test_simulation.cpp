@@ -756,29 +756,63 @@ TEST_CASE("only villainy drives the colony off: a hero or unproven player is not
   REQUIRE(colonist_flee_x(false) == Approx(0.0f));  // an unproven player -> unmoved, not fled
 }
 
-TEST_CASE("a downed villain is no threat: fear yields, and the colony moves to help", "[sim]") {
-  // The Downed exclusion on the fear view, pinned by PRIORITY. Fear beats rescue (it's checked
-  // first and bolts straight away), so if a downed villain still read as a threat the colonist
-  // would flee it (+x, away). Instead the colonist runs TOWARD the fallen body (-x) to rescue it —
-  // which it can only do because the villain was dropped from the fear view. (Whether colonists
-  // SHOULD save a villain is a separate, standing-blind rescue rung — a later refinement, not this
-  // reader's job.)
-  entt::registry reg;
-  const entt::entity villain = reg.create();
-  reg.emplace<eng::sim::Transform>(villain, eng::Vec2{0.0f, 0.0f});
-  reg.emplace<eng::sim::PlayerControlled>(villain);
-  reg.emplace<eng::sim::Downed>(villain);  // helpless -> excluded from fear
-  eng::sim::record_deed(reg, villain, eng::sim::Deed::Cruelty, 5);  // Notorious (-30), but down
+TEST_CASE("a downed villain is abandoned: fear yields but the colony leaves it down", "[sim]") {
+  // Two readers meet on a fallen player, both pinned by the same Downed-standing state. FEAR
+  // yields: the fear view excludes Downed, so a colonist never flees a helpless body (+x). But the
+  // RESCUE rung is no longer standing-blind — a marked VILLAIN (standing <= -kKnownAt) is abandoned
+  // (the global villain-veto), so the colonist doesn't cross the field to save it either (-x). A
+  // NEUTRAL downed player, by contrast, IS steered toward and saved — the discriminator is the
+  // fallen's own standing. (Same veto guards the actual revive in handle_deaths; see the next
+  // test.)
+  const auto rescue_x = [](bool villain) {
+    entt::registry reg;
+    const entt::entity fallen = reg.create();
+    reg.emplace<eng::sim::Transform>(fallen, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(fallen);
+    reg.emplace<eng::sim::Downed>(fallen);  // helpless -> excluded from fear
+    if (villain)
+      eng::sim::record_deed(reg, fallen, eng::sim::Deed::Cruelty, 5);  // Notorious (-30), a villain
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{50.0f, 0.0f});  // in rescue range
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(rescue_x(false) < 0.0f);  // a NEUTRAL fallen player is steered TOWARD (-x) to save...
+  REQUIRE(rescue_x(true) ==
+          Approx(0.0f));  // ...but a marked villain is abandoned (never fled, never saved)
+}
 
-  const entt::entity colonist = reg.create();
-  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{50.0f, 0.0f});
-  reg.emplace<eng::sim::Velocity>(colonist);
-  reg.emplace<eng::sim::Npc>(colonist);
-
-  eng::sim::steer_npcs(reg);
-
-  // Toward the fallen villain (-x) to rescue, NOT fleeing away (+x): the fear reader skipped it.
-  REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x < 0.0f);
+TEST_CASE("no revive for a villain: handle_deaths leaves a downed villain on the ground", "[sim]") {
+  // The revive-site half of the villain-veto (steer is the other half, above). An ally standing
+  // right on a downed player hauls up a NEUTRAL one but NOT a marked villain — the same standing
+  // veto that keeps colonists from crossing the field also stays their hands at point-blank, so a
+  // famous villain must wait out the respawn timer with no rescue.
+  const auto still_downed = [](bool villain) {
+    entt::registry reg;
+    const entt::entity fallen = reg.create();
+    reg.emplace<eng::sim::Transform>(fallen, eng::Vec2{100.0f, 100.0f});
+    reg.emplace<eng::sim::PlayerControlled>(fallen);
+    reg.emplace<eng::sim::Velocity>(fallen);
+    reg.emplace<eng::sim::Stats>(fallen).health.current = 0.0f;  // down
+    if (villain)
+      eng::sim::record_deed(reg, fallen, eng::sim::Deed::Cruelty, 5);  // Notorious (-30), a villain
+    const entt::entity rescuer = reg.create();
+    reg.emplace<eng::sim::Transform>(rescuer,
+                                     eng::Vec2{105.0f, 100.0f});  // within revive reach (20)
+    reg.emplace<eng::sim::Velocity>(rescuer);
+    reg.emplace<eng::sim::Stats>(rescuer);
+    reg.emplace<eng::sim::Npc>(rescuer);
+    const eng::Vec2 centre{640.0f, 360.0f};
+    eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // player goes Downed
+    eng::sim::handle_deaths(reg, centre,
+                            1.0f / 60.0f);        // rescuer in reach -> revive UNLESS shunned
+    return reg.all_of<eng::sim::Downed>(fallen);  // still down = not revived
+  };
+  REQUIRE_FALSE(
+      still_downed(false));     // a neutral fallen player is hauled up by the adjacent ally...
+  REQUIRE(still_downed(true));  // ...but a marked villain is left on the ground (the revive veto)
 }
 
 TEST_CASE("an idle colonist rallies to a renowned hero: the twin of villain-fear", "[sim]") {
