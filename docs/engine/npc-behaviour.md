@@ -101,7 +101,12 @@ carries the design's first **P7** axis — **`bravery`** (an `int8` in `[-100, +
 **coward** (−100) senses a hazard from 1.5× as far and **bolts early**; a **brave** colonist
 (+100) shrinks its radius to half and **holds** until the hazard is nearly on top of it.
 Neutral `0` — or no `Personality` at all — is the base radius exactly, so this is bit-identical
-for anyone without a leaning (the player has none, and stays neutral). The opening four NPCs get
+for anyone without a leaning (the player has none, and stays neutral). **Wisdom** widens that same
+radius by a second, independent factor (`× (1 + (WIS−1)·0.05)`, capped at 2×, like the dodge/crit
+clamps) — bravery is your *nerve* (how close
+you let danger get), Wisdom is your *perception* (how far you see it coming), so a **wise coward** is
+hyper-alert while a **wise but brave** colonist spots danger early yet holds; WIS 1 (untrained) is
+×1, so it too is bit-identical until foraging trains it. The opening four NPCs get
 a fixed spread (two cowards, two brave) so you can watch the difference from the first frame;
 reinforcements roll a coherent *archetype* (bravery among its axes) from the spawner's *own*
 isolated RNG stream. And a colonist's axes aren't frozen for life: its own **deeds drift** them —
@@ -257,7 +262,7 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / drink / retreat-to-hearth / arm-up / avoid / rally / bond ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, AND avoid radii, `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — and a lowest **bond** rung (below rally) pulls it toward a bonded friend it likes; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / drink / retreat-to-hearth / arm-up / avoid / rally / bond ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — and a lowest **bond** rung (below rally) pulls it toward a bonded friend it likes; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
 - `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
 - `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player, a downed villain is skipped), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally.

@@ -654,6 +654,29 @@ TEST_CASE("bravery shapes how close a hazard gets before an NPC flees", "[sim]")
   REQUIRE(reg.get<eng::sim::Velocity>(coward).value.x < 0.0f);   // and the coward fled early too
 }
 
+TEST_CASE("wisdom sharpens danger awareness: an alert forager senses a hazard from further",
+          "[sim]") {
+  // Wisdom's SECOND effect (beyond forage yield): it widens the flee sense radius, a distinct
+  // source from bravery's nerve. Two neutral-bravery NPCs the same distance from one hazard, JUST
+  // beyond the base 120 radius — a WIS-1 one never senses it (holds), but a WIS-trained one
+  // perceives it from further and flees.
+  const auto flees = [](int wisdom_level) {
+    entt::registry reg;
+    const entt::entity hazard = reg.create();
+    reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Hazard>(hazard);
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{130.0f, 0.0f});  // 130 > the base radius 120
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);  // no Personality -> neutral bravery (base radius)
+    reg.emplace<eng::sim::Attributes>(npc).wisdom.level = wisdom_level;
+    eng::sim::steer_npcs(reg);
+    return glm::length(reg.get<eng::sim::Velocity>(npc).value) > 0.0f;  // moved = sensed and fled
+  };
+  REQUIRE_FALSE(flees(1));  // WIS 1: radius 120 < 130 -> the hazard is beyond its senses
+  REQUIRE(flees(10));       // WIS 10: radius 120 * 1.45 = 174 > 130 -> it senses and flees
+}
+
 TEST_CASE("a colonist flees a villain player: standing's first gameplay reader", "[sim]") {
   // Cruelty finally BITES the world, not just the HUD: once a player's deeds mark them a villain
   // (standing at or below the -15 "Suspect" line), a nearby colonist flees them exactly like a
