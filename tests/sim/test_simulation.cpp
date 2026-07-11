@@ -110,6 +110,29 @@ TEST_CASE("a hearth speeds nearby health regen: mend by the fire", "[sim]") {
   REQUIRE(healed_in_1s(50.0f) > healed_in_1s(500.0f));  // ...but within its warmth, mends faster
 }
 
+TEST_CASE("a hearth speeds stamina recovery too: catch your breath by the fire", "[sim]") {
+  // The stamina twin of the fireside health boost — a RESTING character inside a hearth's radius
+  // recovers stamina faster than one resting in the open, so the fire is a FULL recovery spot. Same
+  // spent stamina and rest; only the presence of a nearby hearth differs (away = base baseline).
+  const auto recovered_in_1s = [](bool by_hearth) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Transform>(e, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(e);  // zero velocity -> resting (recovers, not drains)
+    reg.emplace<eng::sim::Stats>(e).stamina.current = 10.0f;  // spent, with room to recover
+    if (by_hearth) {
+      const entt::entity hearth = reg.create();
+      reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{0.0f, 0.0f});  // on top of the rester
+      reg.emplace<eng::sim::Hearth>(hearth, eng::sim::Hearth{50.0f});   // within its warmth
+    }
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::update_stamina(reg, dt);  // 1s
+    return reg.get<eng::sim::Stats>(e).stamina.current - 10.0f;
+  };
+  REQUIRE(recovered_in_1s(false) > 0.0f);                   // resting in the open recovers some...
+  REQUIRE(recovered_in_1s(true) > recovered_in_1s(false));  // ...but faster by the fire
+}
+
 TEST_CASE("a wounded colonist retreats to a hearth and holds in its warmth", "[sim]") {
   // The retreat rung makes the hearth a USED landmark: a safe but wounded colonist falls back to
   // the nearest fire to mend, then holds inside its radius; a healthy one ignores it. Health max

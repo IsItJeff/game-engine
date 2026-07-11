@@ -723,10 +723,15 @@ void update_stamina(entt::registry& reg, float dt) {
   // hardiness means a better second wind. A tunable, and a new *effect* for
   // Endurance beyond the pool size.
   constexpr float kRecoveryPerEndurance = 0.10f;
+  // Resting IN a Hearth's warmth recovers stamina this much faster — the stamina twin of the health
+  // regen boost regenerate_vitals gives there (same 2.0 knob), so the fire is a FULL recovery spot:
+  // mend AND catch your breath. A playtest knob.
+  constexpr float kHearthStaminaBoost = 2.0f;
 
   // Stats + Velocity = things that both tire and move. Motes have Velocity but no
   // Stats, so the view skips them for free — only the player pays.
   auto view = reg.view<Stats, Velocity>();
+  auto hearths = reg.view<Hearth, Transform>();  // for the fireside recovery boost below
   for (const entt::entity e : view) {
     Stats& st = view.get<Stats>(e);
     Vital& stamina = st.stamina;
@@ -761,6 +766,22 @@ void update_stamina(entt::registry& reg, float dt) {
       // upside, move the bane onto the drain-while-moving side instead. No/empty armour = 0.
       const Equipped* eq = reg.try_get<Equipped>(e);
       if (eq != nullptr) boost *= 1.0f - eq->stamina_regen_penalty;
+      // A HEARTH speeds your second wind too: resting in its warmth recovers stamina faster (the
+      // stamina twin of regenerate_vitals' fireside health boost), so the fire is a place to FULLY
+      // recover, not just heal. Needs the rester's position (the view lacks Transform); no
+      // Transform or no hearth in range -> base rate, so a hearthless world is bit-identical.
+      // Scanned within a Hearth's radius exactly like regenerate_vitals, and applied over the
+      // armour bane so a plated rester still catches its breath faster by the fire (the boost and
+      // bane compose).
+      if (const Transform* tf = reg.try_get<Transform>(e)) {
+        for (const entt::entity h : hearths) {
+          if (glm::distance(tf->position, hearths.get<Transform>(h).position) <=
+              hearths.get<Hearth>(h).radius) {
+            boost *= kHearthStaminaBoost;
+            break;  // one hearth is enough
+          }
+        }
+      }
       stamina.current += stamina.regen_per_second * boost * dt;
       if (stamina.current > stamina.max) stamina.current = stamina.max;  // never past the cap
     }

@@ -11,7 +11,7 @@ engine skeleton's ECS. It is the worked example of
 - **`Vital`** — a reusable "bar" stat: `current`, `max`, `regen_per_second`.
 - **`Stats`** — one component per entity that holds its vitals (its character sheet).
 - **`regenerate_vitals`** — a system that recovers each *passive* vital (health) toward its cap, faster the higher your Endurance (VIT) **and faster still within a `Hearth`'s warmth**, and **not at all while starving** (or dehydrated or poisoned).
-- **`update_stamina`** — a system that spends stamina while moving and restores it while still — but **not** while starving or dehydrated (an empty stomach or canteen gives no second wind, the stamina twin of the heal-gate).
+- **`update_stamina`** — a system that spends stamina while moving and restores it while still — faster the higher your Endurance (VIT) **and faster still within a `Hearth`'s warmth**, but **not** while starving or dehydrated (an empty stomach or canteen gives no second wind, the stamina twin of the heal-gate).
 - **`drain_hunger`** — a system that lowers the hunger Need over time (the first survival need); at empty it starves health.
 - **`DamagePlayer`** — a command that subtracts from a player's health, applied
   through the funnel (the `H` key in the demo).
@@ -102,6 +102,12 @@ you rooted where creatures can still reach you. The boost sits *after* the starv
 poison gates, so the fire speeds a *healthy* recovery but never lets a starving or envenomed colonist
 heal — you can't mend on an empty stomach even by the warmest hearth. No hearth in reach → ×1, so a
 hearthless world regenerates exactly as before.
+
+The fire warms your **second wind** too: `update_stamina` gives a resting character inside a hearth's
+radius the same `kHearthStaminaBoost` (2×) on its stamina recovery, so the hearth is a place to
+*fully* recover — mend **and** catch your breath — not just heal. It composes with the Endurance
+boost and the armour bane (a plated rester still recovers faster by the fire than in the open), and
+like the health boost it's `×1` with no hearth in reach, so a hearthless world is bit-identical.
 
 The same discipline now covers your **second wind**: `update_stamina` skips its resting recovery
 while `hunger <= 0` **or** `water <= 0`, so survival failure drains your stamina reserves too, not
