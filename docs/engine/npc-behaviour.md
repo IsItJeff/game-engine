@@ -46,7 +46,9 @@ flowchart TD
   haz -->|yes| flee[flee: velocity straight away]
   haz -->|no| dwn{nearest Downed<br/>ally in range?}
   dwn -->|yes| rescue[rescue: velocity toward them]
-  dwn -->|no| hun{hungry AND<br/>food in range?}
+  dwn -->|no| def{a bonded friend<br/>with a creature<br/>bearing down?}
+  def -->|yes| defend[defend: velocity toward the friend]
+  def -->|no| hun{hungry AND<br/>food in range?}
   hun -->|yes| forage[forage: velocity toward the food]
   hun -->|no| thi{thirsty AND<br/>water in range?}
   thi -->|yes| drink[drink: velocity toward the well]
@@ -66,7 +68,16 @@ flowchart TD
 ```
 
 The first matching want wins and the NPC commits to it that tick (a `continue`), so a
-fleeing NPC never also forages, and a rescuer drops its meal to save someone. The **two survival
+fleeing NPC never also forages, and a rescuer drops its meal to save someone. Just below the
+downed-rescue sits a **defend** rung — the active slice of the design's *PROTECT* stance: an idle
+colonist **charges to a bonded friend** (often the player it fought beside, via
+[camaraderie](relationships.md)) when a **creature is bearing down** on it, to stand and fight at its
+side (`npc_attack` does the swinging once in reach). It reads the same bond as the gentle bond-pull
+far below — but where bond-pull only *drifts* toward an idle friend, defend *rushes* to one in
+danger and **outranks the colonist's own hunger**, exactly as the downed-rescue does (a friend in
+peril beats a meal). Its reach scales with **bravery** — the courage to charge into danger for a
+friend, the same growing radius the rescue rung uses — so, like every acting rung, it reads a trait.
+The **two survival
 needs** are the one exception to strict rung order: hunger is drawn above thirst, but they're
 resolved by **urgency** — a colonist seeks whichever need is the *more depleted* (lower
 `current/max`), so the hunger rung defers to thirst when the canteen is emptier than the belly (and
@@ -288,7 +299,7 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / forage / drink / retreat-to-hearth / arm-up / avoid / rally / bond / hearth-gather ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius **and** (proportionally) the hearth-gather radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — a **bond** rung (below rally) pulls it toward a bonded friend it likes, and a lowest **hearth-gather** rung ambles a sociable idle colonist to the nearest fire; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / defend / forage / drink / retreat-to-hearth / arm-up / avoid / rally / bond / hearth-gather ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, defend, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius **and** (proportionally) the hearth-gather radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, a **defend** rung (just below the downed-rescue) rushes an idle colonist toward a **bonded friend** a creature is bearing down on (`affinity ≥ kBondPull`, a creature within `kDefendThreatRadius`), an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — a **bond** rung (below rally) pulls it toward a bonded friend it likes, and a lowest **hearth-gather** rung ambles a sociable idle colonist to the nearest fire; `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
 - `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `engine/sim/world.cpp` — `make_npc` sets it (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
 - `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player; a downed villain is neither feared nor rescued — the villain-veto, in both steer and `handle_deaths`), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally.

@@ -218,6 +218,14 @@ void steer_npcs(entt::registry& reg) {
   // kBondPull (the affinity floor at which a tie is a real bond) is shared with the
   // loyalty-on-rescue deed, so it lives with the deed constants at the top of the file rather than
   // local here.
+  // Defend: the URGENT twin of the bond-pull — an idle colonist CHARGES to a bonded friend (often
+  // the player it fought beside) when a CREATURE is bearing down on it, to stand and fight at its
+  // side (the active slice of the design's PROTECT stance; bond-pull only drifts toward an idle
+  // friend). kDefendReach is how far it will cross (bravery scales it, the rescue rung's courage
+  // shape); kDefendThreatRadius is how near a creature must be to the friend to count as a threat.
+  // Reuses kRescueSpeed (urgent, like a rescue). Knobs.
+  constexpr float kDefendReach = 300.0f;
+  constexpr float kDefendThreatRadius = 150.0f;
   // Hearth gather: the peacetime want, the lowest rung of all. A truly idle SOCIABLE colonist
   // ambles to the nearest fire to gather round it, so the hearth is a social HUB — not only the
   // field hospital the wounded-retreat rung makes it. This is the RADIUS at full sociability
@@ -241,6 +249,7 @@ void steer_npcs(entt::registry& reg) {
   auto sources = reg.view<WaterSource, Transform>();
   auto plots = reg.view<FoodSource, Transform>();
   auto hearths = reg.view<Hearth, Transform>();
+  auto creatures = reg.view<Enemy, Transform>();  // for the DEFEND rung: a threat near a friend
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
 
@@ -415,6 +424,55 @@ void steer_npcs(entt::registry& reg) {
             (toward / len) * kRescueSpeed * move_scale * (1.0f + compassion / 200.0f);
       }
       continue;  // committed to the rescue — don't also forage
+    }
+
+    // Priority 2.5 — DEFEND a threatened friend: an idle colonist CHARGES to a bonded friend (often
+    // the player it fought beside, or an ally it rescued) when a CREATURE is bearing down on it, to
+    // stand and fight at its side — npc_attack does the actual swinging once in reach. The ACTIVE,
+    // urgent slice of the design's PROTECT stance: the bond-follow rung far below only *drifts*
+    // toward an idle friend, but this DROPS everything (outranks its own hunger, like the rescue
+    // above) to answer a friend in danger. Reads the same Relationships as bond-follow (affinity >=
+    // kBondPull, a valid, non-Downed friend — a Downed one is the rescue rung's job), gated on a
+    // THREAT: a creature within kDefendThreatRadius of that friend. BRAVERY scales how far this NPC
+    // will cross to defend — the courage to charge into danger for a friend, the SAME
+    // growing-radius shape the rescue rung uses (neutral 0 -> kDefendReach exactly), so every
+    // acting rung still reads a trait. No Relationships, no bonded friend, or no creature bearing
+    // down on one -> falls through, so the pre-defend world (no bond, or no creature near a friend
+    // — every existing test) is bit-identical. Steers toward the FRIEND at rescue speed; picks the
+    // nearest threatened one.
+    if (const Relationships* rel = reg.try_get<Relationships>(n)) {
+      entt::entity ward = entt::null;
+      Vec2 ward_pos{0.0f, 0.0f};
+      float nearest_ward = kDefendReach * (1.0f + bravery / 200.0f);
+      for (const Relation& edge : rel->edges) {
+        if (edge.affinity < kBondPull || !reg.valid(edge.other))
+          continue;                                    // not a real bond, or a stale handle
+        if (reg.all_of<Downed>(edge.other)) continue;  // a downed friend is the rescue rung's job
+        const Transform* ft = reg.try_get<Transform>(edge.other);
+        if (ft == nullptr)
+          continue;               // a friend with no position (shouldn't happen, cheap to guard)
+        bool threatened = false;  // is a creature bearing down on this friend?
+        for (const entt::entity c : creatures) {
+          if (glm::distance(ft->position, creatures.get<Transform>(c).position) <
+              kDefendThreatRadius) {
+            threatened = true;
+            break;
+          }
+        }
+        if (!threatened) continue;
+        const float d = glm::distance(pos, ft->position);
+        if (d < nearest_ward) {
+          nearest_ward = d;
+          ward = edge.other;
+          ward_pos = ft->position;
+        }
+      }
+      if (ward != entt::null) {
+        const Vec2 toward = ward_pos - pos;
+        const float len = glm::length(toward);
+        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRescueSpeed * move_scale;
+        continue;  // charging to a friend's defence — don't also forage
+      }
     }
 
     // Priority 3 — hunger: a safe but hungry colonist seeks the nearest orb (its FIRST
