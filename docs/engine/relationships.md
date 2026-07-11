@@ -14,9 +14,10 @@ affinity-moving events:
 - **`Relationships`** — a lazy, sparse, append-ordered `std::vector<Relation>` on the
   subject: how *this* character regards others.
 - **`nudge_affinity(from, toward, delta)`** — the single write-point every affinity-moving
-  event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Three fire it today:
-  a **rescue** forms a bond, a **cruel strike** forms a grudge, and **felling a foe near allies**
-  forges *camaraderie* (nearby colonists warm to the killer).
+  event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Four fire it today:
+  a **rescue** forms a bond with the saved *and* (if witnessed) earns the rescuer **admiration** from
+  onlookers, a **cruel strike** forms a grudge, and **felling a foe near allies** forges *camaraderie*
+  (nearby colonists warm to the hero).
 
 ## Why it matters
 
@@ -41,7 +42,7 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
 
 ## How it works
 
-**Three events** move affinity today — two that bond, one that grudges. The first positive one lives
+**Four events** move affinity today — three that bond, one that grudges. The first positive one lives
 at the **rescue** in `handle_deaths` — the same line that already credits the rescuer with
 **Charity**:
 
@@ -79,11 +80,18 @@ blow. A **ranged** kill counts too: `advance_projectiles` calls the same `bond_w
 felling shot, centred on the **shooter** (the one who fought), not the distant impact — so a
 throw earns the same regard as a swing.
 
-How *much* devotion a shared victory earns is scaled by the killer's **Charisma** (see
-[progression](progression.md)): `kCamaraderieAffinity` grows by `1 + (CHA − 1) × 0.1`, capped at ×2,
-so a **charismatic champion** inspires a deeper bond per kill than a plain fighter — and because
-leading those kills *trains* Charisma, the effect **compounds** (lead more → higher CHA → allies bond
-harder). At CHA 1 (the spawn default) it is exactly ×1, so the pre-Charisma world is byte-identical.
+A **rescue** earns the same regard — the last forming event to spread. When a rescuer hauls up a
+downed ally, `handle_deaths` calls that same `bond_witnesses` centred on the rescue, so nearby
+onlookers **admire the hero** (witness → rescuer), exactly as they warm to a killer. The
+witnessed-event set is now symmetric: a cruel strike spreads grudges, and a kill *and* a rescue both
+spread bonds — the one heroism that used to go unseen no longer does.
+
+How *much* devotion a witnessed heroic act — a kill *or* a rescue — earns is scaled by the hero's
+**Charisma** (see [progression](progression.md)): `kCamaraderieAffinity` grows by `1 + (CHA − 1) × 0.1`,
+capped at ×2, so a **charismatic champion** inspires a deeper bond than a plain one — and because
+leading those acts *trains* Charisma (kills and rescues alike, through the shared `bond_witnesses`),
+the effect **compounds** (lead more → higher CHA → allies bond harder). At CHA 1 (the spawn default)
+it is exactly ×1, so the pre-Charisma world is byte-identical.
 
 The affinity is **read two ways** — a positive draw and a negative repulsion, the two faces of a
 tie:
@@ -136,7 +144,7 @@ rival, is no loss — the gate that keeps the pre-bond world bit-identical.
 
 ## The tradeoffs
 
-- **Three events, a few readers.** No personality-match seeding (that's a later ring) and no
+- **Four events, a few readers.** No personality-match seeding (that's a later ring) and no
   *stored* bond stages — the ladder is the derived `bond_tier`, not a slot — just the smallest struct
   those grow into. (Ties do now **decay** and the deepest **latch**, see above.) Exactly as the
   morality seed shipped a couple of deeds and let the rest wire themselves.
@@ -158,9 +166,10 @@ trait-scaled-radius shape every other axis uses — so a loyal colonist crosses 
 near a bonded ally while a fickle one follows only a friend underfoot. **All six personality
 axes are now wired.**
 
-Beyond that, the write-point is the whole point: three events already prove it out (a rescue bonds,
-a cruel strike grudges, a shared kill forges camaraderie), so each further event — a **shared meal**,
-a **broken promise** — is just one more `nudge_affinity` call, and `trust`
+Beyond that, the write-point is the whole point: four events already prove it out (a rescue bonds the
+saved *and* wins the rescuer admiration, a cruel strike grudges, a shared kill forges camaraderie), so
+each further event — a **shared meal**, a **broken promise** — is just one more `nudge_affinity` call,
+and `trust`
 appends as a second `Relation` field the day its own event lands. The derived `bond_tier` above
 already names the ladder those events climb, and **`decay_bonds`** already lets cold ties fade toward
 neutral (a grudge cools too) — the affinity twin of the standing leak, every kBondDecayPeriod ticks

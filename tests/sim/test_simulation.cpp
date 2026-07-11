@@ -1746,6 +1746,45 @@ TEST_CASE("a rescue forms a bond: the rescuer gains affinity toward the one it s
   REQUIRE(reg.try_get<eng::sim::Relationships>(player) == nullptr);  // the rescued forms no edge
 }
 
+TEST_CASE("a witnessed rescue earns admiration: onlookers bond to the rescuer", "[sim]") {
+  // The witnessed-event set, completed: a cruel strike spreads grudges and a KILL bonds onlookers
+  // to the killer (camaraderie) — now a RESCUE bonds onlookers to the rescuer too, the one heroism
+  // that used to go unseen. Reuses bond_witnesses, so the same kCamaraderieRadius (120) gates it: a
+  // near bystander admires the hero, a far one sees nothing.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{100.0f, 100.0f});
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Velocity>(player);
+  reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // down
+  const entt::entity rescuer = reg.create();
+  reg.emplace<eng::sim::Transform>(
+      rescuer, eng::Vec2{110.0f, 100.0f});  // 10 off -> within revive reach (20)
+  reg.emplace<eng::sim::Velocity>(rescuer);
+  reg.emplace<eng::sim::Stats>(rescuer);
+  reg.emplace<eng::sim::Npc>(rescuer);
+  const entt::entity near_by = reg.create();
+  reg.emplace<eng::sim::Transform>(
+      near_by, eng::Vec2{150.0f, 100.0f});  // 50 off: too far to rescue, near to SEE
+  reg.emplace<eng::sim::Stats>(near_by);
+  reg.emplace<eng::sim::Npc>(near_by);
+  const entt::entity far_by = reg.create();
+  reg.emplace<eng::sim::Transform>(far_by,
+                                   eng::Vec2{500.0f, 100.0f});  // 400 off: beyond the witness range
+  reg.emplace<eng::sim::Stats>(far_by);
+  reg.emplace<eng::sim::Npc>(far_by);
+
+  const eng::Vec2 centre{640.0f, 360.0f};
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // player goes Downed
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // rescuer in reach -> revive + admiration
+
+  REQUIRE_FALSE(reg.all_of<eng::sim::Downed>(player));  // the rescue landed...
+  REQUIRE(eng::sim::affinity_toward(reg, near_by, rescuer) >
+          0);  // ...the onlooker admires the hero...
+  REQUIRE(eng::sim::affinity_toward(reg, far_by, rescuer) ==
+          0);  // ...one too far off feels nothing
+}
+
 TEST_CASE("an idle colonist drifts toward a friend it has bonded with", "[sim]") {
   // The first reader of the seed: with no hero to rally to, an idle colonist gathers toward its
   // nearest positive-affinity friend (e.g. the player it rescued). Base bond radius is 220.
