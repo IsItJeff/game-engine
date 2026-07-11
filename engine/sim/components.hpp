@@ -459,6 +459,12 @@ struct Pickup {
 // AND a negative trait, nothing rolls pure-upside" — here a heavier swing hits harder but
 // slows you. The seed of the full P5 Equipment system (Item{def,quality,durability,traits},
 // multi-slot Equipment); one hardcoded def for now (design: "defs hardcoded first").
+// Full durability of a fresh weapon/armour — the value `equip` copies onto Equipped, and the cap
+// the hearth mends worn gear back toward (`mend_gear`). Named once so the struct default and the
+// repair cap are one source of truth and can never drift apart.
+inline constexpr float kWeaponMaxDurability = 40.0f;  // connecting hits a blade survives
+inline constexpr float kArmourMaxDurability = 30.0f;  // blows a plate absorbs (plate is frailer)
+
 struct Weapon {
   int strength_bonus = 4;      // + effective Strength while wielded (longer reach + harder hits)
   float move_penalty = 0.25f;  // the BANE: fraction of move speed lost while wielding (heft)
@@ -472,7 +478,7 @@ struct Weapon {
   // and the wielder is unarmed until it grabs another. It makes the item's tradeoff TEMPORAL — the
   // bane you pay for the buff is now "and it won't last forever". Placed last so existing
   // positional `Weapon{...}` initialisers keep their meaning.
-  float durability = 40.0f;
+  float durability = kWeaponMaxDurability;
 };
 
 // A dropped piece of ARMOUR — the first defensive item, the offense/defence counterpart of
@@ -486,7 +492,7 @@ struct Armour {
   // Weapon::durability. Each blow it softens wears it by 1, and at 0 the armour slot clears (the
   // wearer is bare again). Fewer than a blade's life (30 vs 40): plate takes the brunt in a swarm.
   // Placed last so existing positional `Armour{...}` initialisers keep their meaning.
-  float durability = 30.0f;
+  float durability = kArmourMaxDurability;
 };
 
 // The cached bonuses of everything a character is wearing — the design's EquipMods, folded ONCE

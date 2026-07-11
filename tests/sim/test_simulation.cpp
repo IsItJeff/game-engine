@@ -4181,6 +4181,32 @@ TEST_CASE("a wielded weapon slows the player (the heft bane)", "[sim]") {
   REQUIRE(armed < bare);  // heft: you trade speed for power
 }
 
+TEST_CASE("the hearth mends worn gear: durability climbs back by the fire", "[sim]") {
+  // The "repair later" the durability system promised. Durability used to only ever FALL (wear ->
+  // shatter); now the base MENDS it — a worn weapon regains durability while its bearer rests in a
+  // hearth's glow, capped at full, so gear is a managed resource (mend it at the fire) not a
+  // one-way trip to breaking. Out in the cold it stays worn; a full blade isn't over-repaired; an
+  // empty slot (durability 0 = no weapon) stays empty — the fire can't conjure gear.
+  const auto mended = [](float start_durability, bool near_hearth) {
+    entt::registry reg;
+    const entt::entity bearer = reg.create();
+    reg.emplace<eng::sim::Transform>(bearer, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Equipped>(bearer).weapon_durability = start_durability;  // a worn blade
+    if (near_hearth) {
+      const entt::entity hearth = reg.create();
+      reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{0.0f, 0.0f});  // right on the bearer
+      reg.emplace<eng::sim::Hearth>(hearth, eng::sim::Hearth{50.0f});   // radius covers it
+    }
+    for (int i = 0; i < 60; ++i) eng::sim::mend_gear(reg, 1.0f / 60.0f);  // one second by the fire
+    return reg.get<eng::sim::Equipped>(bearer).weapon_durability;
+  };
+  REQUIRE(mended(10.0f, true) > 10.0f);            // a worn blade mends by the fire...
+  REQUIRE(mended(10.0f, false) == Approx(10.0f));  // ...but not out in the cold
+  REQUIRE(mended(eng::sim::kWeaponMaxDurability, true) ==
+          Approx(eng::sim::kWeaponMaxDurability));  // a full blade isn't over-repaired past new
+  REQUIRE(mended(0.0f, true) == Approx(0.0f));      // an empty slot stays empty (no gear to mend)
+}
+
 TEST_CASE("a weapon wears with use and shatters: durability reverts the wielder to unarmed",
           "[sim]") {
   // The design's "durability now, repair later" — a connecting hit on a hostile dulls the blade by

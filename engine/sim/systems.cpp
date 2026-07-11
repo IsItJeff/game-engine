@@ -826,6 +826,31 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   }
 }
 
+void mend_gear(entt::registry& reg, float dt) {
+  // The base MENDS your kit: worn weapons and armour slowly regain durability while their bearer
+  // stands in a Hearth's warmth — the "repair later" the durability comment promised, and the FIRST
+  // way durability climbs instead of only wearing toward a shatter. So gear is a MANAGED resource
+  // now (fight -> it wears -> mend it at the fire), not a one-way trip to breaking. Shares
+  // in_a_hearth with the heal/stamina boosts and the creature-ward, so "mended by the fire" is the
+  // exact reach that heals, rests, and hides. Only a WORN slot (0 < durability < max) mends: a full
+  // slot is capped (no over-repair past new) and an EMPTY slot (durability 0 = no weapon/armour) is
+  // left alone — the fire can't conjure gear from nothing, only maintain what you carry. No hearth
+  // in reach -> untouched, so a hearthless world is bit-identical. Pure float, no RNG.
+  constexpr float kMendPerSecond = 0.5f;  // durability points the fire restores per second (a knob)
+  for (const entt::entity e : reg.view<Equipped, Transform>()) {
+    if (!in_a_hearth(reg, reg.get<Transform>(e).position)) continue;
+    Equipped& eq = reg.get<Equipped>(e);
+    if (eq.weapon_durability > 0.0f && eq.weapon_durability < kWeaponMaxDurability) {
+      eq.weapon_durability += kMendPerSecond * dt;
+      if (eq.weapon_durability > kWeaponMaxDurability) eq.weapon_durability = kWeaponMaxDurability;
+    }
+    if (eq.armour_durability > 0.0f && eq.armour_durability < kArmourMaxDurability) {
+      eq.armour_durability += kMendPerSecond * dt;
+      if (eq.armour_durability > kArmourMaxDurability) eq.armour_durability = kArmourMaxDurability;
+    }
+  }
+}
+
 void update_stamina(entt::registry& reg, float dt) {
   // Cost of moving, in stamina per second. Higher than stamina's own regen rate
   // so movement is a real drain. Tuning knob: raise it and you tire faster.

@@ -116,6 +116,13 @@ radius the same `kHearthStaminaBoost` (2×) on its stamina recovery, so the hear
 boost and the armour bane (a plated rester still recovers faster by the fire than in the open), and
 like the health boost it's `×1` with no hearth in reach, so a hearthless world is bit-identical.
 
+The fire mends your **gear**, not just your body: `mend_gear` slowly restores the durability of a worn
+weapon or plate while its bearer rests in the same glow (`in_a_hearth`, capped at full). So durability
+no longer only falls toward a shatter — the base is where you **maintain your kit** (fight → it wears
+→ fall back and mend), the equipment side of the hearth as a recovery hub. Only a *worn* slot mends
+(a full one is capped, an empty one stays empty — the fire can't conjure gear), and with no hearth in
+reach it's a no-op, so a hearthless world is bit-identical (see [combat](combat.md) for durability and the shatter it staves off).
+
 The same discipline now covers your **second wind**: `update_stamina` skips its resting recovery
 while `hunger <= 0` **or** `water <= 0`, so survival failure drains your stamina reserves too, not
 just your health. Composed with the empty-bar crawl below, this is the design's *escalating
@@ -284,7 +291,7 @@ here.
 ## Key files
 
 - `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `need_efficiency` (the empty-Need debuff: softer hits *and* slower steps) and its presentation twin `need_pallor`, `WaterSource`, `FoodSource`, `Hearth`, `Hazard`, and the `Npc` marker.
-- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `graze` (the regrowing food plots), `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `mend_gear` (the hearth repairs worn weapon/armour durability), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `graze` (the regrowing food plots), `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
 - `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the wandering NPCs, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
 - `game/app/main.cpp` — the health, stamina, hunger, and water bars and the "NPCs alive" counter in the debug panel, plus the `need_pallor` sallow-dot cue in `draw_entities`; `world.cpp`'s `make_water_source` places the pond and `make_hearth` the hearth.
 - `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, hunger/starvation/eating, the `need_efficiency` debuff (a starving fighter hits softer *and* trudges slower) and its `need_pallor` visual twin, and permadeath tests.

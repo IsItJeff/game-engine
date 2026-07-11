@@ -407,8 +407,12 @@ shattered colonist re-seek and re-grab a fresh blade — the player and NPCs re-
 alongside stays put; only the weapon pair clears). So the item's tradeoff isn't only *spatial*
 (power vs. speed) but
 **temporal**: a looted blade is a *consumable* you cycle through, not a permanent upgrade — the
-design's *"durability now, wear/repair later"* (repair and reforge are a later ring; for now you
-scavenge a fresh one from the next brute). Only a real hit on a hostile wears it — the same scope
+design's *"durability now, repair later"*. And **repair** has now landed: durability no longer only
+falls. A worn weapon (or plate) **mends** — slowly regaining durability — while its bearer rests in a
+`Hearth`'s glow (`mend_gear`, capped at full, sharing the fire's `in_a_hearth` reach with its heal /
+stamina / ward), so gear is a **managed** resource — fight until it's worn, fall back to the base to
+mend it, or scavenge a fresh one from the next brute — not a one-way trip to breaking. (Reforge is
+still a later ring.) Only a real hit on a hostile wears it — the same scope
 `venom`/`execute`/`cleave` use — so swatting a mote (training) or the effect-less cruel strike don't,
 and a bare hand never does. A fresh blade is bit-identical until it actually breaks.
 

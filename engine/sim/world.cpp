@@ -424,6 +424,7 @@ void World::step() {
   graze(registry_, dt);  // ...and in a food plot refills hunger (the plot regrows/depletes)
   npc_equip(registry_);  // unarmed NPCs wield a dropped weapon they've reached
   regenerate_vitals(registry_, dt);
+  mend_gear(registry_, dt);   // ...and the fire mends worn weapons/armour of anyone resting by it
   decay_standing(registry_);  // reputations leak toward neutral over time (redemption/corruption)
   decay_bonds(
       registry_);  // ...and casual ties cool the same way (deep Partner/Nemesis latches hold)
