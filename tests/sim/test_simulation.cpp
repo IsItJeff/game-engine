@@ -3993,6 +3993,33 @@ TEST_CASE("a venomous creature's bite leaves the victim poisoned; a plain one do
   REQUIRE_FALSE(poisoned_after_bite(0.0f, false));  // ...a non-venomous bite leaves no venom
 }
 
+TEST_CASE("a weaker venom bite never downgrades a stronger poison already in the blood", "[sim]") {
+  // apply_venom (re)applies venom by REFRESHING the clock but keeping the WORST potency — max, not
+  // overwrite — so a weak second bite can't dilute a strong venom you're already carrying, while a
+  // stronger bite still upgrades it. (The old per-site code overwrote, silently downgrading. A
+  // first bite from a clean victim is max(0, dps) = dps, so single-bite poison is unchanged.)
+  const auto dps_after_bite = [](float existing, float bite) {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);
+    reg.emplace<eng::sim::Attributes>(victim);  // Dexterity 1 -> never dodges, so the bite lands
+    reg.emplace<eng::sim::PlayerControlled>(victim);
+    reg.emplace<eng::sim::Poisoned>(victim,
+                                    eng::sim::Poisoned{1.0f, existing});  // already envenomed
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});  // in contact
+    reg.emplace<eng::sim::Enemy>(foe).poison_per_second = bite;
+
+    std::mt19937 rng{1234};
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return reg.get<eng::sim::Poisoned>(victim).damage_per_second;
+  };
+  REQUIRE(dps_after_bite(20.0f, 9.0f) ==
+          Approx(20.0f));  // a weak bite can't dilute a strong venom...
+  REQUIRE(dps_after_bite(5.0f, 9.0f) == Approx(9.0f));  // ...but a stronger one upgrades it
+}
+
 TEST_CASE("poison suppresses healing, so venom nets health strictly down", "[sim]") {
   // Venom gates regen (regenerate_vitals skips a poisoned entity), so even a high-regen character
   // LOSES health while poisoned instead of out-healing the chip — the same gate starvation uses,

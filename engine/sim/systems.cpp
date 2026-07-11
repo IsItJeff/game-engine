@@ -1611,6 +1611,21 @@ void remove_equipped_if_empty(entt::registry& reg, entt::entity e, const Equippe
     reg.remove<Equipped>(e);
   }
 }
+
+// (Re)apply venom to `target`, shared by all THREE venom sources (a venom weapon's hit, a venom
+// spit's impact, a venomous creature's bite) so they can't drift. A fresh bite always REFRESHES the
+// clock to full, but it keeps the WORST potency in the blood: `dps` only raises the existing
+// damage_per_second, never lowers it — so a WEAKER second bite can't dilute a stronger poison
+// you're already carrying (max, not overwrite; the old per-site code overwrote, silently
+// downgrading). A FIRST bite starts from a default Poisoned (dps 0), so max(0, dps) = dps and
+// single-bite poison is unchanged. get_or_emplace is safe mid-iteration at every site (Poisoned is
+// in none of their views).
+void apply_venom(entt::registry& reg, entt::entity target, float dps) {
+  Poisoned& venom = reg.get_or_emplace<Poisoned>(target);
+  venom.remaining = kPoisonDuration;  // any bite re-ups the clock
+  if (dps > venom.damage_per_second)
+    venom.damage_per_second = dps;  // ...never downgrade the potency
+}
 }  // namespace
 
 entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt19937& rng) {
@@ -1863,14 +1878,10 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       }
     }
     // A VENOM weapon's hit also ENVENOMS the foe — the player-side mirror of a swarmer's bite,
-    // reusing Poisoned + tick_poison (and the same kPoisonDuration). Only a venomous blade
-    // (gear->weapon_venom > 0) does this, so a bare-handed or plain-weapon swing is unchanged;
-    // refreshed on each hit. `gear` is the wielder's Equipped fetched at the top of the function.
-    if (gear != nullptr && gear->weapon_venom > 0.0f) {
-      Poisoned& venom = reg.get_or_emplace<Poisoned>(target);
-      venom.remaining = kPoisonDuration;
-      venom.damage_per_second = gear->weapon_venom;
-    }
+    // reusing Poisoned + tick_poison via the shared apply_venom (refresh the clock, keep the worst
+    // potency). Only a venomous blade (gear->weapon_venom > 0) does this, so a bare-handed or
+    // plain-weapon swing is unchanged. `gear` is the wielder's Equipped fetched at the top.
+    if (gear != nullptr && gear->weapon_venom > 0.0f) apply_venom(reg, target, gear->weapon_venom);
   }
 
   // CLEAVE: a wide swing catches a SECOND foe. The nearest OTHER Enemy within kCleaveRadius of the
@@ -2032,15 +2043,10 @@ void advance_projectiles(entt::registry& reg, float dt) {
         if (st->health.current < 0.0f) st->health.current = 0.0f;
         stamp_flash(reg, p.target);
         // A VENOM spit ENVENOMS its target — the ranged echo of a swarmer's bite, reusing Poisoned
-        // + tick_poison (and kPoisonDuration). Only a venom-carrying shot does this; the player's
-        // plain throw carries poison 0, so it stays unchanged. get_or_emplace is safe here
-        // (Poisoned is in no view this loop walks). Harmless on a just-felled target, like the
-        // venom weapon.
-        if (p.poison_per_second > 0.0f) {
-          Poisoned& venom = reg.get_or_emplace<Poisoned>(p.target);
-          venom.remaining = kPoisonDuration;
-          venom.damage_per_second = p.poison_per_second;
-        }
+        // + tick_poison via the shared apply_venom (refresh the clock, keep the worst potency).
+        // Only a venom-carrying shot does this; the player's plain throw carries poison 0, so it
+        // stays unchanged. Harmless on a just-felled target, like the venom weapon.
+        if (p.poison_per_second > 0.0f) apply_venom(reg, p.target, p.poison_per_second);
         // Valor is for felling a HOSTILE, so credit it only when the shot killed an Enemy (a
         // player's throw). A creature's spit homes on a PERSON, so this guard keeps a spitter from
         // ever earning Valor for killing a colonist (creatures have no morality anyway).
@@ -2852,16 +2858,11 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       train_on_damage(reg, p, applied);  // enduring a creature's blow toughens the victim
       stamp_flash(reg, p);               // the struck victim blinks white
 
-      // A venomous archetype's landed blow LINGERS: (re)apply Poisoned so the venom keeps chipping
-      // after the swarm moves on — the reason a fast swarm is scary to disengage from. Refreshed on
-      // each fresh bite. get_or_emplace is safe mid-iteration (Poisoned isn't in the prey view).
-      // Non-venomous creatures (poison_per_second 0) skip this, so an unpoisoned world is
-      // unchanged.
-      if (enemy.poison_per_second > 0.0f) {
-        Poisoned& venom = reg.get_or_emplace<Poisoned>(p);
-        venom.remaining = kPoisonDuration;
-        venom.damage_per_second = enemy.poison_per_second;
-      }
+      // A venomous archetype's landed blow LINGERS: (re)apply Poisoned via the shared apply_venom
+      // so the venom keeps chipping after the swarm moves on — the reason a fast swarm is scary to
+      // disengage from (refresh the clock, keep the worst potency). Non-venomous creatures
+      // (poison_per_second 0) skip this, so an unpoisoned world is unchanged.
+      if (enemy.poison_per_second > 0.0f) apply_venom(reg, p, enemy.poison_per_second);
 
       // ARMOUR WEAR: the plate that just softened this blow (defence_of above) wears by one — the
       // defensive twin of a blade dulling on a swing. At 0 it SHATTERS: the armour slot clears and

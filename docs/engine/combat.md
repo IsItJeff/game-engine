@@ -169,7 +169,10 @@ envenoming spit from a distance you can't melee. (A slow, heavily-plated **senti
   blunt it is **hardiness**: `tick_poison` shaves the chip by the victim's **VIT** (5% per Endurance
   level past 1, capped at 75% — venom always bites at least a quarter), the DoT counterpart of how VIT
   softens a *blow* (`defence_of`) — so a tough constitution shrugs off both a hit and a poison, on top
-  of its bigger HP **pool**. Refreshed on each fresh bite, reaped when it wears off, and cleared by a revive
+  of its bigger HP **pool**. A fresh bite **refreshes** the clock but keeps the **worst potency** in the
+  blood — `apply_venom` (shared by all three venom sources) takes the *max* dose, never overwriting,
+  so a *weaker* second bite can't dilute a strong venom you're already carrying (a first bite still
+  sets the dose from nothing). Reaped when it wears off, and cleared by a revive
   (no lethal status survives being hauled up). Any victim, player or NPC (parity); brutes/sentinels
   leave it `0`. And **enduring** venom *trains* you: each poison tick builds a **Resistance** skill →
   **Endurance** (see [progression](progression.md)), the poison twin of Toughness (a survived *blow* →
