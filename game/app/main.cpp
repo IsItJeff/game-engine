@@ -140,6 +140,20 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     if (world.registry().all_of<eng::sim::Blocking>(e)) {
       dl->AddCircle(ImVec2{p.x, p.y}, radius + 3.0f, IM_COL32(150, 205, 255, 255), 0, 2.0f);
     }
+
+    // A DOWNED entity reads on the FIELD, not just the panel: a crumpled, helpless body an ally can
+    // still haul up. It gets a pale beacon RING — a "someone's down here, come rescue them" halo,
+    // the field twin of the panel's "Downed!" callout and the cue that lets you SEE who to run to
+    // (the rescue-seek rung, the graded rescue reach, the mutual bond a save forms). The dot itself
+    // is dimmed to an ember — a downed body is at 0 health, which wounded_brightness darkens to its
+    // kWoundedFloor — so a pale halo around a dim husk is an unmistakable read. Distinct from the
+    // steel-blue guard ring in hue, and the two never coincide (handle_deaths strips Blocking the
+    // instant it downs you). Presentation-only: reads Downed, never sets it; optional, so all_of
+    // guards it. Only players go Downed today (NPCs permadie), so this shows on a fallen player —
+    // and, in co-op, on any teammate you might revive.
+    if (world.registry().all_of<eng::sim::Downed>(e)) {
+      dl->AddCircle(ImVec2{p.x, p.y}, radius + 4.0f, IM_COL32(230, 230, 235, 220), 0, 2.0f);
+    }
   }
 }
 
