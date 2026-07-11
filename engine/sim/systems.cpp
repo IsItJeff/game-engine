@@ -1043,6 +1043,8 @@ Attribute& attr_ref(Attributes& a, AttrId id) {
       return a.luck;
     case AttrId::Wisdom:
       return a.wisdom;
+    case AttrId::Charisma:
+      return a.charisma;
   }
   return a.endurance;  // unreachable (switch is exhaustive) — silences control-reaches-end
 }
@@ -1073,6 +1075,11 @@ const SkillDef& skill_def(SkillId id) {
   // Foraging is Scavenging's food-plot twin: a gathering skill, but WISDOM-led (nature knowledge)
   // where Scavenging is Luck-led (fortune). Main-only, no contributors — the first WIS skill.
   static const SkillDef kForaging{AttrId::Wisdom, {}};
+  // Leadership is the first CHARISMA skill — the social twin of the combat skills: where Striking
+  // builds Strength by hitting, Leadership builds Charisma by *inspiring* (felling a foe while
+  // allies watch, bond_witnesses). Main-only, no contributors — a pure social strand, off the
+  // fighter tree.
+  static const SkillDef kLeadership{AttrId::Charisma, {}};
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -1090,6 +1097,8 @@ const SkillDef& skill_def(SkillId id) {
       return kThrowing;
     case SkillId::Foraging:
       return kForaging;
+    case SkillId::Leadership:
+      return kLeadership;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -1165,6 +1174,7 @@ void advance_progression(entt::registry& reg) {
     apply_levels(attrs.dexterity.level, attrs.dexterity.xp);  // fed by Evasion at the dodge site
     apply_levels(attrs.luck.level, attrs.luck.xp);            // fed by Scavenging at the loot site
     apply_levels(attrs.wisdom.level, attrs.wisdom.xp);        // fed by Foraging at the graze site
+    apply_levels(attrs.charisma.level, attrs.charisma.xp);    // fed by Leadership at bond_witnesses
     apply_levels(character.level, character.xp);
 
     // 3. Attributes shape derived stats: each Endurance level past the first adds to
@@ -1269,10 +1279,46 @@ float crit_chance(int luck_level) {
 // is safe at the kill site even though npc_attack calls perform_attack mid-iteration (same reason
 // the rescue bond and cruelty grudge are safe). Draws no RNG.
 void bond_witnesses(entt::registry& reg, entt::entity killer, Vec2 killer_pos) {
+  // CHARISMA — a charismatic champion inspires MORE devotion per shared victory. The killer's
+  // Charisma scales the camaraderie each witness feels: kCamaraderieAffinity grows by
+  // (1 + (CHA - 1) * kDevotionPerCharisma), capped at kDevotionCap (the ×2 ceiling the dodge/crit/
+  // awareness knobs use). CHA 1 — the spawn default, and any killer with no Attributes — is ×1, so
+  // every pre-Charisma camaraderie test is byte-identical. Read once here (nullable), before the
+  // witness loop; no RNG, pure float→int8.
+  constexpr float kDevotionPerCharisma = 0.1f;  // each Charisma level past 1 adds 10% devotion...
+  constexpr float kDevotionCap = 2.0f;          // ...up to double, then it plateaus (a knob)
+  Attributes* kattrs = reg.try_get<Attributes>(killer);  // also the sheet Leadership trains below
+  float devotion = 1.0f;
+  if (kattrs != nullptr) {
+    devotion += static_cast<float>(kattrs->charisma.level - 1) * kDevotionPerCharisma;
+    if (devotion > kDevotionCap) devotion = kDevotionCap;
+  }
+  const auto bond = static_cast<std::int8_t>(static_cast<float>(kCamaraderieAffinity) * devotion);
+
+  int witnessed = 0;
   for (const entt::entity w : reg.view<Npc, Transform>(entt::exclude<Downed>)) {
     if (w == killer) continue;  // you don't bond with yourself for your own kill
     if (glm::distance(reg.get<Transform>(w).position, killer_pos) > kCamaraderieRadius) continue;
-    nudge_affinity(reg, w, killer, kCamaraderieAffinity);
+    nudge_affinity(reg, w, killer, bond);
+    ++witnessed;
+  }
+
+  // LEADERSHIP — leading, felling a foe with allies WATCHING, trains the killer's Leadership skill,
+  // which raises Charisma. So devotion COMPOUNDS: lead more → higher CHA → deeper bonds next time —
+  // the social mirror of a striker building Strength by hitting. Trained only when at least one
+  // ally saw it (a kill alone in a corner builds Striking, not a following), so `witnessed > 0`
+  // gates the grant — which also keeps every LONE-kill test bit-identical (no witnesses → no XP).
+  // Flows through the one grant funnel (skill + main attribute + a drip to the character level);
+  // the grant runs AFTER the witness loop, so mutating the killer's Skills/Attributes can't disturb
+  // the view above. A person kill always has Skills+Attributes (perform_attack requires them), but
+  // guard cheaply.
+  if (witnessed > 0 && kattrs != nullptr) {
+    if (Skills* ks = reg.try_get<Skills>(killer); ks != nullptr) {
+      const Fixed kLeadershipPerKill =
+          Fixed::from_int(10);  // a witnessed kill, same grant as a hit
+      grant_skill_xp(*ks, *kattrs, SkillId::Leadership, kLeadershipPerKill,
+                     reg.try_get<CharacterLevel>(killer));
+    }
   }
 }
 

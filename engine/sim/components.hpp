@@ -657,6 +657,7 @@ enum class SkillId : std::uint16_t {
   Scavenging,    // trained by collecting loot; main attribute Luck (fortune -> crit)
   Throwing,      // trained by landing a ranged throw; main attribute Dexterity (aim), a little STR
   Foraging,      // trained by grazing a food plot; main attribute Wisdom (the first WIS skill)
+  Leadership,    // trained by felling a foe with allies watching; main attribute Charisma (social)
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
@@ -699,9 +700,14 @@ struct Attributes {
   Attribute strength;   // fed by Striking; each level past 1 lengthens attack reach + damage
   Attribute dexterity;  // fed by Evasion + Striking; each level past 1 raises the dodge chance
   Attribute luck;       // fed by Scavenging; each level past 1 raises the chance to crit a strike
-  Attribute wisdom;  // fed by Foraging; each level past 1 raises how much a food plot yields. The
-                     // first of the design's NON-combat attributes (nature/foraging), so it does
-                     // not feed the pools or a fighter build — it grows the survival economy.
+  Attribute wisdom;    // fed by Foraging; each level past 1 raises how much a food plot yields. The
+                       // first of the design's NON-combat attributes (nature/foraging), so it does
+                       // not feed the pools or a fighter build — it grows the survival economy.
+  Attribute charisma;  // fed by Leadership; the design's SOCIAL attribute. Each level past 1
+                       // deepens the CAMARADERIE a witness feels toward this character per shared
+                       // victory (bond_witnesses) — a charismatic champion inspires more devotion.
+                       // The second non-combat attribute (social), so like Wisdom it grows neither
+                       // the pools nor a fighter build — it grows the colony's bonds instead.
 };
 
 // A BUILD-derived title — the "from build" half of the derived recognition the `standing_title`
@@ -735,7 +741,7 @@ inline const char* build_title(const Attributes& attrs) {
 // (a skill's XP flows to its MAIN attribute a lot, and to each CONTRIBUTOR a little). An
 // enum, not a member pointer, keeps the defs plain data — the shape mods will add rows to.
 // New attributes append here (and get a case in `attr_ref`, guarded by -Wswitch).
-enum class AttrId : std::uint8_t { Endurance, Strength, Dexterity, Luck, Wisdom };
+enum class AttrId : std::uint8_t { Endurance, Strength, Dexterity, Luck, Wisdom, Charisma };
 
 // A single global "how experienced overall" level, fed by a fraction of ALL
 // activity (not one skill). Its level is a gentle multiplier — via the same POWER

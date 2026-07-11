@@ -195,6 +195,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
                 attr->strength.level - 1);  // from attacking; longer reach + harder hits
     ImGui::Text("wisdom: %d",
                 attr->wisdom.level - 1);  // from foraging; more forage yield + wider danger sense
+    ImGui::Text(
+        "charisma: %d",
+        attr->charisma.level - 1);  // from leading kills; more devotion from those who watch
   }
   // Gear: a wielded weapon and/or worn armour fold into Equipped, each with its own bane.
   // Show only the slots that are actually filled so the tradeoffs are legible (and an
