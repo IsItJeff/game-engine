@@ -4792,6 +4792,44 @@ TEST_CASE("equipping a venom weapon folds its venom into the wielder", "[sim]") 
   REQUIRE(eq->weapon_venom == Approx(6.0f));  // the venom folded into the wielder's cache
 }
 
+TEST_CASE("item quality scales the equipped boon but not the bane: a finer blade hits harder",
+          "[sim]") {
+  // The quality seam (the item-tier axis): equip folds the BOON scaled by the item's quality, while
+  // the BANE stays full — shrinking the bane is the ORTHOGONAL STR/VIT mastery. So a quality-2.0
+  // blade folds in DOUBLE the +Strength (and a quality-2.0 plate double the +defence), while heft /
+  // stamina-regen are untouched. Baseline 1.0 (every item spawned today) folds the exact old value,
+  // so the pre-quality world is bit-identical.
+  const auto equip_weapon = [](float quality) {
+    entt::registry reg;
+    const entt::entity wearer = reg.create();
+    reg.emplace<eng::sim::Transform>(wearer, eng::Vec2{0.0f, 0.0f});
+    const entt::entity blade = reg.create();
+    reg.emplace<eng::sim::Transform>(blade, eng::Vec2{0.0f, 0.0f});  // on the wearer -> in reach
+    reg.emplace<eng::sim::Weapon>(blade).quality = quality;  // strength_bonus 4, move_penalty 0.25
+    eng::sim::equip_nearest_gear(reg, wearer);
+    return reg.get<eng::sim::Equipped>(wearer);
+  };
+  REQUIRE(equip_weapon(1.0f).strength_bonus == 4);  // baseline -> the item's +4 (bit-identical)
+  const eng::sim::Equipped fine = equip_weapon(2.0f);
+  REQUIRE(fine.strength_bonus == 8);            // quality 2.0 -> DOUBLE the boon...
+  REQUIRE(fine.move_penalty == Approx(0.25f));  // ...but the heft bane is UNSCALED (full)
+
+  const auto equip_armour = [](float quality) {
+    entt::registry reg;
+    const entt::entity wearer = reg.create();
+    reg.emplace<eng::sim::Transform>(wearer, eng::Vec2{0.0f, 0.0f});
+    const entt::entity plate = reg.create();
+    reg.emplace<eng::sim::Transform>(plate, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Armour>(plate).quality =
+        quality;  // defence 6, stamina_regen_penalty 0.30
+    eng::sim::equip_nearest_gear(reg, wearer);
+    return reg.get<eng::sim::Equipped>(wearer);
+  };
+  const eng::sim::Equipped plate = equip_armour(2.0f);
+  REQUIRE(plate.defence_bonus == Approx(12.0f));          // quality 2.0 -> double the defence...
+  REQUIRE(plate.stamina_regen_penalty == Approx(0.30f));  // ...bane unscaled
+}
+
 TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
   // The loot economy, keyed on DropKind and resolving independently: a brute yields raw OFFENCE (a
   // steel weapon), a swarmer SUSTAIN (a health orb), a sentinel DEFENCE (armour), and a spitter a

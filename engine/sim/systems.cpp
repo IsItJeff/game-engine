@@ -2242,13 +2242,19 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
   Equipped& eq = reg.get_or_emplace<Equipped>(wearer);  // keep the other slot; write only this one
   if (nearest_is_weapon) {
     const Weapon& wpn = weapons.get<Weapon>(nearest);
-    eq.strength_bonus = wpn.strength_bonus;
+    // QUALITY scales the BOON only: a finer blade folds in more +Strength, a crude one less; the
+    // BANE (heft) below stays full. quality 1.0 (every blade spawned today) -> the exact old value,
+    // so this is bit-identical. ponytail: the int truncation (e.g. +4 at q1.25 -> int(5.0) = 5, but
+    // +4 at q1.1 -> int(4.4) = 4) means fractional quality on a small bonus can round away — a
+    // named ceiling; swap to std::lround if fine-grained tiers ever need it.
+    eq.strength_bonus = static_cast<int>(static_cast<float>(wpn.strength_bonus) * wpn.quality);
     eq.move_penalty = wpn.move_penalty;
     eq.weapon_venom = wpn.venom_per_second;  // a venom blade folds its proc in with its other stats
     eq.weapon_durability = wpn.durability;  // a fresh blade starts with its full life; hits wear it
   } else {
     const Armour& arm = armours.get<Armour>(nearest);
-    eq.defence_bonus = arm.defence_bonus;
+    eq.defence_bonus =
+        arm.defence_bonus * arm.quality;  // finer plate softens more; bane stays full
     eq.stamina_regen_penalty = arm.stamina_regen_penalty;
     eq.armour_durability = arm.durability;  // fresh plate starts with its full life; blows wear it
   }
