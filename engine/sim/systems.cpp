@@ -603,12 +603,28 @@ void chase_prey(entt::registry& reg) {
     }
     if (target == entt::null) continue;  // nobody left to hunt — keep drifting
 
+    // A WOUNDED creature LIMPS: below kLimpThreshold of its HP — the SAME 0.3 fraction the enrage
+    // rung uses — it chases at kLimpMoveScale, the creature-side mirror of the player's exhaustion
+    // crawl. So the sub-30% band is a sharp risk/reward from BOTH sides: a cornered beast RAGES
+    // (enrage, harder hits) yet STRUGGLES to move (this), so you commit to the finish or KITE the
+    // limping brute. Reads its OWN health (every creature carries Stats, like enrage), pure sim (no
+    // RNG). A full-HP creature is unchanged -> bit-identical (the common case and every chase
+    // test).
+    constexpr float kLimpThreshold = 0.3f;  // below this fraction of its HP a creature limps...
+    constexpr float kLimpMoveScale = 0.6f;  // ...and chases at this fraction of its speed (knobs)
+    float chase_scale = 1.0f;
+    if (const Stats* cs = reg.try_get<Stats>(c);
+        cs != nullptr && cs->health.current < cs->health.max * kLimpThreshold) {
+      chase_scale = kLimpMoveScale;
+    }
+
     // Home in at its OWN chase_speed — a brute lumbers, a swarmer sprints. All are slower
     // than the player's 320 top speed, so a fight is always kite-able.
     const Vec2 toward = prey.get<Transform>(target).position - c_pos;
     const float len = glm::length(toward);
     if (len > 0.0f)
-      creatures.get<Velocity>(c).value = (toward / len) * creatures.get<Enemy>(c).chase_speed;
+      creatures.get<Velocity>(c).value =
+          (toward / len) * creatures.get<Enemy>(c).chase_speed * chase_scale;
   }
 }
 

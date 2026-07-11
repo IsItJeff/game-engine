@@ -4342,6 +4342,28 @@ TEST_CASE("creatures chase at their own speed (brute vs swarmer)", "[sim]") {
   REQUIRE(glm::length(reg.get<eng::sim::Velocity>(fast).value) == Approx(140.0f));
 }
 
+TEST_CASE("a wounded creature limps: low HP slows its chase", "[sim]") {
+  // The creature-side mirror of the player's exhaustion crawl — below 30% of its HP a creature
+  // chases at kLimpMoveScale (it struggles), so a worn-down brute can be KITED even as it enrages.
+  // A healthy creature chases at full speed, which is why the chase-speed test above (whose
+  // creatures carry no Stats, so the limp check is skipped) stays bit-identical.
+  const auto chase_speed = [](float hp_fraction) {
+    entt::registry reg;
+    const entt::entity person = reg.create();
+    reg.emplace<eng::sim::Transform>(person, eng::Vec2{100.0f, 0.0f});  // prey to the +x
+    reg.emplace<eng::sim::Stats>(person);
+    const entt::entity creature = reg.create();
+    reg.emplace<eng::sim::Transform>(creature, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(creature);
+    reg.emplace<eng::sim::Enemy>(creature).chase_speed = 100.0f;
+    reg.emplace<eng::sim::Stats>(creature, eng::sim::Vital{hp_fraction * 100.0f, 100.0f, 0.0f});
+    eng::sim::chase_prey(reg);
+    return glm::length(reg.get<eng::sim::Velocity>(creature).value);
+  };
+  REQUIRE(chase_speed(1.0f) == Approx(100.0f));  // full HP -> its full chase_speed...
+  REQUIRE(chase_speed(0.2f) == Approx(60.0f));   // ...20% HP (< 30%) -> limps at 0.6x
+}
+
 TEST_CASE("a creature chases the nearest person, player or NPC", "[sim]") {
   entt::registry reg;
   // A player far to the right; an NPC close above; a creature at the origin.
