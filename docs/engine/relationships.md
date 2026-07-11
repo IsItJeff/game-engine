@@ -94,12 +94,16 @@ onlookers **admire the hero** (witness → rescuer), exactly as they warm to a k
 witnessed-event set is now symmetric: a cruel strike spreads grudges, and a kill *and* a rescue both
 spread bonds — the one heroism that used to go unseen no longer does.
 
-How *much* devotion a witnessed heroic act — a kill *or* a rescue — earns is scaled by the hero's
-**Charisma** (see [progression](progression.md)): `kCamaraderieAffinity` grows by `1 + (CHA − 1) × 0.1`,
-capped at ×2, so a **charismatic champion** inspires a deeper bond than a plain one — and because
+A witnessed heroic act — a kill *or* a rescue — is scaled by the hero's **Charisma** (see
+[progression](progression.md)) in **two** ways. *How much* devotion each witness feels:
+`kCamaraderieAffinity` grows by `1 + (CHA − 1) × 0.1`, capped at ×2, so a **charismatic champion**
+inspires a deeper bond than a plain one. *How far* the deed is witnessed: `kCamaraderieRadius` grows
+by `1 + (CHA − 1) × 0.05`, capped at ×1.5, so a charismatic hero's heroism reaches a **wider ring**
+of onlookers (a gentler cap than the depth, since the radius grows the witnessed area quadratically).
+So a charismatic champion inspires **more onlookers, each more deeply** — and because
 leading those acts *trains* Charisma (kills and rescues alike, through the shared `bond_witnesses`),
-the effect **compounds** (lead more → higher CHA → allies bond harder). At CHA 1 (the spawn default)
-it is exactly ×1, so the pre-Charisma world is byte-identical.
+the effect **compounds** (lead more → higher CHA → allies bond harder *and* from farther). At CHA 1
+(the spawn default) both are exactly ×1, so the pre-Charisma world is byte-identical.
 
 The affinity is **read two ways** — a positive draw and a negative repulsion, the two faces of a
 tie:

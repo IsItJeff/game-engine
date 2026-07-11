@@ -1445,10 +1445,27 @@ void bond_witnesses(entt::registry& reg, entt::entity killer, Vec2 killer_pos) {
   }
   const auto bond = static_cast<std::int8_t>(static_cast<float>(kCamaraderieAffinity) * devotion);
 
+  // CHARISMA also widens the REACH: a charismatic champion's deeds are SEEN and admired from
+  // FARTHER, so its heroism inspires onlookers a wider ring away — the "presence" half of Charisma
+  // beside the "devotion" depth above (the design's Charisma compounds — more people, more deeply).
+  // Reuses the same nullable `kattrs`; each level past 1 widens the camaraderie radius by
+  // kReachPerCharisma, capped at kReachCap — a GENTLER ceiling than devotion's ×2, because a radius
+  // grows the witnessed AREA quadratically (×1.5 reach is already ~×2.25 area). CHA 1 — the spawn
+  // default, and any killer with no Attributes — is ×1, so the base radius holds and every
+  // pre-Charisma camaraderie test is byte-identical. Pure float, no RNG.
+  constexpr float kReachPerCharisma = 0.05f;  // each Charisma level past 1 widens the reach 5%...
+  constexpr float kReachCap = 1.5f;  // ...up to ×1.5 (area ~×2.25), then plateaus (a knob)
+  float reach = 1.0f;
+  if (kattrs != nullptr) {
+    reach += static_cast<float>(kattrs->charisma.level - 1) * kReachPerCharisma;
+    if (reach > kReachCap) reach = kReachCap;
+  }
+  const float camaraderie_radius = kCamaraderieRadius * reach;
+
   int witnessed = 0;
   for (const entt::entity w : reg.view<Npc, Transform>(entt::exclude<Downed>)) {
     if (w == killer) continue;  // you don't bond with yourself for your own kill
-    if (glm::distance(reg.get<Transform>(w).position, killer_pos) > kCamaraderieRadius) continue;
+    if (glm::distance(reg.get<Transform>(w).position, killer_pos) > camaraderie_radius) continue;
     nudge_affinity(reg, w, killer, bond);
     ++witnessed;
   }
