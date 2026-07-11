@@ -58,11 +58,17 @@ struct Command {
   // blows but slows you (see Blocking). Sent every tick alongside the move direction, so it lasts
   // exactly as long as the key is held.
   bool guard = false;
+
+  // MovePlayer: is the player holding SPRINT this tick? A sprint moves you faster
+  // (kSprintMoveScale) but burns stamina harder (see Sprinting) — a short dash, not a free pace.
+  // Held-key like guard; guard takes precedence (you can't sprint with your guard up). Placed LAST
+  // so the existing positional Command{...} inits keep meaning.
+  bool sprint = false;
 };
 
 // Convenience constructors, so call sites read as intent, not struct-filling.
-inline Command move_player(PlayerId player, Vec2 dir, bool guard = false) {
-  return Command{CommandKind::MovePlayer, player, dir, {}, 0.0f, guard};
+inline Command move_player(PlayerId player, Vec2 dir, bool guard = false, bool sprint = false) {
+  return Command{CommandKind::MovePlayer, player, dir, {}, 0.0f, guard, sprint};
 }
 inline Command spawn_mote(Vec2 pos) {
   return Command{CommandKind::SpawnMote, kLocalPlayer, {}, pos};
