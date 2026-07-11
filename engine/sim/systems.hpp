@@ -206,6 +206,14 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt);
 // new CALLER of this function, never new state.
 void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_t mag);
 
+// Leaky moral DECAY: every kDecayPeriod ticks, each of an actor's deed dimensions creeps one step
+// toward 0, so a reputation FADES if it isn't renewed — the design's "redemption and corruption for
+// free" (a villain who stops being cruel climbs back toward neutral; a hero who rests on old glory
+// dims). Symmetric about neutral. Only actors WITH a ledger (those who've done a deed) decay. An
+// exact per-ledger integer tick-count (BehaviorLedger::decay_ticks), so it stays bit-exact; takes
+// no dt (per-tick, fixed-timestep, like advance_progression). Runs once per step().
+void decay_standing(entt::registry& reg);
+
 // Nudge a directed RELATIONSHIP — the record_deed twin, the SINGLE write-point for the P8
 // relationships seed. Lazily emplaces `from`'s Relationships (edge-free until its first bond, so
 // bit-identical when absent), find-or-updates the edge toward `toward` by `delta`, clamped to ±100.

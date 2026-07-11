@@ -111,6 +111,12 @@ enum class Deed : std::uint8_t { Violence, Honesty, Loyalty, Charity, Cruelty, V
 // -Wconversion.
 struct BehaviorLedger {
   std::array<std::int32_t, static_cast<std::size_t>(Deed::Count)> dims{};
+  // A leaky-decay tick counter (read/written only by decay_standing): every kDecayPeriod ticks each
+  // nonzero dim creeps ONE step toward 0, so a reputation FADES if it isn't renewed — the design's
+  // redemption/corruption "for free". An EXACT integer count (no float, so bit-exact and rounding-
+  // free), 0 on a fresh ledger. Not read by standing(), so a short-run world is bit-identical until
+  // a whole period elapses.
+  std::int32_t decay_ticks = 0;
 };
 
 // The one derived scalar the whole morality system collapses to: positive = heroic repute,

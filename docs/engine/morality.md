@@ -180,17 +180,30 @@ each become one `record_deed` call at their event, exactly as Cruelty and Loyalt
 first **gameplay** reader has already landed — colonists flee a villain — and it grows from there
 into the full social `perceive` layer that turns a character's *believed* standing into how others
 treat them (befriend, protect, exploit, not just fear), graded by the onlooker's own nerve rather
-than a single threshold. A **leaky decay** (redemption and corruption for free, so a villain can
-climb back) lands when deeds start to matter over long play.
+than a single threshold.
+
+## Leaky standing — reputation fades
+
+Deeds don't mark you forever: **`decay_standing`** leaks every ledger dimension one step toward `0`
+every `kDecayPeriod` ticks, so a reputation **fades if it isn't renewed** — the design's *redemption
+and corruption for free*. A villain who stops being cruel climbs back toward neutral; a hero who
+rests on old glory dims. It's symmetric about zero (both signs creep in at the same rate) and runs
+on an **exact integer tick-count** per ledger (`BehaviorLedger::decay_ticks`, no float, so it stays
+bit-exact), touching only actors who've actually done a deed. `kDecayPeriod` is a fast playtest knob
+for now — the design's *"~44-day leak"* is far slower — but the *shape* (a slow current pulling every
+reputation back to neutral, so standing must be *maintained*, not banked once) is the point. Because
+nothing reads `decay_ticks` and no whole period elapses in a short run, a brief world is
+bit-identical to before decay existed.
 
 ## Key files
 
 - `engine/sim/components.hpp` — `Deed` (the six dimensions), `BehaviorLedger` (the
-  earned counterpart of `Personality`), the pure `standing` function, `renown_scale`
-  (the presentation twin of `personality_tint`), and the two derived titles `standing_title`
-  (from deeds) and `build_title` (from trained attributes).
+  earned counterpart of `Personality`, plus its `decay_ticks` leak counter), the pure `standing`
+  function, `renown_scale` (the presentation twin of `personality_tint`), and the two derived titles
+  `standing_title` (from deeds) and `build_title` (from trained attributes).
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point,
-  which also **drifts** the actor's matching `Personality` axis); the Charity credit and the
+  which also **drifts** the actor's matching `Personality` axis); `decay_standing` (the slow leak
+  toward neutral, run each `step()`); the Charity credit and the
   bonded-ally Loyalty credit (`kBondPull`-gated) in `handle_deaths`' rescue branch, the Valor
   credit in `perform_attack`'s killing-blow branch, and the Cruelty credit in the same
   function's player-only "no hostile in reach" branch (`kCrueltyStrike`).

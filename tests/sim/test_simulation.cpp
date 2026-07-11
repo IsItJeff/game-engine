@@ -1409,6 +1409,35 @@ TEST_CASE("record_deed accrues on the ledger and standing weighs the dimensions"
   REQUIRE(eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(e)) == -2);  // 4 - Cruelty ×6
 }
 
+TEST_CASE("standing decays toward neutral over time: reputation fades if unrenewed", "[sim]") {
+  // The design's leaky redemption/corruption — every kDecayPeriod ticks a deed dimension creeps one
+  // step toward 0, so a HERO's fame fades and a VILLAIN climbs back if they stop acting, symmetric
+  // about neutral. A short run leaves standing untouched (the counter hasn't crossed a period), so
+  // the pre-decay world is bit-identical; a long run drifts both toward 0 but never past it.
+  entt::registry reg;
+  const entt::entity hero = reg.create();
+  eng::sim::record_deed(reg, hero, eng::sim::Deed::Valor, 10);  // +50 standing (Valor ×5)
+  const entt::entity villain = reg.create();
+  eng::sim::record_deed(reg, villain, eng::sim::Deed::Cruelty, 10);  // -60 standing (Cruelty ×6)
+  const auto std_of = [&](entt::entity x) {
+    return eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(x));
+  };
+  const int hero_before = std_of(hero);        // +50
+  const int villain_before = std_of(villain);  // -60
+
+  // A brief run: the counter accrues but no period has elapsed, so standing is UNCHANGED.
+  for (int i = 0; i < 100; ++i) eng::sim::decay_standing(reg);
+  REQUIRE(std_of(hero) == hero_before);
+  REQUIRE(std_of(villain) == villain_before);
+
+  // A long run (many decay periods): both leak TOWARD neutral, neither crossing it.
+  for (int i = 0; i < 40000; ++i) eng::sim::decay_standing(reg);
+  REQUIRE(std_of(hero) < hero_before);        // the hero's fame faded...
+  REQUIRE(std_of(hero) >= 0);                 // ...but not into villainy
+  REQUIRE(std_of(villain) > villain_before);  // the villain redeemed toward neutral...
+  REQUIRE(std_of(villain) <= 0);              // ...but hasn't overshot into heroism
+}
+
 TEST_CASE("standing weights each deed dimension by the design's signed factors", "[sim]") {
   // The full ×5 formula ships now though only Charity is fed by a deed yet, so pin EVERY term's
   // weight and SIGN — a wrong factor on an as-yet-unfed dimension would otherwise ship silently and

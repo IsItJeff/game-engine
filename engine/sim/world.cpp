@@ -424,6 +424,7 @@ void World::step() {
   graze(registry_, dt);  // ...and in a food plot refills hunger (the plot regrows/depletes)
   npc_equip(registry_);  // unarmed NPCs wield a dropped weapon they've reached
   regenerate_vitals(registry_, dt);
+  decay_standing(registry_);  // reputations leak toward neutral over time (redemption/corruption)
   decay_flashes(registry_, dt);  // age the hit-flashes left by this tick's blows (presentation)
 
   // Reinforcements: after deaths are resolved, top the creature population back up
