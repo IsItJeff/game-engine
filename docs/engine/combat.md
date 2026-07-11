@@ -169,6 +169,12 @@ envenoming spit from a distance you can't melee. (A slow, heavily-plated **senti
   dangerous and finishing it fast is the safe play. Pure sim (it reads the creature's own health),
   no new state. It mostly bites on the tanky brute/sentinel you wear down — a swarmer usually dies
   before it enrages.
+- **Limp** — the *movement* half of that same sub-30% band: a wounded creature (below the same
+  `kLimpThreshold` = 30% line) chases at `kLimpMoveScale` (0.6×), the creature-side mirror of the
+  player's exhaustion crawl. So a cornered beast both **rages** (enrage, harder hits) *and*
+  **struggles** (slower), turning "leave it half-dead" into a real choice: **commit to the finish**,
+  or **kite the limping brute** — safe but slow, since it can't close on you. Pure sim off its own
+  HP (`chase_prey`), no RNG; a full-HP creature is unchanged.
 - **Execute** — the offensive *mirror* of enrage, keyed on the **same** 30% line
   (`kExecuteThreshold`): a strike on a creature already below it lands `kExecuteBonus` (1.5×)
   harder, so a worn-down foe **folds faster**. Together they turn the sub-30% band into a genuine
