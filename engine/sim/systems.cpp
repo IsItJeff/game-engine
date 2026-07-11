@@ -2333,13 +2333,21 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
       // dimension of standing.
       if (affinity_toward(reg, rescuer, e) >= kBondPull)
         record_deed(reg, rescuer, Deed::Loyalty, kRescueLoyalty);
-      // ...and a personal BOND forms: the rescuer grows affinity TOWARD the one they saved (the P8
-      // relationships seed's one forming event). Direction is rescuer->rescued deliberately: only
-      // players go Downed, so `e` is a player that doesn't run steer_npcs — putting the edge on the
-      // RESCUER (usually an NPC that DOES steer) is what lets the bond produce visible motion
-      // later. (If NPCs ever go Downed, revisit that rationale.) Same view-safety as the
-      // record_deed above.
+      // ...and a personal BOND forms — MUTUALLY: hauling someone off the ground ties you both. The
+      // rescuer->rescued edge is what drives visible MOTION (the rescuer is usually an NPC that
+      // runs steer_npcs, so it can later drift back toward the ally it saved via the bond-pull
+      // rung); the rescued->rescuer edge is the other half of the same felt tie — a player forms NO
+      // OTHER outgoing bond (every other event puts the edge on someone else: camaraderie bonds
+      // witnesses TO a killer, a grudge points a victim AT their attacker), so being saved is the
+      // one thing that finally fills the player's own "closest bond" readout with the ally who
+      // saved their life. Both use kRescueAffinity — a rescue is felt equally on both sides. The
+      // rescued `e` is always a player (this view is PlayerControlled-gated) and so is never
+      // steered, which is why its edge is inert in the sim (HUD/data only) and adds no motion — the
+      // original one-way note deferred it for exactly that reason; this lands it now for the
+      // readout. Emplacing a Relationships on `e` is the same view-safety as the Downed/ledger
+      // emplaces above (it's not one of this view's components).
       nudge_affinity(reg, rescuer, e, kRescueAffinity);
+      nudge_affinity(reg, e, rescuer, kRescueAffinity);
       // ...and if the rescue was SEEN, the rescuer earns wider ADMIRATION: bond_witnesses bonds
       // nearby colonists to the hero — the SAME "a public heroic act bonds those who watched"
       // machinery a killing blow uses (camaraderie), now completing the witnessed-event set: a

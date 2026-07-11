@@ -1812,9 +1812,12 @@ TEST_CASE("the public hero-rally still beats a personal bond", "[sim]") {
   REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x > 0.0f);
 }
 
-TEST_CASE("a rescue forms a bond: the rescuer gains affinity toward the one it saved", "[sim]") {
-  // The relationships seed's one forming event, wired at the same rescue site as the Charity deed:
-  // the RESCUER (not the rescued) gains a directed affinity edge toward the player it hauled up.
+TEST_CASE("a rescue forms a MUTUAL bond: rescuer and rescued each gain affinity", "[sim]") {
+  // The relationships seed's forming event, wired at the same rescue site as the Charity deed:
+  // hauling someone up ties you BOTH ways. The rescuer gains a directed edge toward the player it
+  // saved (the motion-driving half), and the rescued player gains the reciprocal edge back — the
+  // one outgoing bond a player ever forms (every other event bonds someone else TO the player), so
+  // this is what fills the player's own "closest bond" readout.
   entt::registry reg;
   const entt::entity player = reg.create();
   reg.emplace<eng::sim::Transform>(player, eng::Vec2{100.0f, 100.0f});
@@ -1837,7 +1840,13 @@ TEST_CASE("a rescue forms a bond: the rescuer gains affinity toward the one it s
   REQUIRE(rel->edges.size() == 1u);
   REQUIRE(rel->edges[0].other == player);  // directed toward the saved player
   REQUIRE(rel->edges[0].affinity == 20);   // kRescueAffinity
-  REQUIRE(reg.try_get<eng::sim::Relationships>(player) == nullptr);  // the rescued forms no edge
+  // The rescued player now forms the RECIPROCAL edge back — the mutual half of the bond, and the
+  // one outgoing tie a player ever forms.
+  const eng::sim::Relationships* prel = reg.try_get<eng::sim::Relationships>(player);
+  REQUIRE(prel != nullptr);
+  REQUIRE(prel->edges.size() == 1u);
+  REQUIRE(prel->edges[0].other == rescuer);  // directed back toward the ally who saved it
+  REQUIRE(prel->edges[0].affinity == 20);    // same kRescueAffinity — felt equally both ways
 }
 
 TEST_CASE("a witnessed rescue earns admiration: onlookers bond to the rescuer", "[sim]") {

@@ -15,9 +15,9 @@ affinity-moving events:
   subject: how *this* character regards others.
 - **`nudge_affinity(from, toward, delta)`** — the single write-point every affinity-moving
   event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Four fire it today:
-  a **rescue** forms a bond with the saved *and* (if witnessed) earns the rescuer **admiration** from
-  onlookers, a **cruel strike** forms a grudge, and **felling a foe near allies** forges *camaraderie*
-  (nearby colonists warm to the hero).
+  a **rescue** forms a **mutual** bond between rescuer and saved *and* (if witnessed) earns the
+  rescuer **admiration** from onlookers, a **cruel strike** forms a grudge, and **felling a foe near
+  allies** forges *camaraderie* (nearby colonists warm to the hero).
 
 ## Why it matters
 
@@ -48,13 +48,21 @@ at the **rescue** in `handle_deaths` — the same line that already credits the 
 
 ```cpp
 record_deed(reg, rescuer, Deed::Charity, kRescueCharity);
-nudge_affinity(reg, rescuer, e, kRescueAffinity);  // the rescuer bonds to the one it saved
+nudge_affinity(reg, rescuer, e, kRescueAffinity);  // the rescuer bonds to the one it saved...
+nudge_affinity(reg, e, rescuer, kRescueAffinity);  // ...and the saved bonds back — MUTUAL
 ```
 
-The direction is deliberate: only players go **Downed**, so the rescued (`e`) is a player,
-which doesn't run `steer_npcs`. Putting the edge on the **rescuer** (usually an NPC that
-*does* steer) is what lets the bond produce **visible motion**. (If NPCs ever go Downed,
-that rationale needs a second look — noted at the call site.)
+The bond is **mutual** — hauling someone off the ground ties you both — but the two halves do
+different work. The **rescuer → rescued** edge drives **visible motion**: the rescuer is usually an
+NPC that runs `steer_npcs`, so it can later drift back toward the ally it saved (the bond-pull rung).
+The **rescued → rescuer** edge is inert in the sim — the rescued (`e`) is always a player (the view
+is `PlayerControlled`-gated), and a player doesn't steer — but it is the *one outgoing bond a player
+ever forms*: every **other** event puts the edge on someone else (camaraderie bonds witnesses **to**
+a killer, a grudge points a victim **at** their attacker), so being **saved** is the single thing
+that finally fills the player's own **closest bond** readout, with the ally who saved their life.
+Both halves use the same `kRescueAffinity` — a rescue is felt equally on both sides. (The original
+one-way edge deferred the reciprocal half precisely because it adds no motion; this lands it for the
+readout.)
 
 `nudge_affinity` is the `record_deed` twin: `get_or_emplace` the component on the first
 bond, then **find-or-update** the edge toward the target — deepen an existing tie or append
