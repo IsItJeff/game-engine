@@ -760,26 +760,33 @@ void steer_npcs(entt::registry& reg) {
     // kHearthGatherRadius to the fire, a mildly sociable one only ambles over from nearby, and a
     // neutral, solitary, or Personality-less colonist has a 0-or-negative radius and so NEVER
     // gathers — the indifferent keep to themselves, which is also what keeps the pre-gather world
-    // bit-identical. Skips a colonist ALREADY in a hearth (no need to move — else it would jitter
-    // toward the centre forever). Scaled by move_scale like every rung (a tired colonist trudges to
-    // the fire too); reuses the `hearths` view and kRallySpeed.
+    // bit-identical. Once AT a fire it HOLDS (velocity 0), the twin of the wounded-retreat rung's
+    // hold: steer_npcs never damps velocity and integrate_motion never decays it, so without the
+    // hold a gathered colonist would carry its inbound velocity straight through the fire and out
+    // the far side, then re-aim and re-enter — a perpetual oscillation that never lets it rest (no
+    // stamina recovery, needs draining at the moving rate). Scaled by move_scale like every rung (a
+    // tired colonist trudges to the fire too); reuses the `hearths` view and kRallySpeed.
     const float gather_radius = kHearthGatherRadius * (sociability / 100.0f);
-    if (gather_radius > 0.0f && !in_a_hearth(reg, pos)) {
-      Vec2 fire_pos{0.0f, 0.0f};
-      bool has_fire = false;
-      float nearest_fire = gather_radius;
-      for (const entt::entity h : hearths) {
-        const float d = glm::distance(pos, hearths.get<Transform>(h).position);
-        if (d < nearest_fire) {
-          nearest_fire = d;
-          fire_pos = hearths.get<Transform>(h).position;
-          has_fire = true;
+    if (gather_radius > 0.0f) {
+      if (in_a_hearth(reg, pos)) {
+        npcs.get<Velocity>(n).value = Vec2{0.0f, 0.0f};  // arrived — hold by the fire, don't coast
+      } else {
+        Vec2 fire_pos{0.0f, 0.0f};
+        bool has_fire = false;
+        float nearest_fire = gather_radius;
+        for (const entt::entity h : hearths) {
+          const float d = glm::distance(pos, hearths.get<Transform>(h).position);
+          if (d < nearest_fire) {
+            nearest_fire = d;
+            fire_pos = hearths.get<Transform>(h).position;
+            has_fire = true;
+          }
         }
-      }
-      if (has_fire) {
-        const Vec2 toward = fire_pos - pos;
-        const float len = glm::length(toward);
-        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+        if (has_fire) {
+          const Vec2 toward = fire_pos - pos;
+          const float len = glm::length(toward);
+          if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+        }
       }
     }
   }

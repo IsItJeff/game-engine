@@ -184,8 +184,10 @@ renowned hero — that was at first trait-blind; sociability now scales *its* ra
 crosses the field to join the throng while a **loner** stays put unless the champion is nearly
 underfoot. Sociability reads a **second time** on the ladder's new *last* rung — **hearth gather**:
 with no hero to rally to and no bonded friend to follow, a sociable colonist ambles to the nearest
-[`Hearth`](stats-system.md) to gather round the fire, so the hearth is a *peacetime* social hub, not
-only the field hospital the wounded-retreat rung makes it. Here the radius is **proportional** to
+[`Hearth`](stats-system.md) to gather round the fire — and **holds** there once inside (velocity
+zeroed), the twin of the wounded-retreat rung's hold, so it doesn't coast straight through the fire
+and out the far side (`steer_npcs` never damps velocity). So the hearth is a *peacetime* social hub,
+not only the field hospital the wounded-retreat rung makes it. Here the radius is **proportional** to
 sociability (`kHearthGatherRadius × sociability/100`), a deliberately different shape from the
 base-plus-offset rally/bond radii: a neutral, solitary, or personality-less colonist has a
 0-or-negative radius and so **never** seeks the fire — the indifferent keep to themselves, which is

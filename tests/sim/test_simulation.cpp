@@ -1023,6 +1023,32 @@ TEST_CASE("an idle sociable colonist gathers at the hearth but a loner keeps awa
   REQUIRE(reg.get<eng::sim::Velocity>(loner).value.y == Approx(0.0f));
 }
 
+TEST_CASE("a gathered colonist holds at the fire instead of coasting through it", "[sim]") {
+  // The hold that pairs with the gather rung: once a sociable colonist reaches the hearth it must
+  // STOP (velocity 0), not carry its inbound velocity through the fire and out the far side.
+  // Without it — steer_npcs never damps velocity and integrate_motion never decays it — the
+  // colonist would oscillate across the hearth forever, never resting (no stamina recovery, needs
+  // draining at the moving rate). A found bug in the gather rung, which used to just skip a
+  // colonist already inside.
+  entt::registry reg;
+  const entt::entity hearth = reg.create();
+  reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Hearth>(hearth, eng::sim::Hearth{50.0f});  // warmth radius 50
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist,
+                                   eng::Vec2{10.0f, 0.0f});  // INSIDE the fire (10 < 50)...
+  reg.emplace<eng::sim::Velocity>(colonist, eng::Vec2{40.0f, 0.0f});  // ...still coasting outward
+  reg.emplace<eng::sim::Npc>(colonist);
+  reg.emplace<eng::sim::Personality>(
+      colonist, eng::sim::Personality{0, 0, 0, 0, 100});  // sociable -> gathers
+
+  eng::sim::steer_npcs(reg);
+
+  const eng::Vec2 v = reg.get<eng::sim::Velocity>(colonist).value;
+  REQUIRE(v.x == Approx(0.0f));  // it HELD at the fire (velocity zeroed)...
+  REQUIRE(v.y == Approx(0.0f));  // ...not coasting through and out the far side
+}
+
 TEST_CASE("bravery shapes how far an NPC will commit to a rescue", "[sim]") {
   // Bravery's SECOND read, exercising BOTH directions against the base rescue radius (300):
   //  - GROW: a brave NPC (+100 -> radius 450) at 350 rescues, where a NEUTRAL one (300) could not;
