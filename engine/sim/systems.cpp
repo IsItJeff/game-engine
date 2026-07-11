@@ -1906,6 +1906,31 @@ void spawn_venom_weapon(entt::registry& reg, Vec2 pos) {
   w.venom_per_second = 6.0f;  // its hits poison (health/sec); a knob
 }
 
+void decay_standing(entt::registry& reg) {
+  // Leaky moral DECAY, the slow counter-current to record_deed: every kDecayPeriod ticks each
+  // nonzero deed dimension creeps ONE step toward 0, so a reputation FADES if it isn't renewed —
+  // redemption and corruption for free (a villain who stops being cruel climbs back toward neutral;
+  // a hero who rests on old glory dims). Symmetric: both signs creep to 0. An EXACT per-ledger
+  // integer tick count (no float -> bit-exact), so a short-run world is unchanged until a whole
+  // period elapses. ponytail/BALANCE: kDecayPeriod is a fast knob for now — the design's "~44-day
+  // leak" is much slower; tune at playtest. Only actors with a ledger (they've done a deed) are
+  // iterated, so the never-acting stay untouched, and it touches no other component
+  // (own-BehaviorLedger writes only).
+  constexpr std::int32_t kDecayPeriod = 3600;  // ~60 game-seconds per step toward 0 (60Hz * 60s)
+  auto view = reg.view<BehaviorLedger>();
+  for (const entt::entity e : view) {
+    BehaviorLedger& led = view.get<BehaviorLedger>(e);
+    if (++led.decay_ticks < kDecayPeriod) continue;  // still accruing — no step this tick
+    led.decay_ticks = 0;
+    for (std::int32_t& d : led.dims) {
+      if (d > 0)
+        --d;
+      else if (d < 0)
+        ++d;  // toward 0 from either side — heroes fade, villains redeem, at the same rate
+    }
+  }
+}
+
 void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_t mag) {
   // The whole morality write-path, one line: lazily give the actor a ledger on its first deed, then
   // add the magnitude to the chosen dimension. No switch — every dimension accrues identically, so
