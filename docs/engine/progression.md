@@ -4,12 +4,14 @@
 
 Characters grow by *doing*. A **skill** improves with the activity that trains it,
 skills roll up into broad **attributes**, and attributes shape what you feel in play.
-Ten strands are wired end to end so far, across six attributes:
+Eleven strands are wired end to end so far, across six attributes:
 
 - staying active trains **Conditioning**, **surviving damage** trains **Toughness**,
-  **resting to recover** spent stamina trains **Recovery**, and **turning a blow with a raised
-  guard** trains **Guarding** (`resolve_creature_contacts`, Toughness's *active* twin — one grows
-  Endurance by *surviving* a hit, the other by *blocking* it) — all four raise
+  **resting to recover** spent stamina trains **Recovery**, **turning a blow with a raised
+  guard** trains **Guarding** (`resolve_creature_contacts`, Toughness's *active* twin — grow
+  Endurance by *blocking* a hit rather than *surviving* it), and **enduring venom** trains
+  **Resistance** (`tick_poison`, Toughness's *poison* twin — keep shrugging off venom and you grow
+  the very VIT that shaves it, immunity through exposure) — all five raise
   **Endurance**, which grows your **max health and stamina**, *and* speeds how fast
   stamina comes back;
 - **attacking** trains **Striking**, which mainly raises **Strength** (plus a little
@@ -151,13 +153,13 @@ attribute → stat — is what stays as it widens into a full character sheet.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck, Wisdom, Charisma), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`, `Throwing`, `Foraging`, `Leadership`, `Guarding`).
+- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck, Wisdom, Charisma), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`, `Throwing`, `Foraging`, `Leadership`, `Guarding`, `Resistance`).
 - `engine/sim/systems.cpp` (anon namespace) — the `SkillDef` table, `attr_ref`, and `grant_skill_xp` (the one funnel every skill→attribute XP grant flows through: main + contributors).
 - `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression` (movement→Conditioning / resting→Recovery), `update_stamina` (Endurance speeds recovery), `train_on_damage` (the damage → Toughness feeder), `perform_attack` (the shared swing resolver) and `npc_attack` (NPCs fight too).
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
 - `game/app/main.cpp` — the endurance/strength/wisdom/charisma/character-level readout, each equipped item's remaining durability (hits/blows left), and the skill XP bars; the `J` = attack key.
 - `engine/sim/systems.cpp` — `bond_witnesses` (the camaraderie grant, called at both a kill and a rescue): Charisma scales a witness's devotion, and a witnessed heroic act trains Leadership → Charisma (the compounding social loop).
-- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more), collecting trains Scavenging → Luck (and a lucky scavenger mends more from an orb), leading trains Leadership → Charisma (and a charismatic champion is bonded harder), blocking a blow trains Guarding → Endurance (but an open stance does not).
+- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more), collecting trains Scavenging → Luck (and a lucky scavenger mends more from an orb), leading trains Leadership → Charisma (and a charismatic champion is bonded harder), blocking a blow trains Guarding → Endurance (but an open stance does not), enduring venom trains Resistance → Endurance (but an unpoisoned character does not).
 
 ## Go deeper
 

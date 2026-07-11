@@ -171,7 +171,10 @@ envenoming spit from a distance you can't melee. (A slow, heavily-plated **senti
   softens a *blow* (`defence_of`) — so a tough constitution shrugs off both a hit and a poison, on top
   of its bigger HP **pool**. Refreshed on each fresh bite, reaped when it wears off, and cleared by a revive
   (no lethal status survives being hauled up). Any victim, player or NPC (parity); brutes/sentinels
-  leave it `0`.
+  leave it `0`. And **enduring** venom *trains* you: each poison tick builds a **Resistance** skill →
+  **Endurance** (see [progression](progression.md)), the poison twin of Toughness (a survived *blow* →
+  Toughness). So a character that keeps shrugging off venom grows the very VIT that shaves it —
+  **immunity through exposure** — closing the loop the way blocking builds Guarding.
 - **Enrage** — worn below `kEnrageThreshold` (30%) of its *own* HP, a creature's blows hit
   `kEnrageDamage` (1.75×) harder: a cornered beast lashes out, so leaving a foe half-dead is
   dangerous and finishing it fast is the safe play. Pure sim (it reads the creature's own health),

@@ -679,6 +679,7 @@ enum class SkillId : std::uint16_t {
                  // Charisma
   Guarding,      // trained by turning a blow with a raised guard; main attribute Endurance (a VIT
                  // skill)
+  Resistance,    // trained by ENDURING venom (tick_poison); main attribute Endurance (a VIT skill)
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
