@@ -139,11 +139,11 @@ inline std::int32_t standing(const BehaviorLedger& led) {
 // One directed tie: THIS entity -> `other`. The seed of the design's P8 RELATIONSHIPS (directed,
 // sparse, small event-deltas). int8 like a Personality axis — affinity SATURATES into bond bands,
 // it doesn't accumulate over a life toward a gate the way ledger dims do — so no wide int and no
-// float ever enters the sim. Only `affinity` is fed for now (the design's R1 slice); its two
-// siblings wire later with NO reshape: `trust` is a one-field append the day its own event lands,
-// and the bond ladder (Acquaintance -> Friend -> Partner / Rival -> Nemesis) is a DERIVED band
-// `bond_tier(affinity)` — a pure query, never a stored slot — exactly the standing ->
-// standing_title split.
+// float ever enters the sim. Only `affinity` is FED for now (the design's R1 slice); the bond
+// ladder (Acquaintance -> Friend -> Partner / Rival -> Nemesis) has ALREADY landed as the DERIVED
+// band `bond_tier(affinity)` below — a pure query, never a stored slot, exactly the standing ->
+// standing_title split. The one still-future sibling is `trust`: a one-field append the day its own
+// event lands, with NO reshape.
 struct Relation {
   entt::entity other = entt::null;  // directed: A->B is a separate edge from B->A
   std::int8_t affinity = 0;         // [-100 dislike .. +100 like]
@@ -162,6 +162,23 @@ struct Relationships {
   // hundreds.
   std::vector<Relation> edges;
 };
+
+// The design's bond LADDER as a DERIVED band — the relationships twin of `standing_title`: a pure
+// query naming where an `affinity` value falls (Nemesis .. Rival .. Neutral .. Acquaintance ..
+// Friend .. Partner), never a stored slot, so it's always in sync with the number behind it. The
+// band edges reuse the behavioural thresholds so the name matches what the sim already DOES at that
+// affinity: Acquaintance begins at +10 (`kBondPull` — a tie strong enough to pull you toward a
+// friend), Rival at -20 (`kGrudgeThreshold` — a grudge deep enough to abandon the resented).
+// Friend/ Partner and Nemesis are the deeper bands the design's latching (resist-decay) will hang
+// off later.
+inline const char* bond_tier(std::int8_t affinity) {
+  if (affinity >= 80) return "Partner";
+  if (affinity >= 40) return "Friend";
+  if (affinity >= 10) return "Acquaintance";  // the kBondPull line — a real bond that pulls you
+  if (affinity <= -60) return "Nemesis";
+  if (affinity <= -20) return "Rival";  // the kGrudgeThreshold line — a grudge that abandons
+  return "Neutral";
+}
 
 // Marks an entity as a non-player character. Empty for now — its whole job is to
 // answer "is this a person the world runs, rather than the player?" so systems
