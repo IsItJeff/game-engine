@@ -110,7 +110,8 @@ hyper-alert while a **wise but brave** colonist spots danger early yet holds; WI
 a fixed spread (two cowards, two brave) so you can watch the difference from the first frame;
 reinforcements roll a coherent *archetype* (bravery among its axes) from the spawner's *own*
 isolated RNG stream. And a colonist's axes aren't frozen for life: its own **deeds drift** them —
-a fighter grows braver, a rescuer more compassionate (see [Morality](morality.md)).
+a fighter grows braver, a rescuer more compassionate — *and so does **loss**: a colonist whose
+bonded friend is slain grieves, its bravery shaken down a step* (see [Morality](morality.md)).
 
 Bravery reads a **second time** on the rescue rung, which is where it becomes a real character
 trait rather than a flee tweak: it scales how far an NPC will *commit* to saving a downed ally.

@@ -122,6 +122,17 @@ Two guard-rails carry it. It uses `try_get`, **never** `get_or_emplace`: an acto
 Personality-free, so the bit-identical absent-Personality world is preserved. And only the
 three wired deeds drift — the other three axes/deeds wire themselves the day their deeds land.
 
+Drift isn't only earned by *your own* deeds — it can be dealt by **loss**. When a colonist
+you were truly bonded to (**Friend** or above, see [relationships](relationships.md)) is
+slain, **grief** drifts your bravery *down* a step (`kGriefDrift`, the negative mirror of a
+Valor deed's bravery-*up*): fighting monsters hardens you, watching one of your own fall
+**shakes** you. It fires in `handle_deaths` the moment the fallen is reaped — a rattled
+mourner then flees a hazard sooner (that same bravery→flee radius), so **permadeath leaves a
+mark on the living**, not just an empty slot. Both drift sources share one `drift_axis` clamp,
+so a deed and a bereavement can never bound differently. Only a real friend-bond grieves — a
+mere acquaintance (or a dead rival) is no such loss, the gate that keeps the pre-bond world
+bit-identical.
+
 ## What to expect
 
 You can now **see** it both ways. A character's dot **scales with its `standing`**: it *swells*
@@ -202,11 +213,13 @@ bit-identical to before decay existed.
   function, `renown_scale` (the presentation twin of `personality_tint`), and the two derived titles
   `standing_title` (from deeds) and `build_title` (from trained attributes).
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point,
-  which also **drifts** the actor's matching `Personality` axis); `decay_standing` (the slow leak
-  toward neutral, run each `step()`); the Charity credit and the
+  which also **drifts** the actor's matching `Personality` axis via the shared `drift_axis` clamp);
+  `decay_standing` (the slow leak toward neutral, run each `step()`); the Charity credit and the
   bonded-ally Loyalty credit (`kBondPull`-gated) in `handle_deaths`' rescue branch, the Valor
   credit in `perform_attack`'s killing-blow branch, and the Cruelty credit in the same
-  function's player-only "no hostile in reach" branch (`kCrueltyStrike`).
+  function's player-only "no hostile in reach" branch (`kCrueltyStrike`). `handle_deaths` also
+  drifts a **second** way — **grief** (`kGriefDrift`, the same `drift_axis`): a survivor bonded to
+  a just-reaped colonist (`kBondFriendAt`-gated) loses a step of bravery.
 - `game/app/main.cpp` — `draw_entities` scales a dot's radius by `renown_scale(standing(...))`
   so standing reads on screen *both ways* (heroes swell, villains shrink), and the debug HUD
   shows the player's `standing` number and both titles (`standing_title` and `build_title`).

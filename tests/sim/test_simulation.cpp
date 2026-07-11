@@ -2219,6 +2219,50 @@ TEST_CASE("a dead NPC is destroyed (permadeath), not respawned", "[sim]") {
   REQUIRE_FALSE(reg.valid(hazard));
 }
 
+TEST_CASE("a bonded survivor grieves a fallen friend: permadeath shakes the living", "[sim]") {
+  // The permadeath pillar reaching past the one who died. When a colonist a survivor was truly
+  // bonded to (Friend or above) is slain, the survivor's BRAVERY drifts down a grief step — the
+  // negative mirror of a Valor deed's bravery-up. A mere acquaintance is no such loss, so only a
+  // real friend-bond grieves; that gate is what keeps the pre-bond world bit-identical.
+  entt::registry reg;
+
+  // The fallen: an NPC already at 0 health, so handle_deaths reaps it this call (permadeath). No
+  // Transform needed — only slain CREATURES need a position (for their loot drop); a dead NPC just
+  // goes.
+  const entt::entity fallen = reg.create();
+  reg.emplace<eng::sim::Stats>(fallen, eng::sim::Vital{0.0f, 100.0f, 0.0f});  // dead on arrival
+  reg.emplace<eng::sim::Npc>(fallen);
+
+  // The mourner: a LIVING colonist (full health, so it can grieve) with a real FRIEND bond toward
+  // the fallen (affinity 60 >= the kBondFriendAt = 40 floor). Bravery starts at +20 so the drop is
+  // unambiguous and clear of the clamp; compassion is set too, to prove ONLY bravery moves.
+  const entt::entity mourner = reg.create();
+  reg.emplace<eng::sim::Stats>(mourner);
+  reg.emplace<eng::sim::Npc>(mourner);
+  eng::sim::Personality& mp = reg.emplace<eng::sim::Personality>(mourner);
+  mp.bravery = 20;
+  mp.compassion = 20;
+  reg.emplace<eng::sim::Relationships>(mourner).edges.push_back(eng::sim::Relation{fallen, 60});
+
+  // The bystander: also living, but only an ACQUAINTANCE of the fallen (affinity 20, below the
+  // friend floor) — a weak tie is no bereavement, so its nerve must be untouched.
+  const entt::entity bystander = reg.create();
+  reg.emplace<eng::sim::Stats>(bystander);
+  reg.emplace<eng::sim::Npc>(bystander);
+  reg.emplace<eng::sim::Personality>(bystander).bravery = 20;
+  reg.emplace<eng::sim::Relationships>(bystander).edges.push_back(eng::sim::Relation{fallen, 20});
+
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f);
+
+  REQUIRE_FALSE(reg.valid(fallen));  // permadeath still reaps the fallen NPC...
+  // ...the bonded mourner's bravery slipped exactly one grief step (kGriefDrift = -kDeedDriftStep =
+  // -2): 20 -> 18. Only bravery moved; the compassion axis is untouched.
+  REQUIRE(reg.get<eng::sim::Personality>(mourner).bravery == 18);
+  REQUIRE(reg.get<eng::sim::Personality>(mourner).compassion == 20);
+  // ...and the mere acquaintance did NOT grieve — its nerve holds at 20 (the bit-identity gate).
+  REQUIRE(reg.get<eng::sim::Personality>(bystander).bravery == 20);
+}
+
 TEST_CASE("an NPC steers away from a nearby hazard", "[sim]") {
   entt::registry reg;
 
