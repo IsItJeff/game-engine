@@ -425,6 +425,8 @@ void World::step() {
   npc_equip(registry_);  // unarmed NPCs wield a dropped weapon they've reached
   regenerate_vitals(registry_, dt);
   decay_standing(registry_);  // reputations leak toward neutral over time (redemption/corruption)
+  decay_bonds(
+      registry_);  // ...and casual ties cool the same way (deep Partner/Nemesis latches hold)
   decay_flashes(registry_, dt);  // age the hit-flashes left by this tick's blows (presentation)
 
   // Reinforcements: after deaths are resolved, top the creature population back up

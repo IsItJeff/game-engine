@@ -214,6 +214,13 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
 // no dt (per-tick, fixed-timestep, like advance_progression). Runs once per step().
 void decay_standing(entt::registry& reg);
 
+// Leaky RELATIONSHIP decay — the affinity twin of decay_standing: every kBondDecayPeriod ticks each
+// UNLATCHED affinity edge creeps one step toward 0, so a tie COOLS if it isn't renewed. A deep bond
+// (Partner) or grudge (Nemesis) LATCHES (`bond_latched`) and resists, so the strongest ties persist
+// — the design's "bonds latch, resist decay". An exact per-Relationships integer counter, so
+// bit-exact; takes no dt (per-tick, fixed-timestep). Runs once per step().
+void decay_bonds(entt::registry& reg);
+
 // Nudge a directed RELATIONSHIP — the record_deed twin, the SINGLE write-point for the P8
 // relationships seed. Lazily emplaces `from`'s Relationships (edge-free until its first bond, so
 // bit-identical when absent), find-or-updates the edge toward `toward` by `delta`, clamped to ±100.

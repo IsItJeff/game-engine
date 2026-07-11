@@ -1947,6 +1947,30 @@ void decay_standing(entt::registry& reg) {
   }
 }
 
+void decay_bonds(entt::registry& reg) {
+  // The relationships twin of decay_standing: every kBondDecayPeriod ticks each UNLATCHED edge's
+  // affinity creeps one step toward 0, so a tie cools if it isn't renewed. A Partner/Nemesis latch
+  // (bond_latched) resists, so the strongest ties — a devoted partner or a sworn nemesis — PERSIST
+  // where casual ties fade: the design's "bonds latch, resist decay". Exact integer counter per
+  // Relationships (no float -> bit-exact), so a short run is unchanged until a whole period
+  // elapses. ponytail/BALANCE: kBondDecayPeriod is a fast knob for now (bonds could well be
+  // stickier than reputation — tune at playtest). Touches only its own edges, no other component.
+  constexpr std::int32_t kBondDecayPeriod = 3600;  // ~60 game-seconds per step toward 0 (a knob)
+  auto view = reg.view<Relationships>();
+  for (const entt::entity e : view) {
+    Relationships& rel = view.get<Relationships>(e);
+    if (++rel.decay_ticks < kBondDecayPeriod) continue;  // still accruing — no step this tick
+    rel.decay_ticks = 0;
+    for (Relation& edge : rel.edges) {
+      if (bond_latched(edge.affinity)) continue;  // a deep bond or grudge holds fast
+      if (edge.affinity > 0)
+        --edge.affinity;
+      else if (edge.affinity < 0)
+        ++edge.affinity;  // toward 0 from either side, at the same rate
+    }
+  }
+}
+
 void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_t mag) {
   // The whole morality write-path, one line: lazily give the actor a ledger on its first deed, then
   // add the magnitude to the chosen dimension. No switch — every dimension accrues identically, so
