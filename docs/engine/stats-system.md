@@ -71,7 +71,10 @@ health and clamps it at zero. Because that runs on the server through the funnel
 a client can't fake damage — it can only ask for it.
 
 When health reaches zero, the player doesn't die outright — `handle_deaths` puts them
-**Downed** (a `Downed{timer}` marker): crumpled where they fell, helpless. A living ally
+**Downed** (a `Downed{timer}` marker): crumpled where they fell, helpless. On the field a downed
+body wears a pale **beacon ring** (`draw_entities`) — the visual twin of the panel's *Downed!*
+callout, so you can *see* who's crumpled and rush a rescuer to them (it never coincides with the
+steel-blue guard ring — being downed strips the guard). A living ally
 who reaches them revives them in place; otherwise the timer expires and they respawn at
 the spawn point. Either way they come back *whole* — full health, and **refilled needs**
 (hunger, water, and stamina reset to max). That last part matters: neither hunger nor water
