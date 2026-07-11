@@ -3648,6 +3648,45 @@ TEST_CASE("build_title names the dominant trained attribute", "[sim]") {
   REQUIRE(title(tied) == "Warrior");
 }
 
+TEST_CASE("deed_epithet names you by your most-repeated deed once it crosses the threshold",
+          "[sim]") {
+  // The third derived-recognition axis: standing_title says how good/bad, build_title says what
+  // kind of fighter, and this says what you're KNOWN FOR — your dominant ledger dimension. Pure
+  // query; below kEpithetAt = no name (nullptr); ties break in fixed Deed-enum order so it's
+  // deterministic. deed(kind) accesses one dimension directly the way the sim's record_deed accrues
+  // it.
+  const auto deed = [](eng::sim::BehaviorLedger& led, eng::sim::Deed k, std::int32_t n) {
+    led.dims[static_cast<std::size_t>(k)] = n;
+  };
+
+  eng::sim::BehaviorLedger fresh{};  // no deeds -> nameless
+  REQUIRE(eng::sim::deed_epithet(fresh) == nullptr);
+
+  eng::sim::BehaviorLedger shy{};  // one shy of the threshold -> still nameless
+  deed(shy, eng::sim::Deed::Valor, eng::sim::kEpithetAt - 1);
+  REQUIRE(eng::sim::deed_epithet(shy) == nullptr);
+
+  eng::sim::BehaviorLedger slayer{};  // exactly at the threshold -> earns the name
+  deed(slayer, eng::sim::Deed::Valor, eng::sim::kEpithetAt);
+  REQUIRE(std::string(eng::sim::deed_epithet(slayer)) == "the Slayer");
+
+  eng::sim::BehaviorLedger savior{};  // the dominant kind wins even with lesser others present
+  deed(savior, eng::sim::Deed::Charity, 5);
+  deed(savior, eng::sim::Deed::Valor, 2);
+  REQUIRE(std::string(eng::sim::deed_epithet(savior)) == "the Savior");
+
+  eng::sim::BehaviorLedger butcher{};  // the villain band is reachable: Cruelty IS fed
+  deed(butcher, eng::sim::Deed::Cruelty, 4);
+  REQUIRE(std::string(eng::sim::deed_epithet(butcher)) == "the Butcher");
+
+  // A tie between an equal tally of Cruelty and Valor brands you the Butcher — infamy sticks
+  // (Cruelty is declared earlier in the Deed enum, and the scan keeps the earliest on a tie).
+  eng::sim::BehaviorLedger tied{};
+  deed(tied, eng::sim::Deed::Valor, 4);
+  deed(tied, eng::sim::Deed::Cruelty, 4);
+  REQUIRE(std::string(eng::sim::deed_epithet(tied)) == "the Butcher");
+}
+
 TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it lands", "[sim]") {
   // The bootstrap: at Dexterity 1 you can't dodge yet, so the blow lands — but facing
   // it still trains Evasion and its Dexterity, which is what eventually lets you dodge.
