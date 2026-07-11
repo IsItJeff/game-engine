@@ -3689,6 +3689,40 @@ TEST_CASE("a finishing blow hits a worn-down creature harder: execute, the mirro
   REQUIRE(on_edge == Approx(healthy));         // ...but only once it's past the threshold
 }
 
+TEST_CASE("a backstab lands harder: a strike on a creature whose back is turned", "[sim]") {
+  // The POSITIONAL twin of execute (which reads HEALTH; this reads FACING): a creature moving AWAY
+  // from the attacker is chasing someone else and never saw the blow, so it takes kBackstabBonus
+  // more. A stationary foe, or one closing on the attacker, takes the plain hit. Same attacker,
+  // same full-HP foe (no execute), LCK/DEX 1 (no crit, no dodge); ONLY the foe's heading differs,
+  // so any damage gap is the flank alone.
+  const auto damage_taken = [](eng::Vec2 foe_velocity) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);
+    reg.emplace<eng::sim::Skills>(atk);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});  // in reach, to the +x
+    reg.emplace<eng::sim::Stats>(foe,
+                                 eng::sim::Vital{100.0f, 100.0f, 0.0f});  // full HP -> no execute
+    reg.emplace<eng::sim::Attributes>(foe);                               // DEX 1 -> no dodge
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Velocity>(foe, foe_velocity);
+    std::mt19937 rng{42};
+    eng::sim::perform_attack(reg, atk, rng);
+    return 100.0f - reg.get<eng::sim::Stats>(foe).health.current;  // HP lost
+  };
+  const float frontal =
+      damage_taken(eng::Vec2{-50.0f, 0.0f});                // charging the attacker (-x): facing it
+  const float still = damage_taken(eng::Vec2{0.0f, 0.0f});  // stationary: no facing to flank
+  const float behind =
+      damage_taken(eng::Vec2{50.0f, 0.0f});  // fleeing away (+x): its back is turned
+  REQUIRE(still > 0.0f);                     // the swing landed...
+  REQUIRE(frontal == Approx(still));  // ...a foe facing you (or still) takes the plain hit...
+  REQUIRE(behind > still);            // ...but one with its back turned takes the flank bonus...
+  REQUIRE(behind == Approx(still * 1.4f));  // ...exactly kBackstabBonus more
+}
+
 TEST_CASE("a melee hit cleaves a second creature when they cluster", "[sim]") {
   // Anti-swarm melee: the swing that strikes the nearest creature ALSO chips the nearest OTHER
   // creature within a swing's width of it — one hit, two foes when they cluster. A second foe far

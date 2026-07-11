@@ -1558,6 +1558,28 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   const float applied =
       (crit > 0.0f && unit(rng) < crit) ? base_damage * kCritMultiplier : base_damage;
 
+  // BACKSTAB: a strike on a creature whose back is TURNED lands harder. A creature that's moving
+  // AWAY from you is chasing someone ELSE (chase_prey aims its velocity at its own prey), so it
+  // never saw the blow coming — peeling a beast off a cornered ally is rewarded. The positional
+  // twin of the low-HP execute: execute reads the target's HEALTH, this reads its FACING. Pure
+  // geometry — the dot of the target's heading against the attacker->target direction: >
+  // kBackstabCosine means the beast is fleeing roughly straight away (within ~60deg), i.e. you're
+  // behind it. No RNG. A STATIONARY target (speed 0) or one closing on YOU (facing you down, dot <=
+  // the cutoff) gets no bonus, so every still-foe combat test is bit-identical. Only Enemies reach
+  // here (motes returned above); a target with no Velocity simply can't be flanked.
+  constexpr float kBackstabBonus = 1.4f;  // a hit from behind lands this much harder (a knob)
+  constexpr float kBackstabCosine =
+      0.5f;  // ...when the target's heading is within ~60deg of "away"
+  float backstab = 1.0f;
+  if (const Velocity* tv = reg.try_get<Velocity>(target); tv != nullptr) {
+    const Vec2 to_target = reg.get<Transform>(target).position - origin;
+    const float speed = glm::length(tv->value);
+    const float away = glm::length(to_target);
+    if (speed > 0.0f && away > 0.0f &&
+        glm::dot(tv->value / speed, to_target / away) > kBackstabCosine)
+      backstab = kBackstabBonus;
+  }
+
   // EXECUTE: a creature already worn below kExecuteThreshold of its HP takes MORE from the
   // finishing blow — the offensive MIRROR of enrage (resolve_creature_contacts), which is keyed on
   // the SAME 0.3 fraction. Together they make a half-dead foe a sharp risk/reward: below 30% it
@@ -1569,8 +1591,9 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   constexpr float kExecuteBonus = 1.5f;  // ...and the finishing blow lands this much harder
   if (Stats* st = reg.try_get<Stats>(target); st != nullptr) {
     const bool was_alive = st->health.current > 0.0f;
-    const float dealt =
+    float dealt =
         st->health.current < st->health.max * kExecuteThreshold ? applied * kExecuteBonus : applied;
+    dealt *= backstab;  // a flank stacks on the finisher — a distracted, half-dead beast folds fast
     st->health.current -= dealt;
     if (st->health.current < 0.0f) st->health.current = 0.0f;
     stamp_flash(reg, target);  // the struck target blinks white
