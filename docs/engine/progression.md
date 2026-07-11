@@ -23,9 +23,11 @@ Eight strands are wired end to end so far, across five attributes:
 - **landing a thrown hit** trains **Throwing**, which raises **Dexterity** (aim — plus a little
   **Strength** for hurl power), the ranged mirror of Striking (see [combat](combat.md));
 - **grazing a food plot** trains **Foraging**, which raises **Wisdom**, the first *non-combat*
-  attribute — each level lets you draw **more food per second** from a patch. It's the loot
-  loop's survival twin (gather food → Foraging → Wisdom → forage faster), and the first of the
-  design's WIS domain (nature/awareness). Wisdom doesn't grow the pools or a fighter build.
+  attribute — each level lets you draw **more food per second** from a patch **and** sharpens
+  **danger awareness** (a wider flee sense radius in `steer_npcs`, a distinct source from bravery's
+  nerve). So the design's WIS = *nature + awareness*: a seasoned forager both gathers more and spots
+  trouble sooner. It's the loot loop's survival twin (gather food → Foraging → Wisdom → forage faster
+  *and* stay alert), and Wisdom doesn't grow the pools or a fighter build.
 
 The player and NPCs run the identical machinery — progression *and* combat — so a
 long-lived NPC that has moved, been hurt, and fought grows genuinely tougher and

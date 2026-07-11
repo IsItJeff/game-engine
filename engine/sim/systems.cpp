@@ -195,7 +195,25 @@ void steer_npcs(entt::registry& reg) {
     // radius 0.5×..1.5× kSenseRadius). Cast the int8 to float BEFORE the divide (-Wconversion).
     const Personality* pers = reg.try_get<Personality>(n);
     const float bravery = pers != nullptr ? static_cast<float>(pers->bravery) : 0.0f;
-    float nearest = kSenseRadius * (1.0f - bravery / 200.0f);
+    // WISDOM sharpens AWARENESS: a wiser colonist PERCEIVES danger from further, so it senses (and
+    // flees) a hazard sooner — a distinct source from bravery's nerve. Bravery is REACTION (how
+    // close you let danger get before bolting), Wisdom is PERCEPTION (how far you see it coming);
+    // they COMPOSE, so a wise coward is hyper-alert (both widen the radius) while a wise but brave
+    // colonist sees danger early yet holds its ground (the two oppose). WIS is trained by FORAGING,
+    // so the forager who knows the land reads as the alert one — a coherent second effect for the
+    // attribute. No Attributes (or WIS level 1, the common case and every flee test) -> ×1.0 ->
+    // bit-identical. Cast the level to float before the multiply (-Wconversion).
+    constexpr float kAwarenessPerWis =
+        0.05f;  // each Wisdom level past 1 widens the sense radius...
+    constexpr float kAwarenessCap =
+        2.0f;  // ...up to 2x, then it caps (like the dodge/crit clamps),
+               // so a lifetime of foraging can't sense the whole field.
+    float awareness = 1.0f;
+    if (const Attributes* wis_attrs = reg.try_get<Attributes>(n)) {
+      awareness += static_cast<float>(wis_attrs->wisdom.level - 1) * kAwarenessPerWis;
+      if (awareness > kAwarenessCap) awareness = kAwarenessCap;
+    }
+    float nearest = kSenseRadius * (1.0f - bravery / 200.0f) * awareness;
     Vec2 threat{0.0f, 0.0f};
     bool sees_threat = false;
     for (const entt::entity h : hazards) {
