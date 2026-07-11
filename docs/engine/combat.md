@@ -293,6 +293,11 @@ poison-resist), and blocking is no longer the one combat action that taught noth
 *ponytail:* `kRiposteDamage` / `kRiposteStaminaCost` are flat balance knobs (scale them with a
 Guarding skill or shield gear later).
 
+And the guard **reads on the field**: a `Blocking` entity's dot gets a steel-blue **ring** in
+`draw_entities` (the same hue as the panel's "GUARDING" line), so you can see who has their guard up
+mid-fight without glancing at the panel — the dot cue every other status already has (personality
+tint, poison green, hit-flash white, standing size). Presentation-only; the sim never reads it.
+
 ### Throwing — the ranged option (F)
 
 Every attack so far has been melee: you must close to within ~45 units. **Throwing** (press **F**)
