@@ -161,23 +161,43 @@ struct Relationships {
   // toward a downed player); cap-N + evict-weakest-affinity only if a colonist ever bonds with
   // hundreds.
   std::vector<Relation> edges;
+  // A leaky-decay tick counter (read/written only by decay_bonds) — the affinity twin of
+  // BehaviorLedger::decay_ticks: every kBondDecayPeriod ticks each UNLATCHED edge creeps one step
+  // toward 0, so a tie COOLS if it isn't renewed. Exact integer (no float), 0 on a fresh set; no
+  // behaviour reads it, so a short-run world is bit-identical until a whole period elapses.
+  std::int32_t decay_ticks = 0;
 };
+
+// The affinity band EDGES, named once and shared by `bond_tier` and `bond_latched`. Aligned to the
+// behavioural thresholds so a band's NAME matches what the sim already DOES at that affinity:
+// Acquaintance begins at +10 (`kBondPull` — a tie strong enough to pull you toward a friend), Rival
+// at -20 (`kGrudgeThreshold` — a grudge deep enough to abandon the resented). Partner/Nemesis are
+// the DEEP bands that LATCH (resist the leaky bond decay).
+inline constexpr std::int8_t kBondPartnerAt = 80;
+inline constexpr std::int8_t kBondFriendAt = 40;
+inline constexpr std::int8_t kBondAcquaintanceAt = 10;  // == kBondPull
+inline constexpr std::int8_t kBondRivalAt = -20;        // == kGrudgeThreshold
+inline constexpr std::int8_t kBondNemesisAt = -60;
 
 // The design's bond LADDER as a DERIVED band — the relationships twin of `standing_title`: a pure
 // query naming where an `affinity` value falls (Nemesis .. Rival .. Neutral .. Acquaintance ..
-// Friend .. Partner), never a stored slot, so it's always in sync with the number behind it. The
-// band edges reuse the behavioural thresholds so the name matches what the sim already DOES at that
-// affinity: Acquaintance begins at +10 (`kBondPull` — a tie strong enough to pull you toward a
-// friend), Rival at -20 (`kGrudgeThreshold` — a grudge deep enough to abandon the resented).
-// Friend/ Partner and Nemesis are the deeper bands the design's latching (resist-decay) will hang
-// off later.
+// Friend .. Partner), never a stored slot, so it's always in sync with the number behind it.
 inline const char* bond_tier(std::int8_t affinity) {
-  if (affinity >= 80) return "Partner";
-  if (affinity >= 40) return "Friend";
-  if (affinity >= 10) return "Acquaintance";  // the kBondPull line — a real bond that pulls you
-  if (affinity <= -60) return "Nemesis";
-  if (affinity <= -20) return "Rival";  // the kGrudgeThreshold line — a grudge that abandons
+  if (affinity >= kBondPartnerAt) return "Partner";
+  if (affinity >= kBondFriendAt) return "Friend";
+  if (affinity >= kBondAcquaintanceAt)
+    return "Acquaintance";  // a real bond that pulls you (kBondPull)
+  if (affinity <= kBondNemesisAt) return "Nemesis";
+  if (affinity <= kBondRivalAt) return "Rival";  // a grudge that abandons (kGrudgeThreshold)
   return "Neutral";
+}
+
+// Whether a tie is LATCHED — a deep bond (Partner) or a deep grudge (Nemesis) — so it RESISTS the
+// leaky bond decay (`decay_bonds`): the strongest ties, for good or ill, PERSIST rather than
+// quietly fading. The design's "bonds latch, resist decay". Reuses bond_tier's deep-band edges so
+// the two can never drift.
+inline bool bond_latched(std::int8_t affinity) {
+  return affinity >= kBondPartnerAt || affinity <= kBondNemesisAt;
 }
 
 // Marks an entity as a non-player character. Empty for now — its whole job is to

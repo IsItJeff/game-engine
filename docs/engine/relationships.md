@@ -35,8 +35,9 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
   split. Its edges reuse the **behavioural** thresholds so the name matches what the sim already does
   at that affinity: Acquaintance begins at `kBondPull` (+10, a tie that pulls you toward a friend),
   Rival at `kGrudgeThreshold` (−20, a grudge deep enough to abandon the resented); the debug HUD
-  reads out the player's **closest bond** by it. Friend/Partner and Nemesis are the deeper bands the
-  design's *latching* (resist-decay) will hang off later.
+  reads out the player's **closest bond** by it. The deep bands **latch**: `bond_latched` (a Partner
+  `≥ +80` or a Nemesis `≤ −60`) marks a tie that **resists decay**, so the strongest bonds and grudges
+  persist while casual ones fade (see the leak below).
 
 ## How it works
 
@@ -121,9 +122,10 @@ tie:
 
 ## The tradeoffs
 
-- **Three events, a few readers.** No personality-match seeding (that's a later ring), no bond
-  *stages*, no decay — just the smallest struct those grow into. Exactly as the morality
-  seed shipped a couple of deeds and let the rest wire themselves.
+- **Three events, a few readers.** No personality-match seeding (that's a later ring) and no
+  *stored* bond stages — the ladder is the derived `bond_tier`, not a slot — just the smallest struct
+  those grow into. (Ties do now **decay** and the deepest **latch**, see above.) Exactly as the
+  morality seed shipped a couple of deeds and let the rest wire themselves.
 - **The readers are still coarse.** A gentle gather, a rescue-veto, and now a graded rescue reach
   (a friend reached from farther); the *deeper* ones — fleeing *with* a friend, refusing to *fight*
   them, healing them *first* — are later work.
@@ -144,10 +146,12 @@ axes are now wired.**
 
 Beyond that, the write-point is the whole point: three events already prove it out (a rescue bonds,
 a cruel strike grudges, a shared kill forges camaraderie), so each further event — a **shared meal**,
-a **broken promise** — is just one more `nudge_affinity` call; `trust`
-appends as a second `Relation` field; and a **leaky decay** (the affinity twin of the standing leak
-that already ships) will let cold ties fade and a grudge cool. The derived `bond_tier` above already
-names the ladder those events climb. Then the social `perceive` layer reads affinity *and*
+a **broken promise** — is just one more `nudge_affinity` call, and `trust`
+appends as a second `Relation` field the day its own event lands. The derived `bond_tier` above
+already names the ladder those events climb, and **`decay_bonds`** already lets cold ties fade toward
+neutral (a grudge cools too) — the affinity twin of the standing leak, every kBondDecayPeriod ticks
+one step toward 0 — while a **latched** Partner or Nemesis (`bond_latched`) holds fast, so only the
+deepest ties last. Then the social `perceive` layer reads affinity *and*
 standing to choose stances (befriend / protect / exploit).
 
 ## Key files

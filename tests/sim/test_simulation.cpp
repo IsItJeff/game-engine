@@ -1438,6 +1438,36 @@ TEST_CASE("standing decays toward neutral over time: reputation fades if unrenew
   REQUIRE(std_of(villain) <= 0);              // ...but hasn't overshot into heroism
 }
 
+TEST_CASE("bonds decay toward neutral but the deepest latch: a Partner and Nemesis hold", "[sim]") {
+  // The relationships twin of standing decay — an UNLATCHED tie cools toward 0 over time, but a
+  // deep bond (Partner, >= +80) or grudge (Nemesis, <= -60) LATCHES and persists (bond_latched). A
+  // short run is bit-identical (no whole period elapsed); a long run fades the casual tie while the
+  // latched ones hold fast.
+  entt::registry reg;
+  const entt::entity a = reg.create();
+  const entt::entity casual = reg.create();
+  const entt::entity partner = reg.create();
+  const entt::entity nemesis = reg.create();
+  eng::sim::nudge_affinity(reg, a, casual, 30);    // a casual friendship (unlatched)
+  eng::sim::nudge_affinity(reg, a, partner, 90);   // a Partner (latched, >= +80)
+  eng::sim::nudge_affinity(reg, a, nemesis, -80);  // a Nemesis (latched, <= -60)
+  const auto aff = [&](entt::entity to) { return eng::sim::affinity_toward(reg, a, to); };
+  const std::int8_t casual_before = aff(casual);  // 30
+
+  // A brief run: no whole period elapsed, so every edge is UNCHANGED (bit-identical).
+  for (int i = 0; i < 100; ++i) eng::sim::decay_bonds(reg);
+  REQUIRE(aff(casual) == casual_before);
+  REQUIRE(aff(partner) == 90);
+  REQUIRE(aff(nemesis) == -80);
+
+  // A long run: the casual tie cools toward neutral, but the latched Partner and Nemesis hold.
+  for (int i = 0; i < 40000; ++i) eng::sim::decay_bonds(reg);
+  REQUIRE(aff(casual) < casual_before);  // the casual friendship faded...
+  REQUIRE(aff(casual) >= 0);             // ...toward neutral, not past
+  REQUIRE(aff(partner) == 90);           // the Partner latch held fast...
+  REQUIRE(aff(nemesis) == -80);          // ...and so did the Nemesis
+}
+
 TEST_CASE("standing weights each deed dimension by the design's signed factors", "[sim]") {
   // The full ×5 formula ships now though only Charity is fed by a deed yet, so pin EVERY term's
   // weight and SIGN — a wrong factor on an as-yet-unfed dimension would otherwise ship silently and
