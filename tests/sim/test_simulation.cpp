@@ -4860,6 +4860,43 @@ TEST_CASE("worn armour slows stamina recovery (its bane)", "[sim]") {
   REQUIRE(arm_sta < bare_sta);  // ...but the armour's bane held the armoured one back
 }
 
+TEST_CASE("a hardy body bears armour better: Endurance eases the armour stamina bane", "[sim]") {
+  // VIT = hardiness: borne_regen_penalty shrinks the armour's stamina-regen bane by Endurance (the
+  // armour twin of STR's weapon carry). The pure helper first (math + null + cap), then the wiring
+  // — ISOLATED from Endurance's OTHER effect (it also speeds base recovery) by comparing the
+  // armoured-to-bare recovery RATIO at a fixed VIT: the base boost cancels in the ratio, leaving
+  // just (1 - eased bane), so a hardy rester loses proportionally LESS to its plate than a frail
+  // one.
+  eng::sim::Attributes attrs{};  // all level 1
+
+  // No Attributes / Endurance 1 -> the full bane; each level eases 5%, capped at half.
+  REQUIRE(eng::sim::borne_regen_penalty(0.30f, nullptr) == Approx(0.30f));
+  REQUIRE(eng::sim::borne_regen_penalty(0.30f, &attrs) == Approx(0.30f));
+  attrs.endurance.level = 6;
+  REQUIRE(eng::sim::borne_regen_penalty(0.30f, &attrs) == Approx(0.30f * 0.75f));
+  attrs.endurance.level = 100;
+  REQUIRE(eng::sim::borne_regen_penalty(0.30f, &attrs) == Approx(0.30f * 0.5f));  // capped at half
+  REQUIRE(eng::sim::borne_regen_penalty(0.30f, &attrs) > 0.0f);                   // never free
+
+  // Wiring: recover for half a second at a fixed Endurance, armoured and bare; their ratio
+  // (Endurance's base boost cancels) RISES with VIT — the armour costs a hardy body proportionally
+  // less recovery.
+  const auto recovered = [](int vit, bool armoured) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Stats>(e).stamina =
+        eng::sim::Vital{50.0f, 100.0f, 20.0f};  // recovers 20/s
+    reg.emplace<eng::sim::Velocity>(e);         // zero velocity -> resting
+    reg.emplace<eng::sim::Attributes>(e).endurance.level = vit;
+    if (armoured) reg.emplace<eng::sim::Equipped>(e, eng::sim::Equipped{0, 0.0f, 6.0f, 0.30f});
+    for (int i = 0; i < 30; ++i) eng::sim::update_stamina(reg, 1.0f / 60.0f);  // half a second
+    return reg.get<eng::sim::Stats>(e).stamina.current - 50.0f;                // recovered amount
+  };
+  const float ratio_frail = recovered(1, true) / recovered(1, false);    // 1 - 0.30 (full bane)
+  const float ratio_hardy = recovered(11, true) / recovered(11, false);  // 1 - 0.15 (bane halved)
+  REQUIRE(ratio_hardy > ratio_frail);  // a hardy body loses LESS of its recovery to its plate
+}
+
 TEST_CASE("a starving or parched character gets no second wind: stamina rest-recovery is gated",
           "[sim]") {
   // The stamina twin of the starvation heal-gate: an empty stomach OR canteen suppresses resting

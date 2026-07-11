@@ -455,7 +455,12 @@ carry the wielder's cached mods into `Drop` once more than one weapon def exists
 on/off. A dull-bronze **`Armour`** piece wears in its own slot alongside the weapon: it adds
 flat **defence** (folded into `defence_of`, so it softens *every* blow at both damage sites for
 free) but carries a **distinct bane** — plate tires you, slowing your **stamina recovery** (a
-weaker second wind, not the weapon's move-heft; banes must differ, never clone). So you can be a
+weaker second wind, not the weapon's move-heft; banes must differ, never clone). **Endurance eases
+that bane** (`borne_regen_penalty`, the armour twin of Strength's weapon [carry](progression.md)): a
+hardy body **bears** armour better, so its VIT shrinks the stamina penalty up to a **half** floor —
+the same *mastery shrinks a bane but never removes it* rule, now on both gear slots. (Endurance also
+speeds base recovery, so a hardy fighter is resilient two ways: quicker second wind *and* less slowed
+by plate.) So you can be a
 fast glass fighter (weapon), a slow tank (armour), or grind to carry both. The two slots are
 **independent**: `Equipped` is a flat pair-of-pairs and `equip_nearest_gear` writes only the
 grabbed slot, so donning armour never disturbs a wielded weapon. `Drop` (`Q`) is the symmetric
