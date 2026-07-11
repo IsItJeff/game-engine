@@ -494,14 +494,24 @@ weapon-only victim is bit-identical), and — like a shattered weapon — if not
 now-empty `Equipped` is dropped (shared `remove_equipped_if_empty`, mirroring `Drop`) so an NPC
 re-seeks fresh gear.
 
+**Gear has a QUALITY tier.** Beyond the fixed boon/bane of a weapon or armour *kind*, each item
+carries a `quality` multiplier on its **boon** — a finer blade folds in more `+Strength`, a finer
+plate more `+defence` (`equip_nearest_gear` scales the boon at equip; the `int` `+Strength` truncates,
+a named ceiling). The **bane stays full**: quality lifts the *upside* only, so *shrinking* the bane is
+the ORTHOGONAL **mastery** track (Strength eases a weapon's heft, Endurance an armour's stamina bane —
+`eased_bane`). Two independent axes — quality is *how good the item is*, mastery *how well you wield
+it*. Everything spawned today is quality **1.0** (the baseline), so this is just the **seam**;
+per-source quality (finer loot from a tougher kill) and rolled quality + traits layer on next.
+
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), three hardcoded
     defs (a steel weapon, a venom weapon, an armour) each pairing a boon
     (`+Attribute`/`+defence`/`+venom`) with a bane — a move-heft on either weapon (heavier steel,
     lighter venom) and a slower second wind on armour, so weapon and armour banes stay *distinct*
     even as the two blades share a kind. Each archetype's kill already feeds this loop as *creature
-    loot* (the four `DropKind`s). The rest of the design's Equipment — NPC armour-*seeking*,
-    `Item{def, quality, durability, traits[]}`, the `+skill/+aspect` bonuses (which ride the
+    loot* (the four `DropKind`s). The rest of the design's Equipment — NPC armour-*seeking*, the
+    `Item{def, quality, durability, traits[]}` model (`quality`'s seam now lands — it scales the boon
+    at equip; rolled tiers + `traits[]` are next), the `+skill/+aspect` bonuses (which ride the
     [SkillDef](progression.md) seam), and wear/repair — layer on top without reworking this plumbing.
 
 ### Dying — `handle_deaths` (Downed, then rescue or respawn)

@@ -537,6 +537,14 @@ struct Weapon {
   // bane you pay for the buff is now "and it won't last forever". Placed last so existing
   // positional `Weapon{...}` initialisers keep their meaning.
   float durability = kWeaponMaxDurability;
+  // QUALITY — the item-tier axis (the design's "found/crafted gear rolls a quality"). A multiplier
+  // on the BOON only (strength_bonus at equip), so a finer blade hits harder while a crude one hits
+  // softer; 1.0 = the baseline blade, and everything spawned today is 1.0 (so the whole pre-quality
+  // world is bit-identical). Deliberately scales only the upside: the BANE (heft) stays full, and
+  // shrinking the bane is the ORTHOGONAL mastery track (STR via carried_move_penalty). So quality
+  // is "how good the item is", mastery is "how well you wield it" — two independent axes. Last for
+  // positional-init safety. (Rolled/per-source quality is a follow-up; this PR is the seam.)
+  float quality = 1.0f;
 };
 
 // A dropped piece of ARMOUR — the first defensive item, the offense/defence counterpart of
@@ -551,6 +559,11 @@ struct Armour {
   // wearer is bare again). Fewer than a blade's life (30 vs 40): plate takes the brunt in a swarm.
   // Placed last so existing positional `Armour{...}` initialisers keep their meaning.
   float durability = kArmourMaxDurability;
+  // QUALITY — the item-tier axis, the twin of Weapon::quality. A multiplier on the BOON only
+  // (defence_bonus at equip): finer plate softens more, crude plate less. 1.0 = baseline (every
+  // armour spawned today), so bit-identical. The BANE (stamina-regen) stays full — shrinking it is
+  // the orthogonal VIT mastery (borne_regen_penalty). Last for positional-init safety.
+  float quality = 1.0f;
 };
 
 // The cached bonuses of everything a character is wearing — the design's EquipMods, folded ONCE
