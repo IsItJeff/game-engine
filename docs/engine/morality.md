@@ -19,8 +19,8 @@ rescuer with **Charity**; rescuing someone the rescuer was **already bonded to**
 **Loyalty** on top (standing by your own is more than charity to a stranger); and landing the
 **killing blow on a hostile** credits the attacker with **Valor**. The fourth is the first
 **villain** signal, and the first deed that pushes `standing` *below zero*: a **player who cuts
-down a peaceful colonist** earns **Cruelty**. The remaining dimensions (unjust Violence,
-Honesty) exist but wait for their deeds.
+down a peaceful colonist** earns **Cruelty** — and if that blow *kills*, **Violence** on top, the
+escalation from harm to death. Only **Honesty** now waits for its deed (a truth/deceit event).
 
 ## Why it matters
 
@@ -85,7 +85,10 @@ nearest peaceful colonist for the same STR-vs-VIT damage, and earns `Deed::Cruel
 gates keep it a **choice, never a slip**: only a player swings this way (NPCs never turn on
 the colony — an NPC-villain AI is a later ring), hostiles are always searched *first* and win
 the target (so you can reach a colonist only with nothing else to fight), and it must be in
-reach. A downed body is excluded — no infamy for kicking a corpse.
+reach. A downed body is excluded — no infamy for kicking a corpse. And if that blow **kills** the
+colonist (drops it to 0 HP), the death earns `Deed::Violence` *on top of* the Cruelty — the
+escalation from wounding to slaying, sinking standing by the Cruelty **×6** *and* the Violence **×4**
+(−10, versus −6 for a non-lethal betrayal). A cruel strike that only wounds stays Cruelty-only.
 
 A cruel strike also lands a *personal* mark: besides the Cruelty deed, it forms a **grudge** — the
 struck colonist's affinity toward the striker drops, and a grudge-holder later **refuses to rescue**
@@ -99,7 +102,8 @@ does. See [relationships](relationships.md).
     `record_deed` call**, exactly what shipping the seam and the full schema first bought — every
     new deed appended a *value*, never a *field*. Cruelty is weighted **×6** (dearer than any
     single hero deed), so one betrayal drops `standing` to −6: villainy is cheap to commit and
-    expensive to wear. The remaining signals (unjust Violence, Honesty) still wait on their events.
+    expensive to wear — and a betrayal that **kills** adds Violence (**×4**) on top, −10 in all. Only
+    **Honesty** now waits on its event (a truth/deceit act, which the current systems don't yet have).
 
 ## Drift: deeds reshape character
 
@@ -182,8 +186,8 @@ record nothing.
   the cruel branch on `PlayerControlled`, because it is shared with `npc_attack` and a
   generic "hit a neighbour when no enemy is near" would make colonists brawl constantly. The
   NPC-villain path (a personality/standing-driven decision to harm) is a social-ring job.
-- **Magnitudes are hardcoded.** `kRescueCharity`, `kValorKill`, `kCrueltyStrike` are
-  constants; JSON-authored deed weights are a modding-milestone job. A tuning knob, not a
+- **Magnitudes are hardcoded.** `kRescueCharity`, `kValorKill`, `kCrueltyStrike`, `kViolenceKill`
+  are constants; JSON-authored deed weights are a modding-milestone job. A tuning knob, not a
   design gap.
 - **`int32`, not fixed-point.** The ×5 integer trick sidesteps the codebase-wide
   fixed-point migration (a later ring) while staying bit-identical.
@@ -198,15 +202,17 @@ names your *repute* from **deeds** — *Unproven* → *Known* → *Renowned*, an
 *Skirmisher* (DEX), *Bulwark* (VIT) or *Chancer* (LCK), *Greenhorn* until one leads. The third,
 `deed_epithet(ledger)`, names what you're **known for** — your single *most-repeated* deed once you've
 done it enough (`kEpithetAt`) to earn the name: *the Slayer* (Valor), *the Savior* (Charity), *the
-Faithful* (Loyalty), *the Butcher* (Cruelty), with *the Brutal* / *the Honest* bands ready for the
-two deeds still unfed. It's the first reader of a **single** ledger dimension — the six were only ever
+Faithful* (Loyalty), *the Butcher* (Cruelty), *the Brutal* (Violence, now reachable since a lethal
+cruelty feeds it), with only *the Honest* (Honesty) band still awaiting its deed. It's the first
+reader of a **single** ledger dimension — the six were only ever
 summed into `standing` before — so how good you are, what you fight as, and what you're famous *for*
 are three separate labels. Unlike the always-present band titles it returns nothing until a kind
 crosses the threshold, so the HUD only shows *known as* once you've truly earned a reputation. The
 richer ones (*Master Smith*, *Dragonslayer* — from specific skills and gear) hang off the same idea.
 
-The write-point is the whole point: the remaining deeds (unjust Violence, Honesty)
-each become one `record_deed` call at their event, exactly as Cruelty and Loyalty just did. `standing`'s
+The write-point is the whole point: **Violence** just became one more `record_deed` call at the
+lethal-cruelty site (exactly as Cruelty and Loyalty landed), leaving only **Honesty** to wire the day
+a truth/deceit event exists. `standing`'s
 first **gameplay** reader has already landed — colonists flee a villain — and it grows from there
 into the full social `perceive` layer that turns a character's *believed* standing into how others
 treat them (befriend, protect, exploit, not just fear), graded by the onlooker's own nerve rather
@@ -236,7 +242,8 @@ bit-identical to before decay existed.
   which also **drifts** the actor's matching `Personality` axis via the shared `drift_axis` clamp);
   `decay_standing` (the slow leak toward neutral, run each `step()`); the Charity credit and the
   bonded-ally Loyalty credit (`kBondPull`-gated) in `handle_deaths`' rescue branch, the Valor
-  credit in `perform_attack`'s killing-blow branch, and the Cruelty credit in the same
+  credit in `perform_attack`'s killing-blow branch, and the Cruelty credit — plus the **Violence**
+  credit when that cruel blow *kills* (`kViolenceKill`) — in the same
   function's player-only "no hostile in reach" branch (`kCrueltyStrike`). `handle_deaths` also
   drifts a **second** way — **grief** (`kGriefDrift`, the same `drift_axis`): a survivor bonded to
   a just-reaped colonist (`kBondFriendAt`-gated) loses a step of bravery.
