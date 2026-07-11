@@ -247,12 +247,13 @@ int allies_of(const entt::registry& reg, entt::entity e);
 
 // Spawn a Weapon on the ground at `pos` — the one canonical grounded-weapon entity, shared by
 // a slain brute's drop (handle_deaths) and the player's Drop command so both look and behave
-// identically. Draws no RNG.
-void spawn_weapon(entt::registry& reg, Vec2 pos);
+// identically. `quality` scales the item's boon (1.0 = baseline; a tough kill drops finer). No RNG.
+void spawn_weapon(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 
 // Spawn a piece of Armour on the ground at `pos` — the defensive counterpart of spawn_weapon
-// (distinct render colour). Used to seed wearable armour into the opening scene. Draws no RNG.
-void spawn_armour(entt::registry& reg, Vec2 pos);
+// (distinct render colour). Used to seed wearable armour into the opening scene, and dropped
+// (finer) by a slain sentinel. `quality` scales its boon (1.0 = baseline). Draws no RNG.
+void spawn_armour(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 
 // Spawn a VENOM blade on the ground at `pos` — the second weapon TYPE (a poison build: weaker,
 // nimbler hits that envenom the foe). The ONE canonical grounded venom-weapon entity, shared by a
