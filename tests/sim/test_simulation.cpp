@@ -3697,6 +3697,39 @@ TEST_CASE("a worn-down creature enrages and hits harder", "[sim]") {
   REQUIRE(wounded_hit > healthy_hit);          // ...and the cornered beast hit harder
 }
 
+TEST_CASE("a creature backstabs a fleeing victim: don't turn your back on a beast", "[sim]") {
+  // The DEFENSIVE mirror of the melee backstab (perform_attack), through the SAME shared
+  // backstab_multiplier: a creature hits a victim FLEEING it (moving away, back turned) harder, so
+  // running from a beast exposes your back. Same beast, same victim in contact reach; only the
+  // victim's heading differs, so any damage gap is the flank alone.
+  const auto damage_taken = [](eng::Vec2 victim_velocity) {
+    entt::registry reg;
+    std::mt19937 rng{42};
+    const entt::entity beast = reg.create();
+    reg.emplace<eng::sim::Transform>(beast, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Enemy>(beast).attack_damage = 20.0f;
+    reg.emplace<eng::sim::Stats>(beast,
+                                 eng::sim::Vital{40.0f, 40.0f, 0.0f});  // full HP -> no enrage
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim,
+                                     eng::Vec2{10.0f, 0.0f});  // in contact (<15), offset +x
+    reg.emplace<eng::sim::Stats>(victim,
+                                 eng::sim::Vital{1000.0f, 1000.0f, 0.0f});  // vast HP -> no clamp
+    reg.emplace<eng::sim::Npc>(victim);                                     // DEX 1 -> no dodge
+    reg.emplace<eng::sim::Velocity>(victim, victim_velocity);
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return 1000.0f - reg.get<eng::sim::Stats>(victim).health.current;  // HP lost
+  };
+  const float facing = damage_taken(eng::Vec2{-50.0f, 0.0f});  // charging the beast (-x): facing it
+  const float still = damage_taken(eng::Vec2{0.0f, 0.0f});     // stationary: no back to hit
+  const float fleeing = damage_taken(eng::Vec2{50.0f, 0.0f});  // running away (+x): back turned
+  REQUIRE(still > 0.0f);                                       // the beast's blow lands...
+  REQUIRE(facing == Approx(still));  // ...a victim facing it (or still) takes the plain hit...
+  REQUIRE(fleeing > still);          // ...one fleeing takes the flank harder...
+  REQUIRE(fleeing ==
+          Approx(still * 1.4f));  // ...exactly kBackstabBonus more (scaled post-mitigate)
+}
+
 TEST_CASE("a finishing blow hits a worn-down creature harder: execute, the mirror of enrage",
           "[sim]") {
   // The offensive twin of enrage: a creature already below the same worn-down fraction of its HP
