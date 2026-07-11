@@ -700,7 +700,9 @@ struct Attributes {
   Attribute endurance;  // fed by Conditioning + Toughness; each level past 1 grows the pools
   Attribute strength;   // fed by Striking; each level past 1 lengthens attack reach + damage
   Attribute dexterity;  // fed by Evasion + Striking; each level past 1 raises the dodge chance
-  Attribute luck;       // fed by Scavenging; each level past 1 raises the chance to crit a strike
+  Attribute
+      luck;  // fed by Scavenging; each level past 1 raises crit chance AND how much a
+             // collected orb heals (collect_pickups) — fortune sharpens the blade and the find
   Attribute wisdom;    // fed by Foraging; each level past 1 raises how much a food plot yields. The
                        // first of the design's NON-combat attributes (nature/foraging), so it does
                        // not feed the pools or a fighter build — it grows the survival economy.
