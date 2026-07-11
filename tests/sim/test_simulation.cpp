@@ -3715,6 +3715,27 @@ TEST_CASE("a hardy constitution resists venom: VIT shaves the poison chip", "[si
   REQUIRE(hardy > 0.0f);                // ...but venom still bites (never fully negated)
 }
 
+TEST_CASE("enduring venom trains Resistance: the poison twin of Toughness", "[sim]") {
+  // Surviving a HIT trains Toughness; surviving VENOM used to train nothing. Now a poison tick
+  // builds Resistance -> Endurance (a VIT skill), so a character that keeps shrugging off venom
+  // grows the very VIT that shaves it (immunity through exposure). A POISONED character with the
+  // progression pair trains it; an UNPOISONED one has nothing to endure (tick_poison never touches
+  // it).
+  const auto trained_resistance = [](bool poisoned) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Stats>(e);   // full health -> survives the chip
+    reg.emplace<eng::sim::Skills>(e);  // ...and the progression pair, so it CAN grow
+    reg.emplace<eng::sim::Attributes>(e);
+    if (poisoned)
+      reg.emplace<eng::sim::Poisoned>(e, eng::sim::Poisoned{5.0f, 9.0f});  // venom, lasts
+    eng::sim::tick_poison(reg, static_cast<float>(eng::sim::kSecondsPerTick));
+    return reg.get<eng::sim::Skills>(e).find(eng::sim::SkillId::Resistance) != nullptr;
+  };
+  REQUIRE(trained_resistance(true));         // a poisoned character learns to resist venom...
+  REQUIRE_FALSE(trained_resistance(false));  // ...an unpoisoned one has nothing to endure
+}
+
 TEST_CASE("a venomous creature's bite leaves the victim poisoned; a plain one doesn't", "[sim]") {
   // A landed blow from a venomous archetype (swarmers) applies Poisoned; a non-venomous one leaves
   // none. Fires for any victim — player or NPC — through the same resolve_creature_contacts

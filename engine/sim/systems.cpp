@@ -1177,6 +1177,11 @@ const SkillDef& skill_def(SkillId id) {
   // Guarding builds it by TURNING one with a raised guard — the second VIT skill fed by defence,
   // both main-only. So a guard-tank grows genuinely tougher by tanking.
   static const SkillDef kGuarding{AttrId::Endurance, {}};
+  // Resistance is Toughness's VENOM twin: Toughness builds Endurance by surviving a blow,
+  // Resistance by enduring a poison tick — so a character that keeps shrugging off venom grows the
+  // very VIT that shaves the venom (tick_poison), an immunity-through-exposure loop. Main-only, the
+  // third VIT skill.
+  static const SkillDef kResistance{AttrId::Endurance, {}};
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -1198,6 +1203,8 @@ const SkillDef& skill_def(SkillId id) {
       return kLeadership;
     case SkillId::Guarding:
       return kGuarding;
+    case SkillId::Resistance:
+      return kResistance;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -2702,13 +2709,26 @@ void tick_poison(entt::registry& reg, float dt) {
     // VIT resistance: level 1 (or no Attributes) resists 0, so an untrained or bare entity chips
     // EXACTLY as before (bit-identical). Capped so venom is never fully negated — the DoT mirror of
     // mitigate's 10% chip floor.
+    Attributes* attrs = reg.try_get<Attributes>(e);  // read for the resist, reused to train below
     float resist = 0.0f;
-    if (const Attributes* attrs = reg.try_get<Attributes>(e)) {
+    if (attrs != nullptr) {
       resist = static_cast<float>(attrs->endurance.level - 1) * kResistPerVit;
       if (resist > kResistCap) resist = kResistCap;
     }
     health.current -= venom.damage_per_second * (1.0f - resist) * dt;
     if (health.current < 0.0f) health.current = 0.0f;
+    // ENDURING venom trains RESISTANCE -> Endurance, the poison twin of Toughness (a survived HIT
+    // -> Toughness): a character that keeps shrugging off venom grows the very VIT that shaves it
+    // (the resist above) — immunity through exposure. Guarded on Skills/Attributes (a bare or
+    // no-progression poisoned entity trains nothing -> bit-identical); a flat per-tick grant, so a
+    // longer or stronger venom trains MORE only by lasting more ticks. Player AND NPC both get
+    // poisoned, so both build it. No RNG.
+    if (Skills* sk = reg.try_get<Skills>(e); sk != nullptr && attrs != nullptr) {
+      const Fixed kResistancePerTick =
+          Fixed::from_ratio(10, 60);  // ~10 XP/sec while poisoned (knob)
+      grant_skill_xp(*sk, *attrs, SkillId::Resistance, kResistancePerTick,
+                     reg.try_get<CharacterLevel>(e));
+    }
     venom.remaining -= dt;
     if (venom.remaining <= 0.0f) cured.push_back(e);
   }
