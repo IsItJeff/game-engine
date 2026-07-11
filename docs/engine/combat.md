@@ -399,11 +399,15 @@ computed on equip, not per tick), and the item is consumed. `perform_attack` rea
 But **every item carries a bane** — the design's *"nothing rolls pure-upside"* pillar: the
 weapon's `move_penalty` cuts your move speed (`MovePlayer` applies it, stacking with the
 exhaustion crawl). Since kiting is how you survive a swarm, wielding the heavy sword is a
-real choice — killing power vs. the speed you escape with. And it's not player-only: the
-buff is read in the *shared* `perform_attack`, and **NPCs arm themselves too** — an unarmed
-colonist steers to a dropped weapon ([`steer_npcs`](npc-behaviour.md)) and wields it
-(`npc_equip`), hitting harder but moving slower, exactly as you do (the bane bites both).
-So the player and NPCs now *race* for a fallen brute's blade.
+real choice — killing power vs. the speed you escape with. **Strength eases that heft** (the design's
+**carry**): `carried_move_penalty` shrinks the move_penalty by your Strength level, up to a **half**
+floor — so a strong wielder moves nearer its unarmed pace, but the bane *never* vanishes (the design's
+*mastery shrinks a bane but never removes it*, see [progression](progression.md)). And it's not
+player-only: the buff is read in the *shared* `perform_attack`, and **NPCs arm themselves too** — an
+unarmed colonist steers to a dropped weapon ([`steer_npcs`](npc-behaviour.md)) and wields it
+(`npc_equip`), hitting harder but moving slower, easing the heft with its own Strength exactly as you
+do (both the buff and the carry relief bite both). So the player and NPCs now *race* for a fallen
+brute's blade.
 
 **And the blade wears out.** Beyond the heft, a weapon carries a `durability` (40 connecting hits on
 a hostile), copied onto the wielder's `Equipped` at equip. Each such swing dulls it by one, and at 0

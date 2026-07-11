@@ -765,7 +765,8 @@ struct Attribute {
 
 struct Attributes {
   Attribute endurance;  // fed by Conditioning + Toughness; each level past 1 grows the pools
-  Attribute strength;   // fed by Striking; each level past 1 lengthens attack reach + damage
+  Attribute strength;   // fed by Striking; each level past 1 lengthens attack reach + damage AND
+                        // eases a wielded weapon's heft (carry, carried_move_penalty below)
   Attribute dexterity;  // fed by Evasion + Striking; each level past 1 raises the dodge chance
   Attribute
       luck;  // fed by Scavenging; each level past 1 raises crit chance AND how much a
@@ -779,6 +780,25 @@ struct Attributes {
                        // The second non-combat attribute (social), so like Wisdom it grows neither
                        // the pools nor a fighter build — it grows the colony's bonds instead.
 };
+
+// STR = "carry": a strong wielder shrugs off part of a weapon's move-heft. This is the design's
+// mastery rule applied to the weapon BANE — "mastery shrinks a bane by about half but NEVER removes
+// it" — so each Strength level past the first relieves a slice of the penalty, capped at
+// kHeftReliefCap (half) so a wielded weapon ALWAYS costs some speed (the tradeoff survives to
+// endgame). A null Attributes, or Strength level 1 (the spawn default, and every existing armed
+// fixture), yields relief 0 — the FULL heft — so the pre-carry world is bit-identical. Returns the
+// EFFECTIVE penalty that BOTH the player (world.cpp MovePlayer) and NPCs (steer_npcs) fold into
+// move speed, so the relief is parity-shared through one function. Manual clamp, no <algorithm>
+// pulled in for one call (matching build_title above). It's the third Strength effect, beside reach
+// and damage.
+inline float carried_move_penalty(float base_penalty, const Attributes* attrs) {
+  if (attrs == nullptr) return base_penalty;  // no Strength known -> full heft
+  constexpr float kHeftReliefPerStr = 0.05f;  // ...relieved per Strength level past the first
+  constexpr float kHeftReliefCap = 0.5f;      // the bane persists: never shrink the heft past half
+  float relief = static_cast<float>(attrs->strength.level - 1) * kHeftReliefPerStr;
+  if (relief > kHeftReliefCap) relief = kHeftReliefCap;
+  return base_penalty * (1.0f - relief);
+}
 
 // A BUILD-derived title — the "from build" half of the derived recognition the `standing_title`
 // comment promised. Which of the four COMBAT Attributes dominates names what KIND of fighter a

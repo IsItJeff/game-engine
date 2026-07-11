@@ -15,8 +15,11 @@ wants, still perception-then-action, still hard-coded leaves:
    reach), so colonists loot the battlefield and fight harder — the player==NPC gear parity.
 5. Otherwise **drift**.
 
-Every steer speed is scaled by `(1 - move_penalty)` when the NPC is **armed**, so a wielded
-weapon's heft slows an NPC exactly as it slows the player — the item's bane bites both.
+Every steer speed is scaled by `(1 - carried_move_penalty(move_penalty, attrs))` when the NPC is
+**armed**, so a wielded weapon's heft slows an NPC exactly as it slows the player — the item's bane
+bites both. Strength **eases** that heft (the carry mastery, see [progression](progression.md)): a
+strong colonist shrugs off up to half the penalty, but the bane never fully lifts. At Strength 1 the
+relief is zero, so an untrained colonist pays the full heft.
 
 It is the seed of the engine's NPC AI (the master plan's sensors, blackboard, and
 behaviour trees) — each rung is exactly the kind of leaf a behaviour tree will one day

@@ -16,9 +16,14 @@ Eleven strands are wired end to end so far, across six attributes:
   stamina comes back;
 - **attacking** trains **Striking**, which mainly raises **Strength** (plus a little
   **Dexterity** — footwork), and Strength lengthens your
-  **attack reach** *and* your **attack damage** — against the hostile **creatures** (red
+  **attack reach**, your **attack damage**, *and* how much of a wielded weapon's **heft** you
+  shrug off (the design's **carry**) — against the hostile **creatures** (red
   dots with HP that hunt you), a higher Strength kills faster, while your Endurance
-  (VIT) softens the blows they land. Damage is `Strength`-vs-`VIT` ratio mitigation;
+  (VIT) softens the blows they land. Damage is `Strength`-vs-`VIT` ratio mitigation. The **carry**
+  effect is the design's *mastery shrinks a bane but never removes it* rule applied to equipment: a
+  weapon slows you (`Equipped::move_penalty`), and each Strength level eases that heft
+  (`carried_move_penalty`) up to a **half** floor — so a strong wielder moves nearer its unarmed pace
+  but a weapon *always* costs some speed, on the player and NPCs alike;
 - **facing a creature's swing** trains **Evasion**, which raises **Dexterity**, your
   chance to **dodge** a blow entirely (and creatures dodge yours — see
   [combat](combat.md#slipping-the-blow-evasion-dexterity));
@@ -159,7 +164,7 @@ attribute → stat — is what stays as it widens into a full character sheet.
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
 - `game/app/main.cpp` — the endurance/strength/wisdom/charisma/character-level readout, each equipped item's remaining durability (hits/blows left), and the skill XP bars; the `J` = attack key.
 - `engine/sim/systems.cpp` — `bond_witnesses` (the camaraderie grant, called at both a kill and a rescue): Charisma scales a witness's devotion, and a witnessed heroic act trains Leadership → Charisma (the compounding social loop).
-- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more), collecting trains Scavenging → Luck (and a lucky scavenger mends more from an orb), leading trains Leadership → Charisma (and a charismatic champion is bonded harder), blocking a blow trains Guarding → Endurance (but an open stance does not), enduring venom trains Resistance → Endurance (but an unpoisoned character does not).
+- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more), collecting trains Scavenging → Luck (and a lucky scavenger mends more from an orb), leading trains Leadership → Charisma (and a charismatic champion is bonded harder), blocking a blow trains Guarding → Endurance (but an open stance does not), enduring venom trains Resistance → Endurance (but an unpoisoned character does not), and Strength eases a weapon's heft up to a half floor (the carry mastery, on the player and NPCs alike).
 
 ## Go deeper
 

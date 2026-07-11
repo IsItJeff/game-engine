@@ -233,9 +233,13 @@ void steer_npcs(entt::registry& reg) {
 
     // A wielded weapon's heft slows an NPC just as it slows the player (the bane must bite
     // both — parity). Every steer speed below is scaled by this, so an armed colonist flees,
-    // rescues, and forages a touch slower. Unarmed = 1.0 (no change).
+    // rescues, and forages a touch slower. Unarmed = 1.0 (no change). STR eases the heft (carry)
+    // via the same carried_move_penalty the player uses — shrunk by Strength, capped at half so the
+    // bane persists; STR 1 or no Attributes -> full heft -> bit-identical.
     const Equipped* gear = reg.try_get<Equipped>(n);
-    float move_scale = gear != nullptr ? 1.0f - gear->move_penalty : 1.0f;
+    float move_scale = gear != nullptr ? 1.0f - carried_move_penalty(gear->move_penalty,
+                                                                     reg.try_get<Attributes>(n))
+                                       : 1.0f;
     // EXHAUSTION crawls an NPC too — parity with the player's MovePlayer crawl: a colonist that has
     // spent its stamina to 0 (by moving) slows to kExhaustedMoveScale, so the tireless-no-more rule
     // the player pays now applies to NPCs, who drain and recover stamina by the same
