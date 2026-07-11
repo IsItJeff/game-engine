@@ -1952,6 +1952,42 @@ TEST_CASE("an idle colonist drifts toward a friend it has bonded with", "[sim]")
   REQUIRE(colonist_velocity_x(400.0f) == Approx(0.0f));  // friend past the bond radius -> no pull
 }
 
+TEST_CASE("a colonist charges to defend a bonded friend from a creature: the PROTECT slice",
+          "[sim]") {
+  // The ACTIVE protect rung: an idle colonist rushes to a bonded friend a CREATURE is bearing down
+  // on, and it OUTRANKS its own hunger (like the downed-rescue). Isolated from the gentle
+  // bond-follow (which sits BELOW foraging): the colonist is STARVING with food the opposite way,
+  // so a threatened friend pulls it LEFT to defend, but with NO threat the hungry colonist forages
+  // RIGHT instead (it never falls all the way to the bottom bond-follow rung).
+  const auto colonist_velocity_x = [](bool threat) {
+    entt::registry reg;
+    const entt::entity friend_e = reg.create();
+    reg.emplace<eng::sim::Transform>(friend_e,
+                                     eng::Vec2{-100.0f, 0.0f});  // the friend, to the LEFT
+    reg.emplace<eng::sim::Npc>(friend_e);
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    reg.emplace<eng::sim::Stats>(colonist).hunger.current = 5.0f;  // starving -> would forage...
+    eng::sim::nudge_affinity(reg, colonist, friend_e, 30);  // ...but bonded (>= kBondPull 10)
+    const entt::entity orb = reg.create();
+    reg.emplace<eng::sim::Transform>(orb, eng::Vec2{100.0f, 0.0f});  // food, to the RIGHT
+    reg.emplace<eng::sim::Pickup>(orb);
+    if (threat) {  // a creature bearing down on the friend (within kDefendThreatRadius)
+      const entt::entity beast = reg.create();
+      reg.emplace<eng::sim::Transform>(beast, eng::Vec2{-120.0f, 0.0f});  // right beside the friend
+      reg.emplace<eng::sim::Enemy>(beast);
+    }
+
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(colonist_velocity_x(true) < 0.0f);  // threat -> CHARGE LEFT to the friend's defence...
+  REQUIRE(colonist_velocity_x(false) >
+          0.0f);  // ...no threat -> the starving colonist forages RIGHT
+}
+
 TEST_CASE("a grudge-holder keeps its distance: an idle colonist backs away from the resented",
           "[sim]") {
   // The ACTIVE completion of a grudge and the negative twin of the bond pull above: an idle

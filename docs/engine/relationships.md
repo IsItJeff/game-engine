@@ -115,7 +115,11 @@ tie:
   scans its own edges for the closest positive tie, reuses the rally toward-vector and speed
   verbatim, sits *below* the hero-rally (guarded by `if (champion == null)`) so the public rally
   stays byte-identical, and gates on `reg.valid(other)` — a stale tie to a recycled id is skipped,
-  never dereferenced.
+  never dereferenced. Its **urgent twin** is the **defend** rung much higher up (just below the
+  downed-rescue): where bond-pull *drifts* toward an idle friend, defend *charges* to a bonded friend
+  a **creature is bearing down on** — same tie read (`affinity ≥ kBondPull`), but gated on a threat
+  and outranking the colonist's own hunger, the active slice of the design's *PROTECT* stance (its
+  reach scales with **bravery**, the nerve to charge into danger for a friend).
 - **Grudge / abandonment** (negative) — the resentful side. Every cruel strike, besides the Cruelty
   deed, fires a *second* `nudge_affinity(victim, attacker, kCrueltyGrudge)` — the struck colonist
   forms a **grudge** toward the striker (the mirror of the rescue's bond). Its reader is a check in
@@ -167,9 +171,11 @@ rival, is no loss — the gate that keeps the pre-bond world bit-identical.
   *stored* bond stages — the ladder is the derived `bond_tier`, not a slot — just the smallest struct
   those grow into. (Ties do now **decay** and the deepest **latch**, see above.) Exactly as the
   morality seed shipped a couple of deeds and let the rest wire themselves.
-- **The readers are still coarse.** A gentle gather, a rescue-veto, and now a graded rescue reach
-  (a friend reached from farther); the *deeper* ones — fleeing *with* a friend, refusing to *fight*
-  them, healing them *first* — are later work.
+- **The readers are getting less coarse.** A gentle gather, a rescue-veto, a graded rescue reach
+  (a friend reached from farther), and now an active **defend** — a colonist *charges* to a bonded
+  friend a creature is bearing down on (the `steer_npcs` rung just below the downed-rescue, the first
+  slice of the design's *PROTECT* stance). The *remaining* deeper ones — fleeing *with* a friend,
+  refusing to *fight* them, healing them *first* — are still later work.
 - **Unbounded edge list.** Bounded in practice (ties form only on a rescue, a grudge, or a shared
   kill — a finite set of triggers), but formally open — a `ponytail:` comment names the `cap-N +
   evict-weakest` upgrade so it's tracked debt, not silent.
