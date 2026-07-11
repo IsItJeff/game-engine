@@ -95,9 +95,11 @@ offensive-fortune counterpart to a dodge. After the hit lands, `perform_attack` 
 **Luck grows by looting.** The fourth attribute, **LCK**, is fed by a **Scavenging** skill
 that trains every time you `collect_pickups` an orb. So the health orbs you already grab
 stop being pure sustain and become an *offensive build*: **grab orbs → Scavenging → Luck →
-more crits → faster kills → more orbs.** It's the first stat you grow with your feet rather
-than your fists. (Creatures never collect loot, so their LCK stays 1 — they never crit,
-just as they never train.)
+more crits → faster kills → more orbs.** Luck now pays *twice*: a higher LCK also makes each
+orb **restore more health** (`1 + (LCK − 1)·0.1`, capped ×2 — the design's "richer finds"), so
+the same loot loop sharpens your blade **and** deepens your mending. It's the first stat you grow
+with your feet rather than your fists. (Creatures never collect loot, so their LCK stays 1 — they
+never crit or mend from orbs, just as they never train.)
 
 ### Kill vigor — health on a kill
 

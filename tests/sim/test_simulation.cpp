@@ -4574,6 +4574,31 @@ TEST_CASE("a player collects a pickup: heals and grows max HP", "[sim]") {
   REQUIRE(!reg.valid(item));                 // consumed
 }
 
+TEST_CASE("a lucky scavenger mends more from an orb: Luck scales the heal", "[sim]") {
+  // Luck's SECOND effect, beside the crit it already rolls: the design's "richer finds / quality" —
+  // a lucky collector draws MORE health from the same orb. LCK 1 is x1 (the bit-identical floor); a
+  // higher LCK heals more, capped at x2. A deeply wounded collector with a huge max leaves plenty
+  // of room, so no overheal cap masks the difference; only its Luck varies between the two runs.
+  const auto heal_gained = [](int luck_level) {
+    entt::registry reg;
+    const entt::entity p = reg.create();
+    reg.emplace<eng::sim::Transform>(p, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(p, eng::sim::Vital{10.0f, 1000.0f, 0.0f});  // wounded, vast max
+    reg.emplace<eng::sim::Attributes>(p).luck.level = luck_level;
+    const entt::entity orb = reg.create();
+    reg.emplace<eng::sim::Transform>(orb, eng::Vec2{0.0f, 0.0f});  // right on the collector
+    reg.emplace<eng::sim::Pickup>(orb);                            // default heal 25
+    eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+    return reg.get<eng::sim::Stats>(p).health.current -
+           10.0f;  // HP restored (max bump doesn't heal)
+  };
+  const float plain = heal_gained(1);      // LCK 1 -> the base 25 heal (x1)
+  const float lucky = heal_gained(11);     // LCK 11 -> the x2 yield cap
+  REQUIRE(plain > 0.0f);                   // a plain scavenger heals from the orb...
+  REQUIRE(lucky > plain);                  // ...a lucky one mends more from the same orb...
+  REQUIRE(lucky == Approx(plain * 2.0f));  // ...exactly the x2 cap
+}
+
 TEST_CASE("an uncollected pickup fades after its lifetime", "[sim]") {
   entt::registry reg;
   // A pickup with no player anywhere near — it should time out and vanish rather

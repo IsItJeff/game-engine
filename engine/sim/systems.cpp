@@ -2371,12 +2371,28 @@ void collect_pickups(entt::registry& reg, float dt) {
       if (glm::distance(eaters.get<Transform>(p).position, item_pos) >= kPickupDistance) continue;
       Stats& stats = eaters.get<Stats>(p);
       Vital& health = stats.health;
+      // FORTUNE stretches a find: Luck scales how much HEALTH an orb restores — the design's LCK =
+      // "quality / richer finds", a SECOND effect for the fortune stat beside the crit it already
+      // rolls (perform_attack). 1 + (LCK - 1) * kLuckYieldPerLevel, capped at kLuckYieldCap (x2 —
+      // matching the WIS-awareness ceiling; dodge/crit cap lower, at 0.50). Reads the OWN
+      // Attributes (fetched here and reused for the Scavenging grant below); no Attributes, or LCK
+      // 1 (the spawn default and every existing collect test), -> x1 -> the orb heals exactly as
+      // before (bit-identical). Only the restorative heal is made richer — the permanent max-HP
+      // bump and the food stay flat. Pure float off the level, no RNG.
+      Attributes* a = reg.try_get<Attributes>(p);
+      constexpr float kLuckYieldPerLevel = 0.1f;  // each Luck level past 1 draws 10% more heal...
+      constexpr float kLuckYieldCap = 2.0f;       // ...up to double (a knob)
+      float luck_yield = 1.0f;
+      if (a != nullptr) {
+        luck_yield += static_cast<float>(a->luck.level - 1) * kLuckYieldPerLevel;
+        if (luck_yield > kLuckYieldCap) luck_yield = kLuckYieldCap;
+      }
       // A permanent max-HP bump: grow base (which advance_progression keeps max in step
       // with each tick) and max now too — the direct max bump is also the only growth
       // for a collector without Attributes, whose max is never recomputed.
       health.base += pk.bonus_max_hp;
       health.max += pk.bonus_max_hp;
-      health.current += pk.heal;
+      health.current += pk.heal * luck_yield;                        // a lucky scavenger mends more
       if (health.current > health.max) health.current = health.max;  // capped, no overheal
 
       // The orb is also FOOD: eating it refills hunger, so the same fight -> orb -> grab loop
@@ -2390,8 +2406,7 @@ void collect_pickups(entt::registry& reg, float dt) {
       // pair — a collector without Skills/Attributes (see the max-HP note above) still gets
       // the heal, it just doesn't grow Luck.
       Skills* sk = reg.try_get<Skills>(p);
-      Attributes* a = reg.try_get<Attributes>(p);
-      if (sk != nullptr && a != nullptr) {
+      if (sk != nullptr && a != nullptr) {  // `a` fetched above for the Luck heal scaling
         const Fixed kScavengingPerGrab = Fixed::from_int(10);  // XP per orb (ponytail: a knob)
         grant_skill_xp(*sk, *a, SkillId::Scavenging, kScavengingPerGrab,
                        reg.try_get<CharacterLevel>(p));

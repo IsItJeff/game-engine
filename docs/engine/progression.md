@@ -18,8 +18,12 @@ Nine strands are wired end to end so far, across six attributes:
 - **facing a creature's swing** trains **Evasion**, which raises **Dexterity**, your
   chance to **dodge** a blow entirely (and creatures dodge yours — see
   [combat](combat.md#slipping-the-blow-evasion-dexterity));
-- **collecting loot** trains **Scavenging**, which raises **Luck**, your chance to land a
-  **critical hit** for doubled damage (see [combat](combat.md#lucky-strikes-crits-luck));
+- **collecting loot** trains **Scavenging**, which raises **Luck** — fortune with *two* effects: your
+  chance to land a **critical hit** for doubled damage (see
+  [combat](combat.md#lucky-strikes-crits-luck)) **and** how much **health a found orb restores** (the
+  design's *richer finds / quality* — `collect_pickups` scales the orb's heal by `1 + (LCK − 1)·0.1`,
+  capped ×2). So a lucky scavenger both crits harder *and* mends more from the same loot, and the
+  loot→Scavenging→Luck loop feeds both;
 - **landing a thrown hit** trains **Throwing**, which raises **Dexterity** (aim — plus a little
   **Strength** for hurl power), the ranged mirror of Striking (see [combat](combat.md));
 - **grazing a food plot** trains **Foraging**, which raises **Wisdom**, the first *non-combat*
@@ -151,7 +155,7 @@ attribute → stat — is what stays as it widens into a full character sheet.
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
 - `game/app/main.cpp` — the endurance/strength/wisdom/charisma/character-level readout, each equipped item's remaining durability (hits/blows left), and the skill XP bars; the `J` = attack key.
 - `engine/sim/systems.cpp` — `bond_witnesses` (the camaraderie grant, called at both a kill and a rescue): Charisma scales a witness's devotion, and a witnessed heroic act trains Leadership → Charisma (the compounding social loop).
-- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more), leading trains Leadership → Charisma (and a charismatic champion is bonded harder).
+- `tests/sim/test_simulation.cpp` — activity trains-and-grows, idle trains nothing, damage trains Toughness, attacking trains Striking → Strength, grazing trains Foraging → Wisdom (and a wiser forager yields more), collecting trains Scavenging → Luck (and a lucky scavenger mends more from an orb), leading trains Leadership → Charisma (and a charismatic champion is bonded harder).
 
 ## Go deeper
 
