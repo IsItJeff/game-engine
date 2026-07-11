@@ -205,6 +205,12 @@ void steer_npcs(entt::registry& reg) {
   // kBondPull (the affinity floor at which a tie is a real bond) is shared with the
   // loyalty-on-rescue deed, so it lives with the deed constants at the top of the file rather than
   // local here.
+  // Hearth gather: the peacetime want, the lowest rung of all. A truly idle SOCIABLE colonist
+  // ambles to the nearest fire to gather round it, so the hearth is a social HUB — not only the
+  // field hospital the wounded-retreat rung makes it. This is the RADIUS at full sociability
+  // (+100); the gather range scales PROPORTIONALLY (not the rally/bond base+offset shape), so
+  // 0-or-below sociability never gathers at all. Reuses kRallySpeed. A knob.
+  constexpr float kHearthGatherRadius = 300.0f;
   // Avoid: the negative twin of the bond pull — an idle colonist keeps this much distance from an
   // entity it RESENTS (affinity <= kGrudgeThreshold). Smaller than the friend-gather range (a
   // personal-space bubble, not a cross-field draw). Reuses kRallySpeed. A knob.
@@ -641,8 +647,9 @@ void steer_npcs(entt::registry& reg) {
     // trait-scaled-radius shape sociability gives the hero rung: a loyal colonist (+) crosses the
     // field to stay near a bonded ally, a fickle one (-) follows only a friend practically
     // underfoot. Neutral 0 (or no Personality) -> kBondRadius exactly (bit-identical). Reuses the
-    // `pers` fetched at the top of the loop; cast to float before the divide (-Wconversion). With
-    // this, EVERY acting steer rung reads a trait, and all six axes are wired.
+    // `pers` fetched at the top of the loop; cast to float before the divide (-Wconversion). Every
+    // acting rung reads a trait and all six axes are wired; the hearth-gather rung below reads
+    // sociability a SECOND way.
     const float loyalty = pers != nullptr ? static_cast<float>(pers->loyalty) : 0.0f;
     if (const Relationships* rel = reg.try_get<Relationships>(n)) {
       entt::entity friend_e = entt::null;
@@ -663,6 +670,39 @@ void steer_npcs(entt::registry& reg) {
       }
       if (friend_e != entt::null) {
         const Vec2 toward = friend_pos - pos;
+        const float len = glm::length(toward);
+        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+        continue;  // following a bonded friend — don't also amble to the hearth below
+      }
+    }
+
+    // Priority 8 (the LAST rung) — HEARTH GATHER: with nothing to flee, rescue, forage, drink,
+    // mend, arm toward, avoid, rally to, or a bonded friend to follow, a SOCIABLE colonist ambles
+    // to the nearest fire to gather round it — the hearth as a peacetime social HUB, the twin of
+    // the wounded-retreat rung that makes it a field hospital. Reads SOCIABILITY a SECOND way (its
+    // first is the rally radius above): the gather radius is PROPORTIONAL to sociability (reusing
+    // the `sociability` fetched for the rally rung), so a very sociable colonist crosses
+    // kHearthGatherRadius to the fire, a mildly sociable one only ambles over from nearby, and a
+    // neutral, solitary, or Personality-less colonist has a 0-or-negative radius and so NEVER
+    // gathers — the indifferent keep to themselves, which is also what keeps the pre-gather world
+    // bit-identical. Skips a colonist ALREADY in a hearth (no need to move — else it would jitter
+    // toward the centre forever). Scaled by move_scale like every rung (a tired colonist trudges to
+    // the fire too); reuses the `hearths` view and kRallySpeed.
+    const float gather_radius = kHearthGatherRadius * (sociability / 100.0f);
+    if (gather_radius > 0.0f && !in_a_hearth(reg, pos)) {
+      Vec2 fire_pos{0.0f, 0.0f};
+      bool has_fire = false;
+      float nearest_fire = gather_radius;
+      for (const entt::entity h : hearths) {
+        const float d = glm::distance(pos, hearths.get<Transform>(h).position);
+        if (d < nearest_fire) {
+          nearest_fire = d;
+          fire_pos = hearths.get<Transform>(h).position;
+          has_fire = true;
+        }
+      }
+      if (has_fire) {
+        const Vec2 toward = fire_pos - pos;
         const float len = glm::length(toward);
         if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
       }
