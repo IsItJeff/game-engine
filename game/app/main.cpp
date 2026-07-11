@@ -193,20 +193,28 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::Text("endurance: %d", attr->endurance.level - 1);  // level 1 = 0 bonus
     ImGui::Text("strength: %d",
                 attr->strength.level - 1);  // from attacking; longer reach + harder hits
+    ImGui::Text("wisdom: %d",
+                attr->wisdom.level - 1);  // from foraging; more forage yield + wider danger sense
   }
   // Gear: a wielded weapon and/or worn armour fold into Equipped, each with its own bane.
   // Show only the slots that are actually filled so the tradeoffs are legible (and an
   // armour-only wearer doesn't read as "+0 STR").
   if (const eng::sim::Equipped* eq = world.registry().try_get<eng::sim::Equipped>(player)) {
+    // ...each with its remaining DURABILITY (hits/blows before it shatters and the slot clears), so
+    // you can see a blade or plate wearing toward the end and decide whether to keep fighting or go
+    // scavenge a fresh one — the temporal half of the tradeoff, made legible.
     if (eq->strength_bonus != 0 || eq->move_penalty != 0.0f) {
-      ImGui::TextColored(ImVec4{0.8f, 0.85f, 1.0f, 1.0f}, "wielding: +%d STR, -%.0f%% speed",
-                         eq->strength_bonus, static_cast<double>(eq->move_penalty * 100.0f));
+      ImGui::TextColored(ImVec4{0.8f, 0.85f, 1.0f, 1.0f},
+                         "wielding: +%d STR, -%.0f%% speed (%.0f hits left)", eq->strength_bonus,
+                         static_cast<double>(eq->move_penalty * 100.0f),
+                         static_cast<double>(eq->weapon_durability));
     }
     if (eq->defence_bonus != 0.0f || eq->stamina_regen_penalty != 0.0f) {
       ImGui::TextColored(ImVec4{0.9f, 0.7f, 0.4f, 1.0f},
-                         "armoured: +%.0f DEF, -%.0f%% stamina regen",
+                         "armoured: +%.0f DEF, -%.0f%% stamina regen (%.0f blows left)",
                          static_cast<double>(eq->defence_bonus),
-                         static_cast<double>(eq->stamina_regen_penalty * 100.0f));
+                         static_cast<double>(eq->stamina_regen_penalty * 100.0f),
+                         static_cast<double>(eq->armour_durability));
     }
   }
   if (const eng::sim::CharacterLevel* cl =
