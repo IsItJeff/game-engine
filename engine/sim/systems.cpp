@@ -113,6 +113,20 @@ void drift_axis(std::int8_t& axis, int step) {
   if (v < -100) v = -100;  // symmetric clamp — positive for deeds, negative for grief
   axis = static_cast<std::int8_t>(v);
 }
+
+// True if `pos` sits within ANY Hearth's radius — the shared "in the warmth" predicate. The fire
+// both HEALS those who rest in it (regenerate_vitals boosts their regen) and WARDS the beasts that
+// would hunt them (chase_prey skips sheltered prey), so the two must agree on the EXACT reach — one
+// predicate keeps them from drifting apart. `<=` so the edge counts, matching the drink/graze reach
+// tests. No hearths (or none in reach) -> false, so a hearthless world is bit-identical.
+bool in_a_hearth(entt::registry& reg, Vec2 pos) {
+  auto hearths = reg.view<Hearth, Transform>();
+  for (const entt::entity h : hearths) {
+    if (glm::distance(pos, hearths.get<Transform>(h).position) <= hearths.get<Hearth>(h).radius)
+      return true;
+  }
+  return false;
+}
 }  // namespace
 
 void snapshot_previous(entt::registry& reg) {
@@ -639,6 +653,16 @@ void chase_prey(entt::registry& reg) {
     entt::entity target = entt::null;
     float nearest = 0.0f;
     for (const entt::entity person : prey) {
+      // THE HEARTH WARDS the beast: a person standing in the fire's glow is NOT hunted — the flames
+      // keep creatures at bay, so a colonist that reaches the hearth is truly SAFE (not merely
+      // healing faster there). This makes the wounded-retreat-to-hearth rung (steer_npcs) a real
+      // escape and gives the base-building fire a DEFENSIVE purpose, not just a recovery one.
+      // Sharing in_a_hearth with regenerate_vitals means "healed by the fire" and "hidden from the
+      // hunt" are the exact same reach. A sheltered person is skipped, so the creature hunts the
+      // nearest one still in the open, or idles if all are sheltered (ponytail: the fire is a small
+      // spot, not a fortress — needs still drain, so you can't camp it forever). No hearths ->
+      // nobody skipped -> bit-identical to before.
+      if (in_a_hearth(reg, prey.get<Transform>(person).position)) continue;
       const float d = glm::distance(c_pos, prey.get<Transform>(person).position);
       if (target == entt::null || d < nearest) {
         nearest = d;
@@ -714,8 +738,10 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   // Kept a SEPARATE knob from stamina's so HP and stamina sustain tune independently.
   constexpr float kHealthRegenPerEndurance = 0.10f;  // ponytail: playtest value
   // A HEARTH multiplies the health regen of anyone resting within its radius — the base-building
-  // recovery seed. Modest, so the fire is a place to MEND between fights, not an invincible camp: a
-  // creature still reaches you there, and you're rooted to the spot (can't kite while healing).
+  // recovery seed. Modest, and NOT an invincible camp even though chase_prey won't hunt you into
+  // the fire: a spitter still lobs venom from range and a beast already on top of you gets its last
+  // licks (only the CHASE breaks), plus you're rooted (can't kite or forage while healing) and
+  // needs keep draining. So the fire buys breathing room between fights, not a place to win from.
   constexpr float kHearthRegenBoost = 2.0f;  // ponytail: playtest knob
 
   // view<Stats>() iterates exactly the entities that have stats — the player
@@ -724,7 +750,6 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   // whoever has the right data, nobody else. A DOWNED player is excluded: they
   // lie at 0 HP for the whole helpless window, so a trickle of self-heal must not
   // quietly lift them off the floor — only a rescue or respawn brings them back.
-  auto hearths = reg.view<Hearth, Transform>();
   auto view = reg.view<Stats>(entt::exclude<Downed>);
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
@@ -756,18 +781,13 @@ void regenerate_vitals(entt::registry& reg, float dt) {
                                                 kHealthRegenPerEndurance
                                    : 1.0f;
     // ...and faster still by a HEARTH: a colonist resting within one's radius mends quicker (stacks
-    // on the VIT boost). No hearth in reach (or none exist) -> x1.0, bit-identical to before. Reads
-    // the entity's own Transform; a Stats entity without one just skips the check.
-    if (const Transform* tf = reg.try_get<Transform>(e)) {
-      for (const entt::entity h : hearths) {
-        if (glm::distance(tf->position, hearths.get<Transform>(h).position) <=
-            hearths.get<Hearth>(h)
-                .radius) {  // <= to match the drink/graze reach test (edge counts)
-          boost *= kHearthRegenBoost;
-          break;  // one hearth's warmth is enough; don't stack multiple
-        }
-      }
-    }
+    // on the VIT boost). Shares the in_a_hearth reach with chase_prey's ward, so "healed by the
+    // fire" and "hidden from the hunt" are the same glow. No hearth in reach (or none exist) ->
+    // x1.0, bit-identical to before. Reads the entity's own Transform; a Stats entity without one
+    // skips it.
+    if (const Transform* tf = reg.try_get<Transform>(e);
+        tf != nullptr && in_a_hearth(reg, tf->position))
+      boost *= kHearthRegenBoost;
     recover(s.health, dt, boost);
     // Health only ever ticks back up, so it recovers here. Stamina is different —
     // it's spent by moving — so it has its own system (update_stamina) instead of
@@ -791,7 +811,6 @@ void update_stamina(entt::registry& reg, float dt) {
   // Stats + Velocity = things that both tire and move. Motes have Velocity but no
   // Stats, so the view skips them for free — only the player pays.
   auto view = reg.view<Stats, Velocity>();
-  auto hearths = reg.view<Hearth, Transform>();  // for the fireside recovery boost below
   for (const entt::entity e : view) {
     Stats& st = view.get<Stats>(e);
     Vital& stamina = st.stamina;
@@ -830,18 +849,13 @@ void update_stamina(entt::registry& reg, float dt) {
       // stamina twin of regenerate_vitals' fireside health boost), so the fire is a place to FULLY
       // recover, not just heal. Needs the rester's position (the view lacks Transform); no
       // Transform or no hearth in range -> base rate, so a hearthless world is bit-identical.
-      // Scanned within a Hearth's radius exactly like regenerate_vitals, and applied over the
-      // armour bane so a plated rester still catches its breath faster by the fire (the boost and
-      // bane compose).
-      if (const Transform* tf = reg.try_get<Transform>(e)) {
-        for (const entt::entity h : hearths) {
-          if (glm::distance(tf->position, hearths.get<Transform>(h).position) <=
-              hearths.get<Hearth>(h).radius) {
-            boost *= kHearthStaminaBoost;
-            break;  // one hearth is enough
-          }
-        }
-      }
+      // Shares in_a_hearth with regenerate_vitals' heal boost AND chase_prey's ward, so all three
+      // fireside checks read the SAME radius — one predicate, no drift. Applied over the armour
+      // bane so a plated rester still catches its breath faster by the fire (the boost and bane
+      // compose).
+      if (const Transform* tf = reg.try_get<Transform>(e);
+          tf != nullptr && in_a_hearth(reg, tf->position))
+        boost *= kHearthStaminaBoost;
       stamina.current += stamina.regen_per_second * boost * dt;
       if (stamina.current > stamina.max) stamina.current = stamina.max;  // never past the cap
     }

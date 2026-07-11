@@ -96,12 +96,19 @@ regen — which is the intended, more honest survival pressure.)
 
 Regen also has a **place**: a **`Hearth`** — a fixed, warm safe spot — multiplies the health
 regen of anyone resting within its radius (`kHearthRegenBoost`, stacking on the VIT boost). It's
-the design's **base-building recovery seed**: a reason to hold or fall back to a spot, and a real
-positioning trade — mend by the fire *or* act in the field, not both, since a guard-less heal keeps
-you rooted where creatures can still reach you. The boost sits *after* the starvation/dehydration/
-poison gates, so the fire speeds a *healthy* recovery but never lets a starving or envenomed colonist
-heal — you can't mend on an empty stomach even by the warmest hearth. No hearth in reach → ×1, so a
-hearthless world regenerates exactly as before.
+the design's **base-building recovery seed**: a reason to hold or fall back to a spot. The fire has a
+**defensive** half as well as a healing one: **creatures won't hunt prey standing in its glow**
+(`chase_prey` skips anyone `in_a_hearth` — the *same* reach that heals also **hides**, one predicate
+so they can't drift apart), so a beast running you down gives up the chase at the fire, and the
+wounded-retreat-to-fire rung becomes a real refuge rather than just a faster mend. It's the **hunt**
+it breaks, not all harm: a spitter still lobs venom from range and a beast already on top of you gets
+its parting swings (`creature_spit` / `resolve_creature_contacts` don't check the fire), so the hearth
+buys *space*, not immunity. The trade is still there, only shifted:
+it's a small *spot*, not a fortress — you can't forage, fight, or loot while camped in it, and needs
+keep draining, so the fire buys you breathing room, not a place to win the game from. The heal boost
+sits *after* the starvation/dehydration/poison gates, so the fire speeds a *healthy* recovery but
+never lets a starving or envenomed colonist heal — you can't mend on an empty stomach even by the
+warmest hearth. No hearth in reach → ×1 and nobody warded, so a hearthless world is bit-identical.
 
 The fire warms your **second wind** too: `update_stamina` gives a resting character inside a hearth's
 radius the same `kHearthStaminaBoost` (2×) on its stamina recovery, so the hearth is a place to
