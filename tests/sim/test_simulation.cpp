@@ -598,6 +598,35 @@ TEST_CASE("a hungry NPC steers toward a nearby food orb", "[sim]") {
   REQUIRE(v.y == Approx(0.0f));  // ...straight at it
 }
 
+TEST_CASE("a starving colonist trudges: the Need debuff drags every step slower", "[sim]") {
+  // need_efficiency reaches the LEGS, not just the swing: the same 1.0-at-comfort -> 0.5-at-empty
+  // curve that saps combat damage now scales steer speed, so the emptier the belly the heavier the
+  // step. Two colonists forage the same orb, differing ONLY in how hungry they are; both still head
+  // for it (never frozen — the 0.5 floor), but the starving one crawls. Full water on both, so
+  // hunger is the worst need and the sole difference.
+  const auto forage_speed = [](float hunger) {
+    entt::registry reg;
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Stats>(npc).hunger.current =
+        hunger;  // full water; hunger is the worst need
+    const entt::entity orb = reg.create();
+    reg.emplace<eng::sim::Transform>(orb,
+                                     eng::Vec2{100.0f, 0.0f});  // food to the +x, in forage range
+    reg.emplace<eng::sim::Pickup>(orb);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(npc).value.x;  // speed toward the orb
+  };
+  const float hungry = forage_speed(10.0f);   // 10% of max -> need_efficiency 0.7
+  const float starving = forage_speed(0.0f);  // bone-empty -> need_efficiency at its 0.5 floor
+  REQUIRE(hungry > 0.0f);                     // a hungry colonist heads for food...
+  REQUIRE(starving >
+          0.0f);  // ...a starving one still crawls toward it (the floor, never frozen)...
+  REQUIRE(starving < hungry);  // ...but slower: an emptier belly is a heavier step
+}
+
 TEST_CASE("fear beats hunger: a threatened NPC flees rather than forage", "[sim]") {
   entt::registry reg;
   const entt::entity npc = reg.create();

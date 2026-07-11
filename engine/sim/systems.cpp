@@ -203,6 +203,15 @@ void steer_npcs(entt::registry& reg) {
     // -> no crawl (the common case), so a rested colony steers exactly as before (bit-identical).
     const Stats* stats = reg.try_get<Stats>(n);
     if (stats != nullptr && stats->stamina.current <= 0.0f) move_scale *= kExhaustedMoveScale;
+    // ...and STARVATION drags the legs too — the Need debuff reaches every step, not just the
+    // swing. need_efficiency (the same 1.0-at-comfort -> 0.5-at-empty curve that saps combat damage
+    // and greys the dot) scales move_scale, so a starving or parched colonist TRUDGES toward
+    // whatever it wants — one source of truth for the whole debuff. Applied uniformly like the
+    // crawl above (so even the forage/water-seek rungs are slowed: a weak body is sluggish on its
+    // way to the meal too), but the 0.5 FLOOR means it always keeps moving and reaches the food,
+    // never freezes. Both needs at/above a quarter -> 1.0 -> a fed colony steers exactly as before
+    // (bit-identical).
+    if (stats != nullptr) move_scale *= need_efficiency(*stats);
 
     // Perception, priority 1 — danger: the single nearest hazard within sense range. How near a
     // hazard gets before this NPC senses (and so flees) it is shaped by its BRAVERY: a coward
