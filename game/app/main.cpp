@@ -131,6 +131,15 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
       radius *= eng::sim::renown_scale(eng::sim::standing(*led));
     }
     dl->AddCircleFilled(ImVec2{p.x, p.y}, radius, color);
+
+    // A raised GUARD reads on the FIELD, not just the panel: a Blocking entity gets a steel-blue
+    // RING around its dot (the same hue the panel's "GUARDING" text uses), so you can SEE who has
+    // their guard up mid-fight — the field cue every other status already has (personality tint,
+    // poison green, hit-flash white, standing size), now for the stance too. Presentation-only:
+    // reads Blocking, never sets it; optional (only the player guards today), so all_of guards it.
+    if (world.registry().all_of<eng::sim::Blocking>(e)) {
+      dl->AddCircle(ImVec2{p.x, p.y}, radius + 3.0f, IM_COL32(150, 205, 255, 255), 0, 2.0f);
+    }
   }
 }
 
