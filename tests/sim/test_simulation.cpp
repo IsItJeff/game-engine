@@ -2136,6 +2136,37 @@ TEST_CASE("a charismatic champion inspires more devotion: Charisma deepens a wit
           plain);  // ...but a charismatic one bonds it harder, from the very same kill
 }
 
+TEST_CASE("a charismatic champion is witnessed from farther: Charisma widens the reach", "[sim]") {
+  // Charisma's SECOND effect (its first is devotion DEPTH above): bond_witnesses scales the
+  // camaraderie RADIUS by the killer's Charisma too, so a charismatic hero's deeds inspire
+  // onlookers a wider ring away — presence, not just depth. The witness sits at 150 — OUTSIDE the
+  // base 120 reach but INSIDE the CHA-11 widened reach (120 x 1.5 = 180) — so only a charismatic
+  // killer bonds it. Only the killer's CHA differs, so the reach gap is Charisma alone.
+  const auto bonds_distant_witness = [](int charisma_level) {
+    entt::registry reg;
+    const entt::entity killer = reg.create();
+    reg.emplace<eng::sim::Transform>(killer, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(killer).charisma.level = charisma_level;
+    reg.emplace<eng::sim::Skills>(killer);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});  // within melee reach
+    reg.emplace<eng::sim::Stats>(foe,
+                                 eng::sim::Vital{3.0f, 3.0f, 0.0f});  // frail: one blow fells it
+    reg.emplace<eng::sim::Enemy>(foe);                                // ...and hostile
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally,
+                                     eng::Vec2{150.0f, 0.0f});  // beyond the base 120, within 180
+    reg.emplace<eng::sim::Npc>(ally);                           // a distant watching colonist
+
+    std::mt19937 rng{42};
+    eng::sim::perform_attack(reg, killer, rng);  // fells the foe -> bonds witnesses in reach
+    return eng::sim::affinity_toward(reg, ally, killer) > 0;
+  };
+  REQUIRE_FALSE(
+      bonds_distant_witness(1));       // a plain fighter's reach doesn't reach the far onlooker
+  REQUIRE(bonds_distant_witness(11));  // ...a charismatic one's widened reach does
+}
+
 TEST_CASE("leading trains Leadership into Charisma: a witnessed kill builds a following", "[sim]") {
   // The Charisma STRAND, closing the loop: felling a foe with an ally WATCHING trains Leadership ->
   // Charisma (the social mirror of Striking -> Strength). A LONE kill, with no one to lead, trains
