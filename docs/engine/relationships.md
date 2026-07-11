@@ -28,11 +28,15 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
 - a **lazy component** (an entity earns a `Relationships` only on its first bond, so a
   never-bonding colonist — and the whole pre-relationships world — carries nothing and
   replays **bit-identically**);
-- and a **locked, minimal schema** — `affinity` is fed now; its two design siblings wire
-  later with *no reshape*. `trust` is a one-field append the day its own event lands; the
-  bond ladder (Acquaintance → Friend → Partner / Rival → Nemesis) is a **derived** band
-  `bond_tier(affinity)` — a pure query, never a stored slot — exactly the
-  `standing → standing_title` split.
+- and a **locked, minimal schema** — `affinity` is fed now; `trust` is a one-field append the
+  day its own event lands (still future, *no reshape*). The bond ladder (Acquaintance → Friend →
+  Partner / Rival → Nemesis) has **landed** as a **derived** band `bond_tier(affinity)` — a pure
+  query naming where an affinity falls, never a stored slot, exactly the `standing → standing_title`
+  split. Its edges reuse the **behavioural** thresholds so the name matches what the sim already does
+  at that affinity: Acquaintance begins at `kBondPull` (+10, a tie that pulls you toward a friend),
+  Rival at `kGrudgeThreshold` (−20, a grudge deep enough to abandon the resented); the debug HUD
+  reads out the player's **closest bond** by it. Friend/Partner and Nemesis are the deeper bands the
+  design's *latching* (resist-decay) will hang off later.
 
 ## How it works
 
@@ -141,8 +145,9 @@ axes are now wired.**
 Beyond that, the write-point is the whole point: three events already prove it out (a rescue bonds,
 a cruel strike grudges, a shared kill forges camaraderie), so each further event — a **shared meal**,
 a **broken promise** — is just one more `nudge_affinity` call; `trust`
-appends as a second `Relation` field; the derived `bond_tier` names the ladder; and a **leaky decay**
-lets cold ties fade (and a grudge cool). Then the social `perceive` layer reads affinity *and*
+appends as a second `Relation` field; and a **leaky decay** (the affinity twin of the standing leak
+that already ships) will let cold ties fade and a grudge cool. The derived `bond_tier` above already
+names the ladder those events climb. Then the social `perceive` layer reads affinity *and*
 standing to choose stances (befriend / protect / exploit).
 
 ## Key files

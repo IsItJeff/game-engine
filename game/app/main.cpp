@@ -230,6 +230,18 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   if (const eng::sim::Attributes* attrs = world.registry().try_get<eng::sim::Attributes>(player)) {
     ImGui::Text("build: %s", eng::sim::build_title(*attrs));
   }
+  // Closest bond: the strongest tie the player holds (its highest-affinity valid edge), named by
+  // the derived `bond_tier` band. The player builds ties by fighting ALONGSIDE colonists
+  // (camaraderie bonds a witness to the killer), so this reads out the co-op camaraderie earned in
+  // the field. No Relationships until a bond forms; a recycled edge target is skipped (ids reuse —
+  // gate on valid).
+  if (const auto* rel = world.registry().try_get<eng::sim::Relationships>(player)) {
+    std::int8_t best = 0;
+    for (const eng::sim::Relation& edge : rel->edges) {
+      if (world.registry().valid(edge.other) && edge.affinity > best) best = edge.affinity;
+    }
+    ImGui::Text("closest bond: %s", eng::sim::bond_tier(best));
+  }
   if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
     // Show one learned skill's level + progress bar. Toughness only appears once the
     // player has taken a hit (it isn't in `owned` until then), so guard on find().

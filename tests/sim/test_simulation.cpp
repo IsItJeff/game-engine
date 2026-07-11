@@ -3268,6 +3268,26 @@ TEST_CASE("standing_title names each band, symmetric about neutral", "[sim]") {
   REQUIRE(title(-eng::sim::kRenownFullAt) == "Notorious");  // ready and symmetric)
 }
 
+TEST_CASE("bond_tier names each affinity band from nemesis to partner", "[sim]") {
+  // The relationships twin of standing_title — a pure query naming where an affinity falls, always
+  // in sync with the number behind it. The band edges reuse the behavioural thresholds:
+  // Acquaintance begins at +10 (the kBondPull follow line), Rival at -20 (the kGrudgeThreshold
+  // abandon line).
+  const auto tier = [](std::int8_t a) { return std::string(eng::sim::bond_tier(a)); };
+  REQUIRE(tier(100) == "Partner");
+  REQUIRE(tier(80) == "Partner");
+  REQUIRE(tier(79) == "Friend");
+  REQUIRE(tier(40) == "Friend");
+  REQUIRE(tier(10) == "Acquaintance");  // exactly the +10 kBondPull line...
+  REQUIRE(tier(9) == "Neutral");        // ...just below it is Neutral
+  REQUIRE(tier(0) == "Neutral");
+  REQUIRE(tier(-19) == "Neutral");
+  REQUIRE(tier(-20) == "Rival");  // exactly the -20 kGrudgeThreshold line...
+  REQUIRE(tier(-59) == "Rival");
+  REQUIRE(tier(-60) == "Nemesis");  // ...deepening to Nemesis
+  REQUIRE(tier(-100) == "Nemesis");
+}
+
 TEST_CASE("build_title names the dominant trained attribute", "[sim]") {
   // The "from build" derived title, the twin of standing_title: which of the four trained
   // Attributes leads names what KIND of fighter you are. Pure query; untrained = Greenhorn; ties
