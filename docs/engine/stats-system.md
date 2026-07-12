@@ -21,14 +21,16 @@ engine skeleton's ECS. It is the worked example of
   system that damages a player who touches one and then destroys it (the drifting
   motes are consumed on contact).
 
-Honest scope: `health`, `stamina`, `hunger`, `water`, and `fatigue` exist. Health regenerates, drops from a
+Honest scope: `health`, `stamina`, `hunger`, `water`, `fatigue`, `warmth`, and `mp` (mana) exist. Health regenerates, drops from a
 debug key and from touching a hazard, and reaching zero puts the player *Downed* (rescued
 by an ally or respawned on a timer). Stamina is
 spent by moving and recovers by resting; running it dry slows the player to a
 crawl. Hunger only ever falls (you refill it by *eating*, not resting) and starves you at
 empty; **water** is its twin — it falls too, you refill it by *drinking* at a pond, and empty it
 dehydrates you. **Fatigue** is the odd third need — it falls as you *exert* and *recovers* as you
-rest — and empty it **collapses** you (`Downed`, ally-rescuable, even at full health). Death is respawn for
+rest — and empty it **collapses** you (`Downed`, ally-rescuable, even at full health). **Warmth** is
+the *localized* need — it drains only inside a cold zone and refills by the fire, freezing you at
+empty; **mana** fuels magic (see [Magic](magic.md)). Death is respawn for
 the player and permadeath — destruction — for NPCs.
 
 ## Why it's built this way
@@ -291,6 +293,30 @@ Survivalist only while you're **already exhausted** (fatigue below `kExhaustionL
 endure by enduring, so a rested colony trains none of it (bit-identical) and only the truly worn-down
 toughen. That completes the Fatigue triad-member: a bar that drains with exertion, recovers with rest
 (fastest by the fire), collapses you at empty, and lengthens as you survive.
+
+### Warmth: the localized need
+
+**Warmth** is the design's *temperature*, split out and made **spatial**. Where hunger/water fall on
+a background timer *everywhere*, warmth moves only by **where you stand** (`drain_warmth`): it holds
+steady in the open, **drains inside a `ColdZone`** (a patch where the cold bites), and **refills by a
+`Hearth`'s fire** — which *wins* where the two overlap, so huddling by the fire re-warms you even in
+the cold. At 0 it **freezes**, chipping health through the same death path as starving and
+dehydrating (and `regenerate_vitals` gates healing off while frozen, so cold nets health strictly
+down like the other needs). So instead of a "feed me" clock it's a **"flee the cold, huddle by the
+fire"** pressure — and it turns the hearth from a mere field-hospital into a place you *return* to.
+The bit-identity gate is spatial: with **no `ColdZone`** in the world nobody ever chills, so warmth
+stays full and untouched. Creatures don't have it drained (the same person-not-monster set), and a
+revive restores it (else you'd wake still freezing).
+
+!!! note "NPCs don't *seek* warmth yet — but they don't freeze helplessly either"
+    The player has the HUD bar and steers by hand, but colonists have **no** dedicated seek-warmth /
+    avoid-cold rung (the way hunger has a forage rung and thirst a drink rung — those are the model
+    for the follow-up). What saves them is emergent: freezing chips health, and once a colonist is
+    wounded the existing **wounded-retreat** rung carries it to the nearest hearth (which re-warms
+    *and* heals it). So the demo `ColdZone` is deliberately placed **inside** `kHearthSeekRadius` of
+    the fire, so that retreat can actually reach it and the "huddle by the fire" loop closes — a
+    colonist stranded in a cold patch with no hearth in retreat range *would* freeze to death, which
+    is why the direct seek-warmth rung is the natural next slice.
 
 ### Food plots: a renewable source
 

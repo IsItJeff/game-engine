@@ -231,6 +231,11 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     const eng::sim::Vital& mp = stats->mp;
     ImGui::Text("mana: %.0f / %.0f", static_cast<double>(mp.current), static_cast<double>(mp.max));
     ImGui::ProgressBar(mp.current / mp.max);  // spent by casting (C: bolt), regenerates at rest
+    const eng::sim::Vital& wm = stats->warmth;
+    ImGui::Text("warmth: %.0f / %.0f", static_cast<double>(wm.current),
+                static_cast<double>(wm.max));
+    ImGui::ProgressBar(wm.current /
+                       wm.max);  // drains in a cold zone, refills at the hearth; 0 freezes
   }
 
   // Progression: the attribute the player has grown, and progress toward the next

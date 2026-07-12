@@ -62,6 +62,19 @@ entt::entity make_hearth(entt::registry& reg, Vec2 pos, float radius) {
   return e;
 }
 
+// Create a COLD ZONE — a patch where the cold bites, draining WARMTH from anyone inside it
+// (drain_warmth). The inverse of the hearth: a pale, icy-blue disc drawn at its reach, so the chill
+// reads as a place to avoid (or dash across to the fire on the far side). Scenery — no
+// Stats/Velocity.
+entt::entity make_cold_zone(entt::registry& reg, Vec2 pos, float radius) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.55f, 0.7f, 0.9f}, radius);  // pale icy-blue, at its reach
+  reg.emplace<ColdZone>(e, ColdZone{radius});
+  return e;
+}
+
 // Create a SPELLBOOK on the ground — a tome the player walks over to LEARN Spellcasting
 // (study_spellbooks). The design's "magic is read/taught": a small arcane-violet dot (matching the
 // bolt it unlocks) a would-be mage seeks out. Scenery until read; no Stats/Velocity.
@@ -333,6 +346,14 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // apart from the player's centre spawn so learning magic is a short quest (go read the tome), not
   // a freebie at your feet.
   make_spellbook(reg, Vec2{kFieldWidth * 0.25f, kFieldHeight * 0.35f});
+  // A COLD ZONE just EAST of the central hearth — a chill that drains WARMTH from anyone who
+  // lingers in it, so the fire becomes a place to RETURN to (warm up), not just heal. Placed so its
+  // whole reach stays WITHIN the hearth-seek radius (kHearthSeekRadius 300): a colonist that chills
+  // there until it's wounded is pulled BACK to the fire by the existing wounded-retreat rung —
+  // which re-warms AND heals it — so the "flee the cold, huddle by the fire" loop actually closes
+  // for NPCs, which have no dedicated seek-warmth rung yet. Its near edge clears the player's
+  // centre spawn, so you start warm and choose when to brave the cold.
+  make_cold_zone(reg, Vec2{center.x + 150.0f, center.y}, 120.0f);
 
   const entt::entity player = reg.create();
   reg.emplace<Transform>(player, center);
@@ -443,11 +464,13 @@ void World::step() {
   npc_guard(registry_);   // ...a hardened colonist instead PLANTS and raises a guard on a creature
   chase_prey(registry_);  // creatures decide to home in on the nearest person (player or NPC)
   integrate_motion(registry_, dt);
-  npc_attack(registry_, rng_);     // NPCs strike any hazard now in reach (positions are current)
-  update_stamina(registry_, dt);   // moving costs stamina; resting restores it
-  drain_hunger(registry_, dt);     // people get hungry; starving (0) chips health before deaths
-  drain_water(registry_, dt);      // ...and thirsty; dehydrating (0) chips health the same way
-  tick_fatigue(registry_, dt);     // ...and tire while exerting, recovering at rest (the 3rd need)
+  npc_attack(registry_, rng_);    // NPCs strike any hazard now in reach (positions are current)
+  update_stamina(registry_, dt);  // moving costs stamina; resting restores it
+  drain_hunger(registry_, dt);    // people get hungry; starving (0) chips health before deaths
+  drain_water(registry_, dt);     // ...and thirsty; dehydrating (0) chips health the same way
+  tick_fatigue(registry_, dt);    // ...and tire while exerting, recovering at rest (the 3rd need)
+  drain_warmth(registry_,
+               dt);  // ...and CHILL in a cold zone, re-warming by a fire (freezing chips)
   advance_progression(registry_);  // activity -> skill+attribute XP -> level -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
   // Collision runs after movement (positions are current), then death is checked

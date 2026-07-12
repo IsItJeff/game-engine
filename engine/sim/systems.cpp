@@ -1048,7 +1048,11 @@ void regenerate_vitals(entt::registry& reg, float dt) {
     // threat. tick_poison runs before this system and reaps expired Poisoned, so the flag here
     // means active venom. Hardiness (VIT) still blunts the venom — but DIRECTLY, in tick_poison
     // (which shaves the chip by Endurance), not here; this system only gates the regen off.
-    if (s.hunger.current <= 0.0f || s.water.current <= 0.0f || reg.all_of<Poisoned>(e)) continue;
+    if (s.hunger.current <= 0.0f || s.water.current <= 0.0f || s.warmth.current <= 0.0f ||
+        reg.all_of<Poisoned>(e))
+      continue;  // ...and FREEZING suppresses healing too (drain_warmth runs before this), so cold
+                 // nets health strictly down like the other needs. Warmth is full unless a ColdZone
+                 // exists, so this clause is dormant (bit-identical) in a world without cold.
 
     // Tougher characters heal faster (VIT). No Attributes -> boost 1.0 (bit-identical to
     // before), so creatures and bare entities are unchanged. Same shape as update_stamina.
@@ -1250,6 +1254,49 @@ void drain_water(entt::registry& reg, float dt) {
 
     if (s.water.current <= 0.0f) {  // dehydrating — the same death path as starving
       s.health.current -= kDehydrationPerSecond * dt;
+      if (s.health.current < 0.0f) s.health.current = 0.0f;
+    }
+  }
+}
+
+void drain_warmth(entt::registry& reg, float dt) {
+  // WARMTH — the LOCALIZED Need, the design's temperature made spatial. Unlike hunger/water (a
+  // background timer) it moves only by WHERE you stand: a Hearth's fire RE-WARMS you, a ColdZone
+  // CHILLS you, the open holds steady. So it drives a "flee the cold, huddle by the fire" loop
+  // rather than a "feed me" clock. At 0 it FREEZES — chipping health through the same death path as
+  // starving and dehydrating (regenerate_vitals also gates healing off while frozen). The fire
+  // beats the cold: a hearth INSIDE a cold zone still warms. Same set as the other needs (every
+  // Stats-bearer that isn't a creature). No ColdZone in the world -> nobody ever chills -> warmth
+  // stays full and untouched (a hearth just re-clamps a full bar) -> bit-identical.
+  constexpr float kColdDrainPerSecond = 3.0f;  // how fast a ColdZone saps you (a real, felt bite)
+  constexpr float kWarmRecoverPerSecond =
+      6.0f;                                  // ...and how fast a fire mends it (a haven, faster)
+  constexpr float kFreezePerSecond = 12.0f;  // health lost per second once warmth hits 0
+  auto view = reg.view<Stats>(entt::exclude<Enemy>);
+  auto zones = reg.view<ColdZone, Transform>();
+  for (const entt::entity e : view) {
+    Stats& s = view.get<Stats>(e);
+    const Transform* tf = reg.try_get<Transform>(e);
+    if (tf != nullptr && in_a_hearth(reg, tf->position)) {
+      s.warmth.current += kWarmRecoverPerSecond * dt;  // by the fire: re-warm...
+      if (s.warmth.current > s.warmth.max) s.warmth.current = s.warmth.max;
+    } else if (tf != nullptr) {
+      bool cold = false;  // ...else in a cold zone: chill (the open holds steady)
+      for (const entt::entity z : zones) {
+        if (glm::distance(tf->position, zones.get<Transform>(z).position) <
+            zones.get<ColdZone>(z).radius) {
+          cold = true;
+          break;
+        }
+      }
+      if (cold) {
+        s.warmth.current -= kColdDrainPerSecond * dt;
+        if (s.warmth.current < 0.0f) s.warmth.current = 0.0f;  // never below empty
+      }
+    }
+
+    if (s.warmth.current <= 0.0f) {  // freezing — the same death path as starving/dehydrating
+      s.health.current -= kFreezePerSecond * dt;
       if (s.health.current < 0.0f) s.health.current = 0.0f;
     }
   }
@@ -3009,7 +3056,8 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
     s.hunger.current = s.hunger.max;
     s.water.current = s.water.max;
     s.fatigue.current = s.fatigue.max;  // and rested — else an EXHAUSTION collapse drops you again
-    reg.remove<Poisoned>(e);            // no lingering lethal status through a revive
+    s.warmth.current = s.warmth.max;  // and warm — else you revive still freezing (a re-death loop)
+    reg.remove<Poisoned>(e);          // no lingering lethal status through a revive
     v.value = Vec2{0.0f, 0.0f};
   };
 
