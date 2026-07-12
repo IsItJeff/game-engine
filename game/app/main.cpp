@@ -223,6 +223,11 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     const eng::sim::Vital& wa = stats->water;
     ImGui::Text("water: %.0f / %.0f", static_cast<double>(wa.current), static_cast<double>(wa.max));
     ImGui::ProgressBar(wa.current / wa.max);  // falls over time; drink at the pond, or dehydrate
+    const eng::sim::Vital& fa = stats->fatigue;
+    ImGui::Text("fatigue: %.0f / %.0f", static_cast<double>(fa.current),
+                static_cast<double>(fa.max));
+    ImGui::ProgressBar(fa.current /
+                       fa.max);  // falls while exerting (worst sprinting), mends at rest
   }
 
   // Progression: the attribute the player has grown, and progress toward the next

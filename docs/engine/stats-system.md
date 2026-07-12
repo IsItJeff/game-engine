@@ -3,7 +3,8 @@
 ## What it is
 
 The foundation for the numbers that describe a player or an NPC — health, stamina,
-and hunger today, with more attributes and skills as the game grows. It is
+and the three survival needs (hunger, water, fatigue) today, with more attributes and skills as the
+game grows. It is
 deliberately small: two data types and a handful of small systems, built on the
 engine skeleton's ECS. It is the worked example of
 [extending the skeleton](skeleton/extending.md) applied to a real feature.
@@ -20,13 +21,15 @@ engine skeleton's ECS. It is the worked example of
   system that damages a player who touches one and then destroys it (the drifting
   motes are consumed on contact).
 
-Honest scope: `health`, `stamina`, `hunger`, and `water` exist. Health regenerates, drops from a
+Honest scope: `health`, `stamina`, `hunger`, `water`, and `fatigue` exist. Health regenerates, drops from a
 debug key and from touching a hazard, and reaching zero puts the player *Downed* (rescued
 by an ally or respawned on a timer). Stamina is
 spent by moving and recovers by resting; running it dry slows the player to a
 crawl. Hunger only ever falls (you refill it by *eating*, not resting) and starves you at
 empty; **water** is its twin — it falls too, you refill it by *drinking* at a pond, and empty it
-dehydrates you. Death is respawn for the player and permadeath — destruction — for NPCs.
+dehydrates you. **Fatigue** is the odd third need — it falls as you *exert* and *recovers* as you
+rest (nothing reads it yet; the empty-collapse consequence is the next slice). Death is respawn for
+the player and permadeath — destruction — for NPCs.
 
 ## Why it's built this way
 
@@ -250,6 +253,24 @@ parity. Because the source is a place rather than scattered orbs, a colonist is 
 of thirst in a quiet corner than of hunger; it is the seed of the water economy (wells now, irrigated
 crops later).
 
+### Fatigue: the need that recovers
+
+**Fatigue** is the fifth vital and the **third** Need, completing the design's survival triad
+(Hunger + Water + Fatigue) — but it's the odd one out. Hunger and water only ever *fall*; you refill
+them by eating and drinking. Fatigue **recovers on its own, with rest**. `tick_fatigue` spends it
+while you exert — the same `rest < walk < sprint` tiers the other needs use, except here the base
+tier is *recovery*: standing still **mends** fatigue, moving spends it, sprinting spends it fastest.
+So the sprint you already pay for in stamina (seconds) now also costs in fatigue (minutes) — the "you
+can't run forever" pressure, on a slow background timescale. It clamps to `[0, max]` (a rester never
+overflows full).
+
+This slice is the **seam**: the bar exists, moves, and shows in the debug HUD, but nothing *reads* it
+yet — so it is bit-identical (a new `Vital` appended last, a new system that touches only the new
+field). The consequences layer on next: an **empty-fatigue collapse** (`Downed`, ally-rescuable —
+exhaustion drops you where you stand, the design's *"empty → Downed"*), the deeper **sit/sleep**
+recovery tiers, and a growth source (gear + a Survivalist skill) that *lengthens* the timer without
+removing it.
+
 ### Food plots: a renewable source
 
 Water's fixed pond has a food counterpart, but with a twist that makes it the seed of a *production*
@@ -305,10 +326,10 @@ here.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water), `need_efficiency` (the empty-Need debuff: softer hits *and* slower steps) and its presentation twin `need_pallor`, `WaterSource`, `FoodSource`, `Hearth`, `Hazard`, and the `Npc` marker.
-- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `mend_gear` (the hearth repairs worn weapon/armour durability), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `graze` (the regrowing food plots), `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
+- `engine/sim/components.hpp` — `Vital`, `Stats` (health + stamina + hunger + water + fatigue), `need_efficiency` (the empty-Need debuff: softer hits *and* slower steps) and its presentation twin `need_pallor`, `WaterSource`, `FoodSource`, `Hearth`, `Hazard`, and the `Npc` marker.
+- `engine/sim/systems.hpp` / `systems.cpp` — `regenerate_vitals` (heal-gated by both needs), `mend_gear` (the hearth repairs worn weapon/armour durability), `update_stamina`, `drain_hunger`, `drain_water` + `drink`, `tick_fatigue` (the third need — falls exerting, recovers resting), `graze` (the regrowing food plots), `handle_deaths` (respawn vs permadeath), and `resolve_contacts`.
 - `engine/sim/world.cpp` — the player's `Stats`, the motes' `Hazard`, the wandering NPCs, the stamina-aware `MovePlayer`, and the lines scheduling the systems in `step()`.
-- `game/app/main.cpp` — the health, stamina, hunger, and water bars and the "NPCs alive" counter in the debug panel, plus the `need_pallor` sallow-dot cue in `draw_entities`; `world.cpp`'s `make_water_source` places the pond and `make_hearth` the hearth.
+- `game/app/main.cpp` — the health, stamina, hunger, water, and fatigue bars and the "NPCs alive" counter in the debug panel, plus the `need_pallor` sallow-dot cue in `draw_entities`; `world.cpp`'s `make_water_source` places the pond and `make_hearth` the hearth.
 - `tests/sim/test_simulation.cpp` — the heal, damage, death, contact, stamina, hunger/starvation/eating, the `need_efficiency` debuff (a starving fighter hits softer *and* trudges slower) and its `need_pallor` visual twin, and permadeath tests.
 
 ## Go deeper

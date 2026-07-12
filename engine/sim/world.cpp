@@ -418,6 +418,7 @@ void World::step() {
   update_stamina(registry_, dt);   // moving costs stamina; resting restores it
   drain_hunger(registry_, dt);     // people get hungry; starving (0) chips health before deaths
   drain_water(registry_, dt);      // ...and thirsty; dehydrating (0) chips health the same way
+  tick_fatigue(registry_, dt);     // ...and tire while exerting, recovering at rest (the 3rd need)
   advance_progression(registry_);  // activity -> skill+attribute XP -> level -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
   // Collision runs after movement (positions are current), then death is checked

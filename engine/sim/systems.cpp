@@ -1165,6 +1165,36 @@ void drain_water(entt::registry& reg, float dt) {
   }
 }
 
+void tick_fatigue(entt::registry& reg, float dt) {
+  // Fatigue is the ODD need: it falls while you EXERT and RECOVERS while you rest — the "you can't
+  // run forever" pressure, on a slow (minutes) background timescale like hunger/water. The same
+  // exertion tiers the other needs use (rest < walk < sprint), but here the base tier is RECOVERY,
+  // not a drain: standing still MENDS fatigue, moving spends it, sprinting spends it faster. Gentle
+  // knobs so a colonist that mixes moving with resting stays rested, and only sustained exertion
+  // wears it down. Nothing READS fatigue yet — the empty-collapse consequence and the sit/sleep
+  // faster-rest tiers are the next slices; this seam just makes the bar move.
+  constexpr float kRestRecoverPerSecond = 0.5f;  // regained per second while standing still...
+  constexpr float kMoveDrainPerSecond = 0.4f;    // ...spent per second while moving (walking)...
+  constexpr float kSprintDrainPerSecond =
+      0.4f;  // ...and again on top while sprinting (the top tier)
+  // Every PERSON tires — the player and NPCs (Stats without the Enemy marker), the same set the
+  // other needs drain. Creatures are pure combat foes, no fatigue bar.
+  auto view = reg.view<Stats>(entt::exclude<Enemy>);
+  for (const entt::entity e : view) {
+    Stats& s = view.get<Stats>(e);
+    const Velocity* v = reg.try_get<Velocity>(e);
+    if (v != nullptr && glm::length(v->value) > 0.0f) {
+      s.fatigue.current -= kMoveDrainPerSecond * dt;  // moving spends fatigue...
+      if (reg.all_of<Sprinting>(e))
+        s.fatigue.current -= kSprintDrainPerSecond * dt;  // ...sprint more
+    } else {
+      s.fatigue.current += kRestRecoverPerSecond * dt;  // ...standing still mends it (the odd need)
+    }
+    if (s.fatigue.current < 0.0f) s.fatigue.current = 0.0f;                    // never below empty
+    if (s.fatigue.current > s.fatigue.max) s.fatigue.current = s.fatigue.max;  // ...nor above full
+  }
+}
+
 void drink(entt::registry& reg, float dt) {
   // How fast water refills while standing in a source — quick, so a few seconds at the well tops
   // you off, but not instant, so you must LINGER (the design's "walk to the well" spatial loop). A

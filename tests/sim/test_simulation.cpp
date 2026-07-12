@@ -318,6 +318,33 @@ TEST_CASE("sprinting drains hunger and water faster than walking (the exertion t
           reg.get<eng::sim::Stats>(walker).water.current);  // ...and more water than a walk
 }
 
+TEST_CASE("fatigue falls while exerting and recovers at rest (the third need)", "[sim]") {
+  // The ODD need: unlike hunger/water (which only fall), fatigue RECOVERS with rest and FALLS with
+  // exertion. A rester regains it (toward full), a mover spends it, and a sprinter spends it
+  // fastest — the same rest < walk < sprint tiers, but with rest as RECOVERY. Clamps at full, never
+  // overflows.
+  const auto fatigue_after = [](float start, bool moving, bool sprinting) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Stats>(e).fatigue.current = start;
+    if (moving)
+      reg.emplace<eng::sim::Velocity>(e, eng::Vec2{50.0f, 0.0f});  // exerting
+    else
+      reg.emplace<eng::sim::Velocity>(e);  // at rest
+    if (sprinting) reg.emplace<eng::sim::Sprinting>(e);
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) eng::sim::tick_fatigue(reg, dt);
+    return reg.get<eng::sim::Stats>(e).fatigue.current;
+  };
+  REQUIRE(fatigue_after(50.0f, false, false) >
+          50.0f);  // resting RECOVERS fatigue (rose above 50)...
+  REQUIRE(fatigue_after(50.0f, true, false) < 50.0f);  // ...moving SPENDS it (fell below 50)...
+  REQUIRE(fatigue_after(50.0f, true, true) <
+          fatigue_after(50.0f, true, false));  // ...and sprinting spends it fastest
+  REQUIRE(fatigue_after(100.0f, false, false) ==
+          Approx(100.0f));  // a rester at full CLAMPS, never overflows max
+}
+
 TEST_CASE("an empty stomach starves health", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();
