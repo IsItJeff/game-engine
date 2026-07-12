@@ -891,6 +891,10 @@ enum class SkillId : std::uint16_t {
   Healing,   // trained by MENDING a wounded ally (heal_spell). Main attribute WISDOM: the design's
              // WIS Healing/Medicine domain, the support twin of Spellcasting's offence (WIS scales
              // the mend as INT scales a bolt). Added LAST so existing SkillId values hold.
+  Cooking,   // trained by PREPARING a meal (harvest_nearest_crop). Main attribute INTELLECT (the
+             // design's INT Cooking skill, Spellcasting's non-magic sibling): a better cook's meal
+             // fills more hunger, so INT scales the meal the way it scales a bolt. Added LAST so
+             // existing SkillId values hold.
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a

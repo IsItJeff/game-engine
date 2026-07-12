@@ -948,6 +948,54 @@ TEST_CASE("harvesting a ripe crop drops a meal that fills more than a loot orb",
   REQUIRE(reg.get<eng::sim::Stats>(farmer).hunger.current > 50.0f);  // a fuller meal than an orb
 }
 
+TEST_CASE("a better cook's meal restores more to a famished eater", "[sim]") {
+  // Cooking scales the meal's food, and — because the base meal sits BELOW the hunger cap — that
+  // surplus actually LANDS: a famished eater (empty hunger, full room) gets more from a skilled
+  // cook's meal than a novice's. We measure the HUNGER a colonist actually feels, not the raw
+  // Pickup.food, so the effect isn't clamped away. A level-1 cook prepares the base meal.
+  const auto hunger_restored = [](int cooking_level) {
+    entt::registry reg;
+    const entt::entity plot = reg.create();
+    reg.emplace<eng::sim::Transform>(plot, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::FoodSource>(plot);  // default: ripe (stock 100), radius 60
+    const entt::entity cook = reg.create();
+    reg.emplace<eng::sim::Transform>(cook, eng::Vec2{0.0f, 0.0f});  // on the plot -> in reach
+    reg.emplace<eng::sim::Attributes>(cook);
+    auto& sk = reg.emplace<eng::sim::Skills>(cook);
+    if (cooking_level > 1) sk.train(eng::sim::SkillId::Cooking).level = cooking_level;
+    REQUIRE(eng::sim::harvest_nearest_crop(reg, cook));  // drops a meal where the cook stands
+    const entt::entity eater = reg.create();
+    reg.emplace<eng::sim::Transform>(eater, eng::Vec2{0.0f, 0.0f});  // on the meal -> eats it
+    reg.emplace<eng::sim::Stats>(eater).hunger.current = 0.0f;       // FAMISHED -> full room
+    eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+    return reg.get<eng::sim::Stats>(eater).hunger.current;
+  };
+  REQUIRE(hunger_restored(1) > 50.0f);               // even a novice meal beats an orb (50)...
+  REQUIRE(hunger_restored(6) > hunger_restored(1));  // ...but a skilled cook fills a famished
+                                                     // colonist more (the surplus lands)
+}
+
+TEST_CASE("preparing a meal trains Cooking which feeds Intellect", "[sim]") {
+  // The learn-by-doing loop: harvesting a crop into a meal trains Cooking (learning it at level 1
+  // on the first prepare) and feeds its main attribute, Intellect — so a colonist that farms a lot
+  // becomes the colony's cook, its meals ever richer.
+  entt::registry reg;
+  const entt::entity plot = reg.create();
+  reg.emplace<eng::sim::Transform>(plot, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::FoodSource>(plot);
+  const entt::entity cook = reg.create();
+  reg.emplace<eng::sim::Transform>(cook, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(cook);
+  reg.emplace<eng::sim::Skills>(cook);  // no Cooking yet
+
+  REQUIRE(reg.get<eng::sim::Skills>(cook).find(eng::sim::SkillId::Cooking) ==
+          nullptr);  // unlearned
+  eng::sim::harvest_nearest_crop(reg, cook);
+  REQUIRE(reg.get<eng::sim::Skills>(cook).find(eng::sim::SkillId::Cooking) !=
+          nullptr);                                                          // learned it
+  REQUIRE(reg.get<eng::sim::Attributes>(cook).intellect.xp > eng::Fixed{});  // ...and it fed INT
+}
+
 TEST_CASE("a bare or out-of-reach crop cannot be harvested", "[sim]") {
   // Two ways a harvest yields nothing: the patch is too bare to bother (stock below the cost), or
   // it is out of reach. Either way no meal appears and the plot is left untouched.

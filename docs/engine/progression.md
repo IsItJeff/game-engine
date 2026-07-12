@@ -4,7 +4,7 @@
 
 Characters grow by *doing*. A **skill** improves with the activity that trains it,
 skills roll up into broad **attributes**, and attributes shape what you feel in play.
-Sixteen strands are wired end to end so far, across all seven attributes:
+Seventeen strands are wired end to end so far, across all seven attributes:
 
 - staying active trains **Conditioning**, **surviving damage** trains **Toughness**,
   **resting to recover** spent stamina trains **Recovery**, **turning a blow with a raised
@@ -79,6 +79,15 @@ Sixteen strands are wired end to end so far, across all seven attributes:
   restorative mirror of casting sharpening a bolt. Like a bolt it's *learned* (it rides the same
   Spellcasting gate for now) and spends mana — but it reaches for a **friend**, not a foe, so it's the
   first strand grown by *helping* another rather than fighting or gathering.
+- **preparing a meal** (harvesting a ripe crop, the **G** command) trains **Cooking**, a **second**
+  feeder of **Intellect** beside Spellcasting — the design's INT *non-magic* domain. Each level
+  stretches the same crop into **more food** (`harvest_nearest_crop` scales the meal by the cook's
+  Cooking level), so a colonist who farms a lot becomes the colony's cook. Because the base meal sits
+  *below* the hunger cap, that surplus actually **lands on a famished eater** — a starving colonist is
+  filled more by a skilled cook's meal, while a nearly-full one tops off from either (a belly holds
+  only so much; *carryable leftovers that feed more mouths are a follow-up*). Learn-by-doing needs no
+  gate: anyone can harvest, and the first prepare learns it at level 1 (a plain ×1.0 meal, so a fresh
+  world is unchanged) — the food-economy twin of a bolt growing a mage.
 
 The player and NPCs run the identical machinery — progression *and* combat — so a
 long-lived NPC that has moved, been hurt, and fought grows genuinely tougher and
