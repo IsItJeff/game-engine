@@ -2113,7 +2113,20 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   reg.emplace<Transform>(shot, origin);
   reg.emplace<PrevTransform>(shot, origin);
   reg.emplace<RenderDot>(shot, Vec3{1.0f, 0.95f, 0.4f}, 4.0f);  // a small bright-yellow bolt
-  reg.emplace<Projectile>(shot, Projectile{target, attacker, applied, kProjectileSpeed});
+  // DEXTERITY speeds the bolt — the design's DEX "Speed" aspect: a defter thrower's shot FLIES
+  // faster, so it reaches the target sooner AND is wasted less often when the target dies
+  // mid-flight (advance_projectiles despawns a shot whose target died first). A reliability payoff
+  // for a DEX throw build, distinct from the +damage above. DEX 1 (spawn default, every existing
+  // throw test) -> 1.0 -> the flat kProjectileSpeed -> bit-identical. Capped like the
+  // dodge/crit/awareness clamps. `attrs` is the thrower's sheet, non-null here (derefed for the
+  // damage above). No RNG.
+  constexpr float kThrowSpeedPerDexterity = 0.06f;  // each DEX level past 1 speeds the bolt 6%...
+  constexpr float kThrowSpeedCap = 2.0f;            // ...up to 2x, then it plateaus
+  float speed_scale =
+      1.0f + static_cast<float>(attrs->dexterity.level - 1) * kThrowSpeedPerDexterity;
+  if (speed_scale > kThrowSpeedCap) speed_scale = kThrowSpeedCap;
+  reg.emplace<Projectile>(shot,
+                          Projectile{target, attacker, applied, kProjectileSpeed * speed_scale});
 }
 
 void advance_projectiles(entt::registry& reg, float dt) {

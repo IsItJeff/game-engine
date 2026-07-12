@@ -344,7 +344,10 @@ choice) nor a mote. Player-only for now: there is no `npc_throw`, so NPCs still 
 A throw doesn't hit *instantly* — it **launches a homing `Projectile`** (a small bright bolt) that
 flies to the target and applies the blow on arrival (`advance_projectiles`). So a throw now has a
 visible travel, and it's **wasted if the target dies first** (its shot despawns unhit) — the one
-cost of the delay. The shot *homes* rather than flying straight so it reliably catches an
+cost of the delay. **Dexterity speeds the bolt** — the design's DEX *Speed* aspect: a defter
+thrower's shot flies faster (up to 2×), so it arrives sooner *and* is wasted less often on a foe that
+dies mid-flight — a reliability edge distinct from the `+damage` DEX already gives the throw. The shot
+*homes* rather than flying straight so it reliably catches an
 approaching creature (a straight bolt aimed at where the foe *was* would overshoot as it closes on
 you). The `Projectile` is the reusable seed of every ranged effect: the spitter's (venomous) spit
 already rides it — a ranged *enemy* fell out of the same primitive — and arrows or bolts would too.
