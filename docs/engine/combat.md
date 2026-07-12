@@ -281,8 +281,9 @@ replay dodges the same blows every time.
 ### Raising a guard — active block (K)
 
 Dodge and armour are *passive* (a roll, a stat); **guard is a choice you make in the moment.**
-Hold **K** and you're `Blocking`: incoming creature blows are cut to `kBlockDamageFactor` (40%),
-enough to *tank* a swarm or hold through an enraged brute. The catch — and the reason it isn't free
+Hold **K** and you're `Blocking`: incoming creature blows are cut to `kBlockDamageFactor` (40%) —
+and a *trained* guard cuts them further still (see the Guarding skill below), enough to *tank* a
+swarm or hold through an enraged brute. The catch — and the reason it isn't free
 upside — is that a raised guard **roots you** to `kGuardMoveScale` (35%) of your speed: you trade
 mobility for mitigation. **Plant and tank, or move and dodge — not both.** It rides the per-tick
 `MovePlayer` command (a held key, not an edge event), so the stance lasts exactly as long as you hold
@@ -302,14 +303,21 @@ kill itself. The riposte routes through the creature's own `Stats`, so if it lan
 creature dies through `handle_deaths` like any other — loot and all — though it credits **no Valor**
 (Valor rewards a strike *you* throw; a riposte is the beast breaking itself on your shield).
 
-And guarding, like every other combat action, now **trains** you: a blow turned on a raised guard
+And guarding, like every other combat action, **trains** you: a blow turned on a raised guard
 builds the **Guarding** skill → **Endurance** (see [progression](progression.md#progression-skills-feed-attributes)),
 **Toughness's active twin** — one grows Endurance by *surviving* a hit, the other by *blocking* it.
 So a guard-tank grows genuinely tougher by tanking (Endurance buys bigger pools, softer blows, and
 poison-resist), and blocking is no longer the one combat action that taught nothing. It trains on
 *every* turned blow, winded or not (the grant isn't stamina-gated — only the riposte is).
-*ponytail:* `kRiposteDamage` / `kRiposteStaminaCost` are flat balance knobs (scale them with a
-Guarding skill or shield gear later).
+
+And that training now **pays back into the block itself**: the Guarding level *eases* how much of a
+blow gets through (`eased_bane(kBlockDamageFactor, level)` — the same half-floor helper the carry and
+fatigue banes use), so a veteran guard turns away more than a novice. Level 1 or no skill → the flat
+40% → bit-identical; the relief caps at half, so a master still takes a fifth of the blow (`0.4 →
+0.2`) — a guard is *softened*, never a wall. The skill you earn by blocking makes you better at
+blocking — a defensive build to sit beside the offensive STR/DEX/crit ones.
+*ponytail:* `kRiposteDamage` / `kRiposteStaminaCost` stay flat knobs (scale them with the Guarding
+skill or shield gear later); only the block *fraction* is skill-eased so far.
 
 And the guard **reads on the field**: a `Blocking` entity's dot gets a steel-blue **ring** in
 `draw_entities` (the same hue as the panel's "GUARDING" line), so you can see who has their guard up

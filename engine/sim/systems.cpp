@@ -3181,19 +3181,32 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // A raised GUARD softens the blow (before VIT mitigates it too) — the active-defence trade
       // for the mobility it costs. Applies to anyone Blocking; only the player guards today.
       if (reg.all_of<Blocking>(p)) {
-        attack_dmg *= kBlockDamageFactor;
+        // Only kBlockDamageFactor of the blow gets through a raised guard. GUARDING eases even
+        // that: a trained guard TURNS MORE of it (less through), via the same half-floor mastery
+        // helper the STR-carry / fatigue banes use — so the skill that until now only fed Endurance
+        // XP finally sharpens the block it is earned by. Level 1, or no Guarding skill (a bare
+        // Blocking victim),
+        // -> relief 0 -> the flat 0.4 -> bit-identical. eased_bane caps the relief at half, so a
+        // master still takes a fifth of the blow — a guard is softened, never a wall. Fetch Skills
+        // once here; the training grant just below reuses it.
+        Skills* gsk = reg.try_get<Skills>(p);
+        float block_factor = kBlockDamageFactor;
+        if (gsk != nullptr)
+          if (const Skill* guard = gsk->find(SkillId::Guarding))
+            block_factor = eased_bane(block_factor, guard->level);
+        attack_dmg *= block_factor;
         // Turning a blow TRAINS you to guard: a raised guard under fire builds the Guarding skill
         // -> Endurance (the design's VIT skill, Toughness's active twin — Toughness grows Endurance
         // by SURVIVING a hit, Guarding by TURNING one). So blocking, the ONE combat action that
         // used to train nothing, now grows a defensive build like every other — and Endurance is
         // well spent: VIT already buys bigger pools AND softer blows (defence_of) AND
         // poison-resist, so a guard-tank sharpens across the board. Reuses `attrs` (fetched for the
-        // dodge roll above) and guards on Skills too — a Blocking entity without the progression
-        // pair (none today but the player) just doesn't grow, so it's bit-identical for anyone not
-        // progressing. No RNG.
+        // dodge roll above) and `gsk` (fetched for the block ease above) — a Blocking entity
+        // without the progression pair (none today but the player) just doesn't grow, so it's
+        // bit-identical for anyone not progressing. No RNG.
         const Fixed kGuardingPerBlock =
             Fixed::from_int(10);  // XP per blow turned (matches a swing)
-        if (Skills* gsk = reg.try_get<Skills>(p); gsk != nullptr && attrs != nullptr) {
+        if (gsk != nullptr && attrs != nullptr) {
           grant_skill_xp(*gsk, *attrs, SkillId::Guarding, kGuardingPerBlock,
                          reg.try_get<CharacterLevel>(p));
         }

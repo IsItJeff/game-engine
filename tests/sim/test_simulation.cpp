@@ -4683,6 +4683,32 @@ TEST_CASE("a raised guard softens a creature's blow", "[sim]") {
   REQUIRE(hit_damage(true) < hit_damage(false));  // ...a raised guard softens it
 }
 
+TEST_CASE("a trained guard turns more of the blow: Guarding sharpens the block", "[sim]") {
+  // The block's EFFECT half (its training already landed): a higher Guarding level lets LESS of a
+  // creature's blow through, via the half-floor mastery helper. A veteran guard takes less than a
+  // novice turning the identical hit — same VIT (so mitigation matches), only the skill differs.
+  const auto blocked_damage = [](int guarding_level) {
+    entt::registry reg;
+    std::mt19937 rng{1234};
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);
+    reg.emplace<eng::sim::Attributes>(victim);  // VIT 1 mitigation + DEX 1 never dodges, both cases
+    reg.emplace<eng::sim::Blocking>(victim);
+    reg.emplace<eng::sim::Skills>(victim).train(eng::sim::SkillId::Guarding).level = guarding_level;
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});  // in contact
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Stats>(foe,
+                                 eng::sim::Vital{100.0f, 100.0f, 0.0f});  // full HP -> not enraged
+    const float before = reg.get<eng::sim::Stats>(victim).health.current;
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return before - reg.get<eng::sim::Stats>(victim).health.current;
+  };
+  REQUIRE(blocked_damage(1) > 0.0f);                // a novice guard still takes a blow...
+  REQUIRE(blocked_damage(11) < blocked_damage(1));  // ...a master turns more of it away
+}
+
 TEST_CASE("a raised guard trains Guarding: blocking was the one action that taught nothing",
           "[sim]") {
   // Every combat action trains a skill — attacking Striking, facing a swing Evasion, taking a hit
