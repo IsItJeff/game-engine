@@ -197,6 +197,31 @@ TEST_CASE("a chilled colonist heads for the fire: warmth drives a hearth-seek li
           0.0f);  // ...fully warm -> ignores the fire, keeps its drift (+x)
 }
 
+TEST_CASE("an idle colonist steps out of a cold zone before it chills: cold avoidance", "[sim]") {
+  // The PREVENTION half of warmth: an otherwise-idle, still-warm colonist standing IN a ColdZone
+  // drifts OUT (radially away from the zone centre, the shortest way to its edge), so it doesn't
+  // linger in the cold and chill. One already clear of the zone keeps its drift — and with no cold
+  // zone at all the rung is dormant (bit-identical).
+  const auto steer_vx = [](float npc_x) {
+    entt::registry reg;
+    const entt::entity zone = reg.create();
+    reg.emplace<eng::sim::Transform>(zone, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::ColdZone>(zone, eng::sim::ColdZone{100.0f});  // radius 100
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc,
+                                     eng::Vec2{npc_x, 0.0f});  // west of centre: inside or clear
+    reg.emplace<eng::sim::Velocity>(npc,
+                                    eng::Vec2{7.0f, 0.0f});  // an EAST drift; avoid overrides it
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Stats>(
+        npc);  // full warmth + health -> no higher want, isolating the avoid
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(npc).value.x;
+  };
+  REQUIRE(steer_vx(-50.0f) < 0.0f);  // inside the zone (west of centre) -> steers OUT, west (-x)...
+  REQUIRE(steer_vx(-500.0f) > 0.0f);  // ...clear of it -> keeps its east drift (+x), no avoid
+}
+
 TEST_CASE("moving drains the player's stamina", "[sim]") {
   eng::sim::World world;  // player spawns with full stamina (100)
   const entt::entity player = world.player();

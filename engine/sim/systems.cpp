@@ -258,7 +258,8 @@ void steer_npcs(entt::registry& reg) {
   auto sources = reg.view<WaterSource, Transform>();
   auto plots = reg.view<FoodSource, Transform>();
   auto hearths = reg.view<Hearth, Transform>();
-  auto creatures = reg.view<Enemy, Transform>();  // for the DEFEND rung: a threat near a friend
+  auto creatures = reg.view<Enemy, Transform>();      // for the DEFEND rung: a threat near a friend
+  auto cold_zones = reg.view<ColdZone, Transform>();  // for the AVOID-THE-COLD rung
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
 
@@ -699,6 +700,40 @@ void steer_npcs(entt::registry& reg) {
         if (len > 0.0f)
           npcs.get<Velocity>(n).value = (toward / len) * kWeaponSeekSpeed * move_scale;
         continue;  // heading for a weapon — an idle colonist would have fallen through to rally
+      }
+    }
+
+    // Priority 4.9 — AVOID THE COLD: an idle colonist standing in a ColdZone drifts OUT of it (away
+    // from the zone's centre — radially, the shortest way to its edge), so a wanderer that has
+    // blundered into the cold steps back into the warm before it chills. The PREVENTION half of the
+    // temperature Need, the complement of the seek-warmth retreat above (which is RECOVERY, for one
+    // ALREADY chilled — and which, being higher priority, wins: a chilled colonist heads to the
+    // FIRE, not just out of the cold). LOW priority, so a colonist with any real want — flee,
+    // rescue, forage, drink, mend/warm, arm — tends it first, and only an otherwise-idle one
+    // bothers to step out of the chill. No ColdZone (every world without one) -> nothing to avoid
+    // -> falls through -> bit-identical.
+    {
+      entt::entity zone = entt::null;
+      Vec2 zone_pos{0.0f, 0.0f};
+      float deepest =
+          0.0f;  // the zone it's DEEPEST inside (radius - dist > 0 == inside, by that much)
+      for (const entt::entity z : cold_zones) {
+        const Vec2 zp = cold_zones.get<Transform>(z).position;
+        const float depth = cold_zones.get<ColdZone>(z).radius - glm::distance(pos, zp);
+        if (depth > deepest) {
+          deepest = depth;
+          zone = z;
+          zone_pos = zp;
+        }
+      }
+      if (zone != entt::null) {
+        const Vec2 away =
+            pos - zone_pos;  // radially outward = toward the nearest edge, the way out
+        const float len = glm::length(away);
+        if (len > 0.0f) {
+          npcs.get<Velocity>(n).value = (away / len) * kRallySpeed * move_scale;
+          continue;  // stepping out of the cold — skip the idle gather rungs below
+        }
       }
     }
 
