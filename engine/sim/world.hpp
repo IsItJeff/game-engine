@@ -87,6 +87,13 @@ class World {
   // full invariance to colony tuning. Different seed = an independent, reproducible stream.
   std::mt19937 npc_spawn_rng_{5678};
 
+  // A THIRD independent stream, for rolling a fine drop's quality in handle_deaths (a slain brute's
+  // steel, a sentinel's plate). Kept off rng_ for the same reason as the spawner's: these loot
+  // rolls must not perturb the creature/combat waves that tests pin — so adding rolled loot leaves
+  // every existing dodge, spawn and wave bit-identical, only the dropped quality varies. Its own
+  // seed = an independent, reproducible stream.
+  std::mt19937 drop_rng_{9012};
+
   // Counts down each step; when it reaches 0 the world spawns a creature (if under
   // the cap) and resets. Starts at a full interval so the opening two hunters get a
   // head start before reinforcements arrive.

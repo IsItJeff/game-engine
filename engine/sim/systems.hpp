@@ -195,13 +195,26 @@ void npc_equip(entt::registry& reg);
 // `xp_to_next` and the effect curve `power` live in progression/curve.hpp.)
 void advance_progression(entt::registry& reg);
 
+// The rolled-quality band for a FINE drop (a slain brute's steel, a sentinel's plate): its
+// `quality` is drawn uniformly from [kFineQualityMin, kFineQualityMax), so two tough kills yield
+// subtly different gear and looting stays interesting past the first drop. The floor is above 1.0
+// so a fine drop is always a finer ITEM than baseline (the equip fold scales the boon by quality);
+// the int truncation on a weapon's +Strength can still round a modest roll back to the baseline
+// integer — a known ceiling, smooth on armour's float defence. Shared with the drop test so the
+// band is one source of truth.
+inline constexpr float kFineQualityMin = 1.1f;
+inline constexpr float kFineQualityMax = 1.4f;
+
 // React to death. A player at 0 health goes DOWNED — helpless where they fell for a
 // timer (`dt` counts it down); a living ally within reach revives them in place, else on
 // expiry they respawn at `respawn_point`. An NPC or creature at 0 health is destroyed —
 // permadeath, the game's core rule; a slain CREATURE drops a health Pickup where it fell.
 // MUST run before regenerate_vitals, or a just-killed entity gets healed back above 0 the
 // same tick and never dies (a downed player is also excluded from regen for the same reason).
-void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt);
+// `rng` is a DEDICATED drop stream: it rolls each fine drop's quality (above) and NOTHING else, so
+// loot varies without perturbing the creature/combat stream — every wave, dodge and spawn is
+// unchanged. Draws from it only when a fine drop actually lands (a brute/sentinel death).
+void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt19937& rng);
 
 // Record one moral DEED on an actor's BehaviorLedger — the SINGLE write-point the whole morality
 // system funnels through (the design's one `record_deed`). Lazily emplaces the ledger (an actor

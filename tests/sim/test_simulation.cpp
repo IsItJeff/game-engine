@@ -18,6 +18,19 @@
 
 using Catch::Approx;
 
+namespace eng::sim {
+// Test-only convenience: the real handle_deaths now takes a dedicated `rng` to ROLL a fine drop's
+// quality. The great majority of death tests reap a player (Downed), a swarmer (orb) or a mote and
+// so never trigger a fine drop — they draw nothing from it. This 3-arg forward hands those a
+// throwaway stream, so ~20 unrelated Downed/rescue/reap call sites stay unchanged instead of each
+// hand-rolling an rng they never consume. The loot-ROLL tests call the real 4-arg form with their
+// OWN seeded rng, to observe the drawn quality. Overload resolution picks by arity — no ambiguity.
+inline void handle_deaths(entt::registry& reg, Vec2 respawn, float dt) {
+  std::mt19937 throwaway{1234};
+  handle_deaths(reg, respawn, dt, throwaway);
+}
+}  // namespace eng::sim
+
 TEST_CASE("FixedTimestep runs one step per tick's worth of time", "[sim]") {
   eng::sim::FixedTimestep ts(1.0 / 60.0);
 
@@ -3820,8 +3833,9 @@ TEST_CASE("quality_sheen brightens a finer item and then caps: baseline unchange
                                                    // ordinary gear renders bit-identical to before
   REQUIRE(eng::sim::quality_sheen(0.5f) ==
           1.0f);  // a shoddy sub-baseline item also draws as authored
-  const float fine = eng::sim::quality_sheen(1.25f);  // the kFineDropQuality a brute/sentinel drops
-  REQUIRE(fine > 1.0f);                               // ...glints brighter than baseline...
+  const float fine =
+      eng::sim::quality_sheen(1.25f);             // a fine item (within a brute/sentinel's roll)
+  REQUIRE(fine > 1.0f);                           // ...glints brighter than baseline...
   REQUIRE(eng::sim::quality_sheen(1.5f) > fine);  // ...and a finer one brighter still (monotonic)
   REQUIRE(eng::sim::quality_sheen(1000.0f) ==
           Approx(eng::sim::kQualitySheenCap));  // an extreme quality -> capped, not a blinding blob
@@ -4938,46 +4952,86 @@ TEST_CASE("a sentinel's dropped armour is a real acquisition path: pick it up an
           "[sim]") {
   // Prove the loot seam is genuinely wearable, not just a spawn: a bare wearer standing on the
   // dropped armour dons it (equip_nearest_gear folds its defence into the Equipped cache). The
-  // sentinel drops FINE plate (kFineDropQuality 1.25), so the worn defence is the baseline 6.0
-  // lifted by quality: 6.0 * 1.25 = 7.5 — a tough kill pays out better than the starting gear.
+  // sentinel drops FINE plate whose quality is now ROLLED in [kFineQualityMin, kFineQualityMax), so
+  // the worn defence is the baseline 6.0 lifted by that roll — ALWAYS finer than the starting 6.0,
+  // and within [6.0*min, 6.0*max). Armour's defence is a float, so every roll shows (no int
+  // truncation to hide a modest one). Asserted as a BAND, not an exact value:
+  // uniform_real_distribution isn't bit-portable across stdlibs, so a fixed seed gives a
+  // stable-but-platform-specific float — the band holds on every platform.
   entt::registry reg;
   const eng::Vec2 pos{50.0f, 50.0f};
   const entt::entity sentinel = reg.create();
   reg.emplace<eng::sim::Transform>(sentinel, pos);
   reg.emplace<eng::sim::Stats>(sentinel, eng::sim::Vital{0.0f, 60.0f, 0.0f});
   reg.emplace<eng::sim::Enemy>(sentinel).drop = eng::sim::DropKind::Armour;
-  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f);
+  std::mt19937 rng{2024};
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f, rng);
 
   const entt::entity wearer = reg.create();
   reg.emplace<eng::sim::Transform>(wearer, pos);  // standing on the dropped armour
   const entt::entity grabbed = eng::sim::equip_nearest_gear(reg, wearer);
 
   REQUIRE(reg.valid(grabbed));  // grabbed the grounded armour (entt::null would be invalid)...
-  REQUIRE(reg.get<eng::sim::Equipped>(wearer).defence_bonus ==
-          Approx(7.5f));  // ...and wears its FINE defence (6.0 * 1.25)
+  const float defence = reg.get<eng::sim::Equipped>(wearer).defence_bonus;
+  REQUIRE(defence > 6.0f);  // ...and its FINE defence beats the baseline 6.0...
+  REQUIRE(defence >= 6.0f * eng::sim::kFineQualityMin);  // ...at least the band floor (6.6)...
+  REQUIRE(defence < 6.0f * eng::sim::kFineQualityMax);   // ...and under the band ceiling (8.4)
 }
 
-TEST_CASE("a brute's dropped steel is finer than starting gear: the quality boon lands in offence",
-          "[sim]") {
-  // The offensive twin of the sentinel-plate test, and the whole POINT of per-source quality: a
-  // slain brute drops FINE steel (kFineDropQuality 1.25), so equipping it grants MORE strength than
-  // the +4 of a default-spawned blade. int(4 * 1.25) = int(5.0) = 5 — one better. The bane rides
-  // along unchanged (quality lifts only the upside): move_penalty stays the full 0.25.
+TEST_CASE("a brute's dropped steel is rolled fine: strength 4-5 and the bane unchanged", "[sim]") {
+  // The offensive twin of the sentinel-plate test: a slain brute drops FINE steel whose quality is
+  // ROLLED in [kFineQualityMin, kFineQualityMax). int(4 * q) is 4 or 5 — so a modest roll can round
+  // back to the baseline +4 (the int-truncation ceiling; armour's float defence shows every roll).
+  // Either way the item is a finer ITEM (quality > 1.0) and never WORSE than a default blade, and
+  // the bane rides along unchanged (quality lifts only the upside): move_penalty stays the full
+  // 0.25. Asserted as a range for the same cross-stdlib reason as the sentinel test.
   entt::registry reg;
   const eng::Vec2 pos{70.0f, 70.0f};
   const entt::entity brute = reg.create();
   reg.emplace<eng::sim::Transform>(brute, pos);
   reg.emplace<eng::sim::Stats>(brute, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // dead
   reg.emplace<eng::sim::Enemy>(brute).drop = eng::sim::DropKind::Weapon;
-  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f);
+  std::mt19937 rng{2024};
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f, rng);
 
   const entt::entity wearer = reg.create();
   reg.emplace<eng::sim::Transform>(wearer, pos);  // standing on the dropped steel
   const entt::entity grabbed = eng::sim::equip_nearest_gear(reg, wearer);
 
-  REQUIRE(reg.valid(grabbed));                                       // grabbed the steel...
-  REQUIRE(reg.get<eng::sim::Equipped>(wearer).strength_bonus == 5);  // ...finer than +4...
+  REQUIRE(reg.valid(grabbed));  // grabbed the steel...
+  const int strength = reg.get<eng::sim::Equipped>(wearer).strength_bonus;
+  REQUIRE(strength >= 4);  // ...never WORSE than a default +4 blade...
+  REQUIRE(strength <= 5);  // ...and int(4 * [1.1,1.4)) rounds to 4 or 5, never more
   REQUIRE(reg.get<eng::sim::Equipped>(wearer).move_penalty == Approx(0.25f));  // ...same heft
+}
+
+TEST_CASE("a fine drop's quality is rolled within its band and varies from kill to kill", "[sim]") {
+  // The heart of rolled quality: a fine drop is no longer a FLAT 1.25 — each draws its own quality
+  // from [kFineQualityMin, kFineQualityMax) off the dedicated drop stream, so two brute kills yield
+  // subtly different steel and looting stays interesting past the first drop. Proven three ways:
+  // every roll is in-band, two kills off ONE stream differ (a flat constant would tie), and the
+  // same seed replays the same roll (deterministic within a platform — the sim's core invariant).
+  const auto drop_quality = [](std::mt19937& rng) {
+    entt::registry reg;
+    const entt::entity brute = reg.create();
+    reg.emplace<eng::sim::Transform>(brute, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(brute, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // dead
+    reg.emplace<eng::sim::Enemy>(brute).drop = eng::sim::DropKind::Weapon;
+    eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f, rng);
+    return reg.get<eng::sim::Weapon>(*reg.view<eng::sim::Weapon>().begin()).quality;
+  };
+
+  std::mt19937 rng{777};
+  const float q1 = drop_quality(rng);
+  const float q2 = drop_quality(rng);  // a SECOND kill off the same stream
+  REQUIRE(q1 >= eng::sim::kFineQualityMin);
+  REQUIRE(q1 < eng::sim::kFineQualityMax);  // in-band...
+  REQUIRE(q2 >= eng::sim::kFineQualityMin);
+  REQUIRE(q2 < eng::sim::kFineQualityMax);
+  REQUIRE(q1 != q2);  // ...it VARIES kill to kill (the whole point; a flat 1.25 would tie these)
+
+  std::mt19937 rng_again{777};
+  REQUIRE(drop_quality(rng_again) == q1);  // deterministic: the same seed replays the same roll
 }
 
 TEST_CASE("the Equip command wields the nearest weapon in reach", "[sim]") {

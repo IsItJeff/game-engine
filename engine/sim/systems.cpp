@@ -2498,7 +2498,7 @@ int allies_of(const entt::registry& reg, entt::entity e) {
   return count;
 }
 
-void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
+void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt19937& rng) {
   // A zero-health entity meets one of two fates, and which one is the game's core rule
   // made concrete: a PLAYER goes DOWNED (helpless where they fell, then rescued-in-place
   // by an ally or respawned when the timer runs out); an NPC dies for good (permadeath).
@@ -2688,15 +2688,21 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt) {
   // FINER loot from a TOUGHER kill: a brute's dropped steel and a sentinel's plate come out ABOVE
   // baseline quality (a bigger boon), so felling a hard foe pays out better gear than you start
   // with — the first thing item quality expresses in play. The venom fang stays baseline (its small
-  // +Strength would round the scale away, and it already trades raw power for venom). Deterministic
-  // per drop source, no roll. ponytail: keyed to the DropKind here (brute==Weapon, sentinel==Armour
-  // today); a per-archetype Enemy::drop_quality is the refinement if two archetypes ever share a
-  // DropKind, and ROLLED quality the follow-up once the drop path carries an RNG.
-  constexpr float kFineDropQuality = 1.25f;
+  // +Strength would round the scale away, and it already trades raw power for venom).
+  //
+  // Now the fine quality is ROLLED, not flat: each fine drop draws its own quality from the
+  // [kFineQualityMin, kFineQualityMax) band, so two brute kills yield subtly different steel and
+  // looting stays interesting past the first drop. Drawn from the DEDICATED `rng` (World's
+  // drop_rng_), so these rolls never touch the creature/combat stream — every wave, dodge and spawn
+  // is bit-identical; only the dropped quality varies. The draw happens per fine drop in a fixed
+  // order (weapons then armour, each vector already in deterministic entity order), so the sequence
+  // replays identically. Orb + venom drops stay baseline 1.0 (no draw). ponytail: one band for both
+  // fine kinds; a per-archetype band is the refinement if a sentinel should out-roll a brute.
+  std::uniform_real_distribution<float> fine_quality{kFineQualityMin, kFineQualityMax};
   for (const entt::entity e : dead) reg.destroy(e);
-  for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);                       // swarmer sustain
-  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos, kFineDropQuality);  // finer offence
-  for (const Vec2& pos : armour_drops) spawn_armour(reg, pos, kFineDropQuality);  // finer defence
+  for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);  // swarmer sustain
+  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos, fine_quality(rng));  // rolled offence
+  for (const Vec2& pos : armour_drops) spawn_armour(reg, pos, fine_quality(rng));  // rolled defence
   for (const Vec2& pos : venom_drops) spawn_venom_weapon(reg, pos);  // poison build (baseline)
 }
 

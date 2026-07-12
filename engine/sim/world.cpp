@@ -417,8 +417,8 @@ void World::step() {
   tick_poison(registry_, dt);                      // venom from a swarmer's bite chips health...
   creature_spit(registry_, dt);                    // ranged creatures launch a spit at a person...
   advance_projectiles(registry_, dt);              // ...and thrown/spat shots fly home and land
-  handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f},
-                dt);               // ...then 0-HP reaped
+  handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt,
+                drop_rng_);        // ...then 0-HP reaped (drop_rng_ rolls any fine loot quality)
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
   drink(registry_, dt);            // anyone standing in a water source refills their canteen
   graze(registry_, dt);  // ...and in a food plot refills hunger (the plot regrows/depletes)
