@@ -130,7 +130,12 @@ radius by a second, independent factor (`× (1 + (WIS−1)·0.05)`, capped at 2�
 clamps) — bravery is your *nerve* (how close
 you let danger get), Wisdom is your *perception* (how far you see it coming), so a **wise coward** is
 hyper-alert while a **wise but brave** colonist spots danger early yet holds; WIS 1 (untrained) is
-×1, so it too is bit-identical until foraging trains it. The opening four NPCs get
+×1, so it too is bit-identical until foraging trains it. A **third** factor is social — **courage in
+numbers**: a *bonded friend* (affinity ≥ `kBondPull`) standing within `kCourageRadius` shrinks the
+sense radius another `15%` each (capped at half), so a colonist **holds its ground** beside a friend
+where it would bolt alone — the passive, positive mirror of grief (a friend's *death* shakes the
+nerve; a friend's *presence* steadies it). No bond in range → factor `1.0` → bit-identical. The
+opening four NPCs get
 a fixed spread (two cowards, two brave) so you can watch the difference from the first frame;
 reinforcements roll a coherent *archetype* (bravery among its axes) from the spawner's *own*
 isolated RNG stream. And a colonist's axes aren't frozen for life: its own **deeds drift** them —

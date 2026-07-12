@@ -755,6 +755,39 @@ TEST_CASE("bravery shapes how close a hazard gets before an NPC flees", "[sim]")
   REQUIRE(reg.get<eng::sim::Velocity>(coward).value.x < 0.0f);   // and the coward fled early too
 }
 
+TEST_CASE("courage in numbers: a bonded friend nearby steadies an NPC against a hazard", "[sim]") {
+  // The relationship analog of bravery's flee radius (and the passive mirror of grief): a bonded
+  // friend standing nearby SHRINKS the sense radius, so a colonist holds its ground where a lone
+  // one bolts. A neutral NPC 110 units from a hazard (base sense 120) flees when alone (110 < 120);
+  // a friend at its shoulder steadies it (radius ~102 < 110) so it holds. No bond -> the base
+  // radius.
+  const auto fled_from_hazard = [](bool has_friend) {
+    entt::registry reg;
+    const entt::entity hazard = reg.create();
+    reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Hazard>(hazard);
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc,
+                                     eng::Vec2{110.0f, 0.0f});  // 110 from the hazard: inside 120
+    reg.emplace<eng::sim::Velocity>(npc);                       // at rest
+    reg.emplace<eng::sim::Npc>(npc);                            // neutral bravery -> radius 120
+    if (has_friend) {
+      const entt::entity ally = reg.create();
+      reg.emplace<eng::sim::Transform>(ally,
+                                       eng::Vec2{110.0f, 100.0f});  // at the NPC's shoulder...
+      reg.emplace<eng::sim::Npc>(ally);
+      eng::sim::nudge_affinity(reg, npc, ally, eng::sim::kBondFriendAt);  // ...and bonded to it
+    }
+    eng::sim::steer_npcs(reg);
+    // Flee = velocity points AWAY from the hazard (toward +x here). The friend sits at +y, so any
+    // bond-pull the held NPC does is pure +y (x == 0) — a positive x-velocity is unambiguously a
+    // FLEE.
+    return reg.get<eng::sim::Velocity>(npc).value.x > 0.0f;
+  };
+  REQUIRE(fled_from_hazard(false));       // lone: 110 < base 120 -> flees away (+x)
+  REQUIRE_FALSE(fled_from_hazard(true));  // flanked: steadied radius ~102 < 110 -> holds its ground
+}
+
 TEST_CASE("wisdom sharpens danger awareness: an alert forager senses a hazard from further",
           "[sim]") {
   // Wisdom's SECOND effect (beyond forage yield): it widens the flee sense radius, a distinct
