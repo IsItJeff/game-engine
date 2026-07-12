@@ -88,6 +88,12 @@ void drain_water(entt::registry& reg, float dt);
 // to. Downed bodies and creatures don't drink. (P6.)
 void drink(entt::registry& reg, float dt);
 
+// Drive the WARMTH need — the design's temperature, made LOCAL. A person loses warmth inside a
+// ColdZone, regains it by a Hearth's fire, and holds steady in the open; at 0 it FREEZES, chipping
+// health like starving/dehydrating. So it's a "flee the cold, huddle by the fire" pressure, not a
+// background timer. No ColdZone in the world -> nobody chills -> bit-identical.
+void drain_warmth(entt::registry& reg, float dt);
+
 // Tick the Fatigue need — the THIRD survival Need, and the one that RECOVERS with rest. Every
 // person loses fatigue while exerting (moving, faster sprinting — the same rest<walk<sprint tiers
 // the other needs use) and regains it while standing still. Unlike hunger/water it self-recovers,

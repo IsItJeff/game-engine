@@ -719,6 +719,13 @@ struct Stats {
   // default-fills it, and since nothing reads mp unless you can cast, a world with no caster is
   // bit-identical.
   Vital mp{100.0f, 100.0f, 10.0f};  // spent by casting, regenerates at rest; the magic bar
+  // WARMTH — a LOCALIZED survival Need (the design's temperature, split out spatially). Unlike
+  // hunger/water it doesn't fall on a background timer: it holds steady in the open, DRAINS only
+  // inside a ColdZone, and REFILLS by a Hearth's fire (drain_warmth) — so a cold snap is a "huddle
+  // by the fire" pressure, not a clock. At 0 it FREEZES (chips health, the starving/dehydrating
+  // death path). Appended LAST so every positional Stats{...} init default-fills it, and since it
+  // only moves inside a ColdZone (none in a fresh world), a world without cold is bit-identical.
+  Vital warmth{100.0f, 100.0f, 0.0f};  // holds in the open, drains in cold, refills at a fire
 };
 
 // How hard a character can fight given how FED and WATERED it is — the design's "an empty Need is
@@ -767,6 +774,15 @@ struct WaterSource {
 // the field). Like the pond it's scenery the sim reads only for its effect; drawn if given a
 // RenderDot.
 struct Hearth {
+  float radius = 0.0f;
+};
+
+// A COLD ZONE — a patch of the world where the cold bites: a person standing within `radius` of it
+// loses WARMTH each tick (drain_warmth), the spatial half of the design's temperature Need. The
+// inverse of a Hearth (which re-warms), so the two make the "flee the cold, huddle by the fire"
+// loop. Scenery (Transform + a pale render disc + this); no Stats/Velocity. None in a fresh scene,
+// so warmth never moves and the world is bit-identical until one is placed.
+struct ColdZone {
   float radius = 0.0f;
 };
 

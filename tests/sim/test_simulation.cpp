@@ -516,6 +516,64 @@ TEST_CASE("an empty canteen dehydrates health and blocks healing", "[sim]") {
   REQUIRE(reg.get<eng::sim::Stats>(e).health.current < before);
 }
 
+TEST_CASE("warmth drains inside a cold zone but holds in the open", "[sim]") {
+  // The localized Need: warmth falls only where the cold bites (a ColdZone), and holds steady
+  // anywhere else — unlike hunger/water, which fall on a background timer everywhere.
+  const auto warmth_after = [](bool in_cold) {
+    entt::registry reg;
+    const entt::entity zone = reg.create();
+    reg.emplace<eng::sim::Transform>(zone, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::ColdZone>(zone, eng::sim::ColdZone{100.0f});
+    const entt::entity person = reg.create();
+    reg.emplace<eng::sim::Transform>(
+        person,
+        in_cold ? eng::Vec2{0.0f, 0.0f} : eng::Vec2{500.0f, 500.0f});  // in the chill or clear
+    reg.emplace<eng::sim::Stats>(person);                              // warmth full
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::drain_warmth(reg, dt);  // 1s
+    return reg.get<eng::sim::Stats>(person).warmth.current;
+  };
+  REQUIRE(warmth_after(true) < 100.0f);            // inside the cold -> chilled...
+  REQUIRE(warmth_after(false) == Approx(100.0f));  // ...in the open -> unchanged
+}
+
+TEST_CASE("a hearth re-warms a chilled colonist even in the cold: the fire beats the chill",
+          "[sim]") {
+  // A Hearth is the inverse of a ColdZone — it REFILLS warmth — and it WINS where the two overlap:
+  // huddling by the fire warms you back up even standing in the cold.
+  entt::registry reg;
+  const entt::entity zone = reg.create();
+  reg.emplace<eng::sim::Transform>(zone, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::ColdZone>(zone, eng::sim::ColdZone{100.0f});
+  const entt::entity hearth = reg.create();
+  reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Hearth>(hearth, eng::sim::Hearth{100.0f});
+  const entt::entity person = reg.create();
+  reg.emplace<eng::sim::Transform>(person, eng::Vec2{0.0f, 0.0f});  // in BOTH the cold and the fire
+  reg.emplace<eng::sim::Stats>(person).warmth.current = 50.0f;      // already chilled
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::drain_warmth(reg, dt);
+  REQUIRE(reg.get<eng::sim::Stats>(person).warmth.current > 50.0f);  // the fire re-warmed it
+}
+
+TEST_CASE("freezing chips health like starvation: warmth at zero is lethal", "[sim]") {
+  // At empty warmth, freezing chips health through the same death path as starving/dehydrating.
+  entt::registry reg;
+  const entt::entity zone = reg.create();
+  reg.emplace<eng::sim::Transform>(zone, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::ColdZone>(zone, eng::sim::ColdZone{100.0f});
+  const entt::entity person = reg.create();
+  reg.emplace<eng::sim::Transform>(person, eng::Vec2{0.0f, 0.0f});
+  eng::sim::Stats& st = reg.emplace<eng::sim::Stats>(person);
+  st.warmth.current = 0.0f;  // frozen through
+
+  const float before = st.health.current;
+  eng::sim::drain_warmth(reg, static_cast<float>(eng::sim::kSecondsPerTick));
+  REQUIRE(reg.get<eng::sim::Stats>(person).health.current <
+          before);  // 0 warmth freezes -> health chipped
+}
+
 TEST_CASE("drinking at a water source refills water without consuming the source", "[sim]") {
   // The refill loop: standing in a source tops your water up, and the source PERSISTS (unlike a
   // one-shot food orb) — so many can drink and you return to it. Standing outside its radius
