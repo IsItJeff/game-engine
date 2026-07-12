@@ -198,6 +198,7 @@ nav:
           - Stats: engine/stats-system.md
           - Progression: engine/progression.md
           - Combat: engine/combat.md
+          - Magic: engine/magic.md
           - NPC behaviour: engine/npc-behaviour.md
           - Morality: engine/morality.md
           - Relationships: engine/relationships.md

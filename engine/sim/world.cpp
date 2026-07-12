@@ -325,6 +325,12 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   reg.emplace<RenderDot>(player, Vec3{0.3f, 0.8f, 1.0f}, 10.0f);  // bright blue
   reg.emplace<Stats>(player, Vital{70.0f, 100.0f, 8.0f});         // spawn worn; heals 8/sec
   reg.emplace<Skills>(player);  // trains with activity; feeds Attributes (see advance_progression)
+  // The player starts having LEARNED one spell — a starter cantrip — so magic is castable from the
+  // off (Cast -> magic_bolt gates on carrying this skill). This is the design's "magic is learned,
+  // not innate": an untrained colonist has NO Spellcasting and can't cast at all, however full its
+  // mana bar. The player is the only caster in the world, so this changes nothing else; teaching it
+  // to NPCs and learning MORE spells (from a book or a mentor) are later slices of the magic trunk.
+  reg.get<Skills>(player).train(SkillId::Spellcasting);
   reg.emplace<Attributes>(player);
   reg.emplace<CharacterLevel>(player);
   // A NEUTRAL personality (all axes 0), the design's "players start neutral, drift from deeds": the
@@ -668,6 +674,19 @@ void World::apply_command(const Command& cmd) {
         planters.push_back(p);
       }
       for (const entt::entity p : planters) plant_crop(registry_, p);
+      break;
+    }
+    case CommandKind::Cast: {
+      // The MAGIC twin of Throw: the player casts a bolt at the nearest hostile in range
+      // (magic_bolt), spending MANA and gated on the learned Spellcasting skill. Same
+      // match-by-player -id and view requirements as Throw. magic_bolt spawns a Projectile
+      // (emplacing Transform), but this view drives off PlayerControlled — a pool the new bolt
+      // isn't in — so the iteration is stable across the spawn, exactly like the Throw case above.
+      auto casters = registry_.view<PlayerControlled, Transform, Attributes, Skills, Stats>();
+      for (const entt::entity a : casters) {
+        if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
+        magic_bolt(registry_, a);
+      }
       break;
     }
   }

@@ -694,6 +694,14 @@ struct Stats {
   // Stats{Vital
   // ...} init (health only) default-fills it, bit-identical.
   Vital fatigue{100.0f, 100.0f, 0.0f};  // falls while exerting, rises at rest; 0 = exhausted
+  // MANA — the magic resource, the design's third bar beside health and stamina, but NOT a survival
+  // Need: it is SPENT (casting a spell) and steadily REGENERATES (regenerate_vitals), the shape
+  // stamina uses. Everyone carries a trickle of it, but it's INERT until you've LEARNED a spell
+  // (magic_bolt gates on the Spellcasting skill, which the untrained don't have) — the design's
+  // "magic is learned, not innate". Appended LAST so every positional Stats{Vital ...} init
+  // default-fills it, and since nothing reads mp unless you can cast, a world with no caster is
+  // bit-identical.
+  Vital mp{100.0f, 100.0f, 10.0f};  // spent by casting, regenerates at rest; the magic bar
 };
 
 // How hard a character can fight given how FED and WATERED it is — the design's "an empty Need is
@@ -800,6 +808,10 @@ enum class SkillId : std::uint16_t {
                  // lengthens but never removes the timer", the ONE thing that buffers a need (VIT/
                  // Endurance stays pure combat defence). Added LAST so existing SkillId values keep
                  // their numbers.
+  Spellcasting,  // the MAGIC gate: an entity that HAS this skill has LEARNED to cast (magic_bolt
+                 // checks for it), so magic is learned-not-innate. Main attribute Intellect (the
+                 // design's magic domain); trained by casting, and its main-attr feeds the INT that
+                 // scales a bolt. Added LAST so existing SkillId values keep their numbers.
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
@@ -853,6 +865,12 @@ struct Attributes {
                        // victory (bond_witnesses) — a charismatic champion inspires more devotion.
                        // The second non-combat attribute (social), so like Wisdom it grows neither
                        // the pools nor a fighter build — it grows the colony's bonds instead.
+  Attribute
+      intellect;  // fed by Spellcasting; the design's MAGIC attribute (the 7th, completing the
+                  // set). Each level past 1 sharpens a magic bolt's damage (magic_bolt) — the
+                  // arcane mirror of STR on a swing / DEX on a throw. Appended LAST so the
+                  // default-constructed Attributes every entity gets is unchanged; nothing
+                  // reads it unless you can cast, so a world of non-mages is bit-identical.
 };
 
 // The design's gear-mastery pillar as ONE curve: "mastery shrinks a bane by about half but NEVER
@@ -922,7 +940,15 @@ inline const char* build_title(const Attributes& attrs) {
 // (a skill's XP flows to its MAIN attribute a lot, and to each CONTRIBUTOR a little). An
 // enum, not a member pointer, keeps the defs plain data — the shape mods will add rows to.
 // New attributes append here (and get a case in `attr_ref`, guarded by -Wswitch).
-enum class AttrId : std::uint8_t { Endurance, Strength, Dexterity, Luck, Wisdom, Charisma };
+enum class AttrId : std::uint8_t {
+  Endurance,
+  Strength,
+  Dexterity,
+  Luck,
+  Wisdom,
+  Charisma,
+  Intellect  // the magic attribute (the 7th); appended LAST so existing AttrId values keep numbers
+};
 
 // A single global "how experienced overall" level, fed by a fraction of ALL
 // activity (not one skill). Its level is a gentle multiplier — via the same POWER

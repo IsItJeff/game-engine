@@ -4,7 +4,7 @@
 
 Characters grow by *doing*. A **skill** improves with the activity that trains it,
 skills roll up into broad **attributes**, and attributes shape what you feel in play.
-Twelve strands are wired end to end so far, across six attributes:
+Thirteen strands are wired end to end so far, across all seven attributes:
 
 - staying active trains **Conditioning**, **surviving damage** trains **Toughness**,
   **resting to recover** spent stamina trains **Recovery**, **turning a blow with a raised
@@ -59,6 +59,11 @@ Twelve strands are wired end to end so far, across six attributes:
   Leadership → Charisma → allies bond harder *and* from farther), the
   social mirror of a striker building Strength by hitting. Like Wisdom it grows neither the pools nor a
   fighter build — it grows the colony's *bonds*.
+- **casting a spell** (a `magic_bolt`, the **C** command) trains **Spellcasting**, which raises
+  **Intellect** — the **seventh** attribute, completing the set, and the design's **magic** stat. Each
+  level sharpens a bolt's damage, the arcane mirror of Strength on a swing. Magic is *learned*: only a
+  caster who carries the Spellcasting skill can cast at all (see [magic](magic.md)), so Intellect grows
+  by casting the way Strength grows by striking — but from a power you earned the right to use.
 
 The player and NPCs run the identical machinery — progression *and* combat — so a
 long-lived NPC that has moved, been hurt, and fought grows genuinely tougher and

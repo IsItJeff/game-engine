@@ -940,6 +940,13 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
 
+    // MANA regenerates steadily — the magic bar refilling between casts (magic_bolt spends it). It
+    // sits BEFORE the starvation/venom gate below deliberately: that gate suppresses HEALING (a
+    // fed- and-clean body mends), but magic energy isn't food, so a starving mage still recharges.
+    // No one reads mp unless they can cast, so this is bit-identical for every non-caster. Downed
+    // is already excluded by the view (an unconscious caster doesn't recharge).
+    recover(s.mp, dt);
+
     // No mending on an empty stomach. This gate is load-bearing: drain_hunger runs BEFORE
     // this system in step(), so hunger.current is already this tick's value. Skipping heal
     // while starving is what makes "starvation always nets health DOWNWARD" a structural
@@ -1356,6 +1363,8 @@ Attribute& attr_ref(Attributes& a, AttrId id) {
       return a.wisdom;
     case AttrId::Charisma:
       return a.charisma;
+    case AttrId::Intellect:
+      return a.intellect;
   }
   return a.endurance;  // unreachable (switch is exhaustive) — silences control-reaches-end
 }
@@ -1406,6 +1415,11 @@ const SkillDef& skill_def(SkillId id) {
   // Throwing.
   static const SkillDef kAthletics{AttrId::Dexterity, {}};
   static const SkillDef kSurvivalist{AttrId::Endurance, {}};  // a VIT skill, like Conditioning
+  // Spellcasting is the first INTELLECT skill — the design's magic domain. Casting a bolt trains
+  // it, and its main attr feeds the INT that scales the bolt's damage, so a mage sharpens by
+  // casting the same way a thrower sharpens DEX by throwing. Main-only for now (aspects come with
+  // the tree).
+  static const SkillDef kSpellcasting{AttrId::Intellect, {}};
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -1433,6 +1447,8 @@ const SkillDef& skill_def(SkillId id) {
       return kAthletics;
     case SkillId::Survivalist:
       return kSurvivalist;
+    case SkillId::Spellcasting:
+      return kSpellcasting;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -1533,9 +1549,10 @@ void advance_progression(entt::registry& reg) {
     apply_levels(attrs.strength.level, attrs.strength.xp);
     apply_levels(attrs.dexterity.level,
                  attrs.dexterity.xp);  // fed by Evasion (dodge), Throwing (aim), Athletics (sprint)
-    apply_levels(attrs.luck.level, attrs.luck.xp);          // fed by Scavenging at the loot site
-    apply_levels(attrs.wisdom.level, attrs.wisdom.xp);      // fed by Foraging at the graze site
-    apply_levels(attrs.charisma.level, attrs.charisma.xp);  // fed by Leadership at bond_witnesses
+    apply_levels(attrs.luck.level, attrs.luck.xp);            // fed by Scavenging at the loot site
+    apply_levels(attrs.wisdom.level, attrs.wisdom.xp);        // fed by Foraging at the graze site
+    apply_levels(attrs.charisma.level, attrs.charisma.xp);    // fed by Leadership at bond_witnesses
+    apply_levels(attrs.intellect.level, attrs.intellect.xp);  // fed by Spellcasting at magic_bolt
     apply_levels(character.level, character.xp);
 
     // 3. Attributes shape derived stats: each Endurance level past the first adds to
@@ -2231,6 +2248,75 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   if (speed_scale > kThrowSpeedCap) speed_scale = kThrowSpeedCap;
   reg.emplace<Projectile>(shot,
                           Projectile{target, attacker, applied, kProjectileSpeed * speed_scale});
+}
+
+void magic_bolt(entt::registry& reg, entt::entity caster) {
+  // The player's first SPELL — the magic mirror of perform_throw: launch a homing bolt at the
+  // nearest hostile in range, chipping it from afar. Two things set magic apart, both from the
+  // design: it is LEARNED (only an entity that carries the Spellcasting skill can cast — a trickle
+  // of mana is innate, but inert until taught), and it spends MANA, not stamina, so it draws on a
+  // bar the physical fighter never touches. It reuses the very Projectile the throw flies (tinted
+  // arcane), and INTELLECT scales its damage (the design's magic attribute), trained BY casting
+  // (Spellcasting -> INT) so a mage sharpens by casting the way a thrower sharpens DEX by throwing.
+  // Draws NO RNG — a plain, reliable bolt, like the throw. Player-only for now (no NPC caster).
+  constexpr float kSpellRange = 350.0f;        // the same long reach as a throw
+  constexpr float kSpellManaCost = 25.0f;      // each cast spends this (a full 100 bar -> 4 bolts)
+  constexpr float kBaseSpellDamage = 14.0f;    // raw before Intellect (a touch above a throw's 8)
+  constexpr float kDamagePerIntellect = 4.0f;  // each Intellect level past 1 sharpens the bolt
+  const Fixed kSpellcastingPerCast = Fixed::from_int(10);
+
+  const Transform* tf = reg.try_get<Transform>(caster);
+  Attributes* attrs = reg.try_get<Attributes>(caster);
+  Skills* skills = reg.try_get<Skills>(caster);
+  Stats* stats = reg.try_get<Stats>(caster);
+  if (tf == nullptr || attrs == nullptr || skills == nullptr || stats == nullptr) return;
+
+  // THE LEARNED GATE: no Spellcasting skill -> you never learned to cast -> nothing happens. This
+  // is what makes magic learned-not-innate, and it keeps a world of non-casters bit-identical — a
+  // plain colonist with a full mana bar still can't fling a bolt.
+  if (skills->find(SkillId::Spellcasting) == nullptr) return;
+
+  // Nearest hostile in range — deterministic strict-<, Enemies only (a bolt is an anti-creature
+  // tool; it never targets a colonist, so villainy stays a deliberate MELEE choice).
+  const Vec2 origin = tf->position;
+  entt::entity target = entt::null;
+  float nearest = kSpellRange;
+  auto enemies = reg.view<Enemy, Transform>();
+  for (const entt::entity e : enemies) {
+    const float d = glm::distance(origin, enemies.get<Transform>(e).position);
+    if (d < nearest) {
+      nearest = d;
+      target = e;
+    }
+  }
+  if (target == entt::null) return;  // nothing in range — a held cast: no mana spent, no XP
+
+  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), the magic echo of the empty-
+  // stamina throw. Strict <, so a cast at exactly the cost still fires.
+  if (stats->mp.current < kSpellManaCost) return;
+  stats->mp.current -= kSpellManaCost;
+
+  // A connecting cast trains Spellcasting -> Intellect, so a mage grows the INT that sharpens the
+  // bolt by casting it — the learn-by-doing loop, mirror of a throw training Throwing -> DEX.
+  CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
+  grant_skill_xp(*skills, *attrs, SkillId::Spellcasting, kSpellcastingPerCast, character);
+
+  // INT-vs-VIT damage: base + earned-Intellect delta, softened by the target's VIT and scaled by
+  // the same need_efficiency every attack uses (a starving mage casts weaker too — no ranged
+  // loophole). No crit/execute — a bolt is the plain reliable option, like the throw.
+  const float raw =
+      (kBaseSpellDamage + static_cast<float>(attrs->intellect.level - 1) * kDamagePerIntellect) *
+      need_efficiency(*stats);
+  const float applied = mitigate(raw, defence_of(reg, target));
+
+  // Launch a homing Projectile carrying the (mitigated) damage — the SAME primitive the throw
+  // flies, so advance_projectiles delivers it and credits the Valor on arrival with no new
+  // plumbing. Tinted arcane violet so a spell reads apart from a throw's yellow bolt.
+  const entt::entity shot = reg.create();
+  reg.emplace<Transform>(shot, origin);
+  reg.emplace<PrevTransform>(shot, origin);
+  reg.emplace<RenderDot>(shot, Vec3{0.6f, 0.3f, 0.95f}, 4.0f);  // arcane violet bolt
+  reg.emplace<Projectile>(shot, Projectile{target, caster, applied, kProjectileSpeed});
 }
 
 void advance_projectiles(entt::registry& reg, float dt) {
