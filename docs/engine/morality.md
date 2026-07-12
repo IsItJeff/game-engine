@@ -119,9 +119,12 @@ Morality and personality aren't two separate ledgers — a deed does *two* thing
 one `record_deed` write-point. Besides adding to the ledger, it **drifts the actor's
 matching `Personality` axis** a small, bounded step: **Valor → bravery** (fighting
 monsters hardens you), **Charity → compassion** (hauling up the fallen softens you),
-**Loyalty → loyalty** (standing by your own deepens the leaning). This
+**Loyalty → loyalty** (standing by your own deepens the leaning), and — the villain
+mirror — **Cruelty → compassion *down*** (striking the helpless hardens you back toward
+callous, the one deed so far that *lowers* its axis rather than lifting it). This
 is the design's *"you are what you do"* / "the war changed him" — a character reshaped by
-its own history, not just a fixed dial rolled at birth.
+its own history, not just a fixed dial rolled at birth, with hero deeds lifting and villain
+deeds lowering.
 
 The step is deliberately small (`kDeedDriftStep`, ~50 deeds for a full ±100 swing), so a
 handful of deeds shifts you visibly but never into a wholly different person. And it lands
@@ -132,7 +135,7 @@ yellow and starts holding its ground — a character arc read from its deeds alo
 Two guard-rails carry it. It uses `try_get`, **never** `get_or_emplace`: an actor with no
 `Personality` (the player, every creature) accrues the deed on its ledger but *stays*
 Personality-free, so the bit-identical absent-Personality world is preserved. And only the
-three wired deeds drift — the other three axes/deeds wire themselves the day their deeds land.
+four wired deeds drift — the last two (Violence, Honesty) wire themselves the day their deeds land.
 
 Drift isn't only earned by *your own* deeds — it can be dealt by **loss**. When a colonist
 you were truly bonded to (**Friend** or above, see [relationships](relationships.md)) is

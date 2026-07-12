@@ -2475,15 +2475,18 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
   // DRIFT: a deed also nudges the actor's matching PERSONALITY axis a bounded step — the design's
   // "you are what you do" made concrete, the bridge between the two P7 halves (the earned ledger
   // reshapes the innate leaning). Fighting monsters hardens you (Valor -> bravery); hauling up the
-  // fallen softens you (Charity -> compassion). And because bravery is both the TINTED axis and the
+  // fallen softens you (Charity -> compassion), and its MIRROR, striking the helpless, hardens you
+  // right back (Cruelty -> compassion DOWN). And because bravery is both the TINTED axis and the
   // one steer_npcs reads twice, a fighter visibly warms and holds its ground — a character arc from
   // deeds alone. `try_get`, NEVER get_or_emplace: an entity with no Personality (the player, every
   // creature) must STAY Personality-free, or the bit-identical absent-Personality world breaks.
-  // Only the three wired deeds drift; the other three wire themselves the day their deeds land.
+  // Four deeds drift now; the last two (Violence, Honesty) wire themselves the day they need to.
   // Pure integer math (no RNG), clamped in int before the int8 cast so a long career can't
-  // overflow.
+  // overflow. Most deeds LIFT their axis; a VILLAIN deed lowers it (a negative step), so the
+  // ledger's hero/villain split shows up in the personality too.
   if (Personality* p = reg.try_get<Personality>(actor)) {
     std::int8_t* axis = nullptr;
+    int step = kDeedDriftStep;  // the default: a deed strengthens its leaning
     if (kind == Deed::Valor) {
       axis = &p->bravery;
     } else if (kind == Deed::Charity) {
@@ -2491,8 +2494,11 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
     } else if (kind == Deed::Loyalty) {
       axis =
           &p->loyalty;  // standing by your own hardens the loyalty leaning — "you are what you do"
+    } else if (kind == Deed::Cruelty) {
+      axis = &p->compassion;   // the villain MIRROR of Charity: striking the helpless HARDENS you,
+      step = -kDeedDriftStep;  // drifting compassion DOWN toward callous ("the war changed him")
     }
-    if (axis != nullptr) drift_axis(*axis, kDeedDriftStep);  // shared clamp — grief uses it too
+    if (axis != nullptr) drift_axis(*axis, step);  // shared clamp — grief uses it too
   }
 }
 
