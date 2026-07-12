@@ -504,7 +504,9 @@ it*. **Per-source quality now lands**: a slain brute drops FINE steel and a sent
 (`kFineDropQuality` 1.25 → `+5 Strength`, `7.5 defence`), so felling a tough foe pays out better than
 the gear you start with — the first place quality is *visible in play*. What you *start* with, the
 venom fang, and a player's dropped blade stay quality **1.0** (baseline). Deterministic per drop
-source (no roll yet); **rolled** quality + traits layer on next.
+source (no roll yet); **rolled** quality + traits layer on next. And you can *see* it: a finer item
+**glints brighter** on the field (`quality_sheen`, a pure presentation helper the renderer applies —
+baseline 1.0 renders unchanged), so a fine drop catches the eye without a numeric UI.
 
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), three hardcoded
