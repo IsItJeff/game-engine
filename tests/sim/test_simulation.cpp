@@ -3276,6 +3276,46 @@ TEST_CASE("casting sharpens the bolt: Intellect levels from xp and lifts a bolt'
   REQUIRE(bolt_damage(true) > bolt_damage(false));  // a leveled-up mage's bolt hits harder
 }
 
+TEST_CASE("reading a spellbook teaches Spellcasting and consumes the tome", "[sim]") {
+  // Magic is EARNED, not innate: a player standing on a Spellbook READS it, learns Spellcasting
+  // (and can then cast), and the tome is spent. The found-and-read loop that replaced the starter
+  // cantrip.
+  entt::registry reg;
+  const entt::entity reader = reg.create();
+  reg.emplace<eng::sim::Transform>(reader, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::PlayerControlled>(reader);
+  reg.emplace<eng::sim::Skills>(reader);  // no Spellcasting yet -> can't cast
+  const entt::entity book = reg.create();
+  reg.emplace<eng::sim::Transform>(book, eng::Vec2{5.0f, 0.0f});  // within study reach (15)
+  reg.emplace<eng::sim::Spellbook>(book);
+
+  REQUIRE(reg.get<eng::sim::Skills>(reader).find(eng::sim::SkillId::Spellcasting) == nullptr);
+  eng::sim::study_spellbooks(reg);
+  REQUIRE(reg.get<eng::sim::Skills>(reader).find(eng::sim::SkillId::Spellcasting) !=
+          nullptr);                // read it -> learned to cast
+  REQUIRE_FALSE(reg.valid(book));  // ...and the tome is consumed
+}
+
+TEST_CASE("a spellbook out of reach or already known is left untouched", "[sim]") {
+  // Two ways a tome is NOT consumed: no reader is close enough, or the only reader already knows
+  // the spell (a book is spent only on a lesson that teaches something).
+  const auto book_survives = [](float reader_x, bool already_knows) {
+    entt::registry reg;
+    const entt::entity reader = reg.create();
+    reg.emplace<eng::sim::Transform>(reader, eng::Vec2{reader_x, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(reader);
+    eng::sim::Skills& sk = reg.emplace<eng::sim::Skills>(reader);
+    if (already_knows) sk.train(eng::sim::SkillId::Spellcasting);
+    const entt::entity book = reg.create();
+    reg.emplace<eng::sim::Transform>(book, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Spellbook>(book);
+    eng::sim::study_spellbooks(reg);
+    return reg.valid(book);
+  };
+  REQUIRE(book_survives(500.0f, false));  // reader far away -> book untouched...
+  REQUIRE(book_survives(0.0f, true));     // ...or a reader who already knows the spell -> not spent
+}
+
 TEST_CASE("a defter thrower's bolt flies faster: dexterity's Speed aspect", "[sim]") {
   // DEX's design "Speed" aspect: a defter thrower launches a FASTER projectile, so it reaches the
   // target sooner and is wasted less often when the target dies mid-flight (advance_projectiles

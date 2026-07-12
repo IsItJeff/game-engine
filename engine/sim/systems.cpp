@@ -3201,6 +3201,32 @@ void collect_pickups(entt::registry& reg, float dt) {
   for (const entt::entity item : taken) reg.destroy(item);
 }
 
+void study_spellbooks(entt::registry& reg) {
+  // The design's "magic is LEARNED" made real: a player standing on a Spellbook READS it and gains
+  // the Spellcasting skill, so casting is EARNED by finding a tome rather than innate. The learning
+  // twin of collect_pickups (walk over a grounded item to gain from it), and the same collect-then-
+  // destroy so a consumed book never invalidates the view mid-walk. Player-only for now (the player
+  // reads books; teaching NPCs is a later slice), gated on NOT already knowing the spell — so a
+  // book is spent only on a read that actually teaches, and a caster who already knows it leaves
+  // the tome.
+  constexpr float kStudyReach = 15.0f;  // same reach as a pickup grab
+  std::vector<entt::entity> read;       // books consumed after the walk (never destroy mid-view)
+  auto books = reg.view<Spellbook, Transform>();
+  auto learners = reg.view<PlayerControlled, Transform, Skills>();
+  for (const entt::entity book : books) {
+    const Vec2 book_pos = books.get<Transform>(book).position;
+    for (const entt::entity p : learners) {
+      if (glm::distance(learners.get<Transform>(p).position, book_pos) >= kStudyReach) continue;
+      Skills& sk = learners.get<Skills>(p);
+      if (sk.find(SkillId::Spellcasting) != nullptr) continue;  // already a caster — leave the tome
+      sk.train(SkillId::Spellcasting);                          // READ it: learn to cast
+      read.push_back(book);
+      break;  // one reader consumes the book
+    }
+  }
+  for (const entt::entity book : read) reg.destroy(book);
+}
+
 void resolve_contacts(entt::registry& reg) {
   // "In contact" = centres within this many world units. A real engine gives
   // each entity a collision shape (roadmap M4, Jolt); one distance is plenty for
