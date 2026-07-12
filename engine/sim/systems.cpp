@@ -3047,9 +3047,28 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
   std::vector<Vec2> weapon_drops;  // ...where brutes fell — a steel weapon instead...
   std::vector<Vec2> armour_drops;  // ...where sentinels fell — a piece of armour...
   std::vector<Vec2> venom_drops;  // ...and where spitters fell — a venom fang (poison-build blade)
+  std::vector<Vec2> kit_weapon_drops;  // where an ARMED colonist fell — its wielded blade lands...
+  std::vector<Vec2> kit_armour_drops;  // ...and where an ARMOURED one fell — its worn plate
   auto npcs = reg.view<Stats, Npc>();
   for (const entt::entity e : npcs) {
-    if (npcs.get<Stats>(e).health.current <= 0.0f) dead.push_back(e);
+    if (npcs.get<Stats>(e).health.current > 0.0f) continue;
+    dead.push_back(e);
+    // A fallen colonist DROPS THE KIT it earned — the gear it was wielding/wearing lands where it
+    // fell, so an ally's blade and plate are RECOVERABLE (the equipment economy's death end: gear
+    // outlives its bearer, the twin of a slain brute paying out a weapon). Only a real slot drops
+    // (an unarmed, bare NPC — every existing death test — leaves nothing, bit-identical), and it
+    // drops PLAIN: baseline quality, no trait, NO rng draw, matching the Drop command's "a dropped
+    // weapon is a plain one" simplification, so the drop_rng_ stream stays byte-aligned. The
+    // non-empty-slot checks mirror the Drop command's exactly. Position captured HERE (the corpse
+    // is still valid; the destroy loop is below).
+    if (const Equipped* eq = reg.try_get<Equipped>(e); eq != nullptr) {
+      const Vec2 pos = reg.get<Transform>(e).position;
+      if (eq->strength_bonus != 0 || eq->move_penalty != 0.0f || eq->weapon_venom != 0.0f ||
+          eq->crit_bonus != 0.0f)
+        kit_weapon_drops.push_back(pos);  // it was armed -> its weapon drops
+      if (eq->defence_bonus != 0.0f || eq->stamina_regen_penalty != 0.0f)
+        kit_armour_drops.push_back(pos);  // it was armoured -> its plate drops
+    }
   }
   auto creatures = reg.view<Stats, Enemy>();
   for (const entt::entity e : creatures) {
@@ -3149,6 +3168,11 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
   }
   for (const Vec2& pos : armour_drops) spawn_armour(reg, pos, fine_quality(rng));  // rolled defence
   for (const Vec2& pos : venom_drops) spawn_venom_weapon(reg, pos);  // poison build (baseline)
+  // A fallen colonist's KIT — a PLAIN blade / plate at baseline quality (1.0), no rng draw:
+  // recovered gear is the ordinary kind, not the finer loot a tough KILL rolls. Spawned after the
+  // destroy loop like every other drop, from positions captured while the corpse was still valid.
+  for (const Vec2& pos : kit_weapon_drops) spawn_weapon(reg, pos, 1.0f);
+  for (const Vec2& pos : kit_armour_drops) spawn_armour(reg, pos, 1.0f);
 }
 
 void collect_pickups(entt::registry& reg, float dt) {
