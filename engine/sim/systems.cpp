@@ -306,7 +306,31 @@ void steer_npcs(entt::registry& reg) {
       awareness += static_cast<float>(wis_attrs->wisdom.level - 1) * kAwarenessPerWis;
       if (awareness > kAwarenessCap) awareness = kAwarenessCap;
     }
-    float nearest = kSenseRadius * (1.0f - bravery / 200.0f) * awareness;
+    // COURAGE IN NUMBERS: a bonded friend standing nearby STEADIES the nerve — this colonist lets a
+    // hazard get closer before bolting, where a lone one would bolt early. The passive, positive
+    // mirror of grief (a friend's DEATH drifts bravery DOWN) and of the DEFEND rung (charge to a
+    // THREATENED friend): here a merely-PRESENT friend emboldens you. Reads the same Relationships
+    // edges the defend/bond rungs do (affinity >= kBondPull, a valid non-Downed friend) within
+    // kCourageRadius, and SHRINKS the sense radius by kSteadiedPerFriend per nearby friend
+    // (capped), so a cluster holds ground while a straggler flees. No Relationships / no friend in
+    // range -> steadied 0 -> factor 1.0 -> bit-identical. Draws no RNG. ponytail: O(edges) per NPC,
+    // the same scan shape the defend rung already runs.
+    constexpr float kCourageRadius = 140.0f;  // how near a friend must be to steady you
+    constexpr float kSteadiedPerFriend =
+        0.15f;                            // each nearby friend shrinks the flee radius 15%...
+    constexpr float kSteadiedCap = 0.5f;  // ...down to half — you never ignore danger entirely
+    float steadied = 0.0f;
+    if (const Relationships* rel = reg.try_get<Relationships>(n)) {
+      for (const Relation& edge : rel->edges) {
+        if (edge.affinity < kBondPull || !reg.valid(edge.other)) continue;  // not a real bond
+        if (reg.all_of<Downed>(edge.other)) continue;  // a downed friend steadies no one
+        const Transform* ft = reg.try_get<Transform>(edge.other);
+        if (ft != nullptr && glm::distance(pos, ft->position) < kCourageRadius)
+          steadied += kSteadiedPerFriend;
+      }
+      if (steadied > kSteadiedCap) steadied = kSteadiedCap;
+    }
+    float nearest = kSenseRadius * (1.0f - bravery / 200.0f) * awareness * (1.0f - steadied);
     Vec2 threat{0.0f, 0.0f};
     bool sees_threat = false;
     for (const entt::entity h : hazards) {
