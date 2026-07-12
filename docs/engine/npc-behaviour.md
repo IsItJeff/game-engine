@@ -83,9 +83,12 @@ resolved by **urgency** — a colonist seeks whichever need is the *more deplete
 `current/max`), so the hunger rung defers to thirst when the canteen is emptier than the belly (and
 a well is actually in reach — an unreachable thirst never blocks a meal it *can* get to). Nobody
 dies of thirst standing next to a well just because hunger is checked first. Just below the needs
-sits a **retreat** rung: a *wounded* colonist (health below half) falls back to the nearest
-[`Hearth`](stats-system.md) to mend in its warmth, then **holds** once inside its radius — so the
-fire becomes a *used* landmark, wounded colonists gathering to recover. And the retreat now *shakes
+sits a **retreat** rung: a *wounded* colonist (health below half) **or a *chilled* one** (warmth below
+half — the temperature Need's seek want) falls back to the nearest
+[`Hearth`](stats-system.md) to mend in its warmth *and re-warm by its fire*, then **holds** once inside
+its radius — so the fire becomes a *used* landmark, wounded and cold colonists gathering to recover.
+(A warm, unhurt colonist skips it exactly as before, so the chilled clause is dormant without a cold
+zone — bit-identical.) And the retreat now *shakes
 the hunt*: creatures won't chase prey into the hearth's glow (`chase_prey`, see [combat](combat.md)),
 so a pursued colonist that reaches the fire loses its chaser — safe from being *hunted*, though a
 spitter or an already-adjacent beast can still land a hit, so it's breathing room, not full cover. It ranks below the needs on

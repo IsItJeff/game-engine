@@ -204,11 +204,16 @@ void steer_npcs(entt::registry& reg) {
   constexpr float kThirstSeekFraction = 0.6f;
   constexpr float kWaterSeekRadius = 260.0f;
   constexpr float kWaterSeekSpeed = 80.0f;
-  // Retreat: a WOUNDED colonist (health below this fraction) falls back to the nearest Hearth to
-  // mend in its warmth (regenerate_vitals boosts regen there). It holds once inside the hearth's
-  // own radius. Same wide-scan shape as the other survival wants. Knobs.
+  // Retreat: a WOUNDED colonist (health below this fraction) OR a CHILLED one (warmth below
+  // kColdSeekFraction) falls back to the nearest Hearth — to mend faster in its warmth
+  // (regenerate_vitals boosts regen there) AND to RE-WARM (drain_warmth's fire beats the cold). It
+  // holds once inside the hearth's own radius. The seek-warmth want the temperature Need needed: a
+  // chilled colonist now actively heads for the fire, not only once the cold has hurt it into the
+  // wounded case — so warmth drives behaviour like hunger/water do. Same wide-scan shape. Knobs.
   constexpr float kRetreatFraction = 0.5f;
   constexpr float kHearthSeekRadius = 300.0f;
+  constexpr float kColdSeekFraction =
+      0.5f;  // below half warmth, seek the fire (like thirst seeks a well)
   constexpr float kHearthSeekSpeed = 80.0f;
   // Rally: an IDLE colonist drifts toward a nearby renowned-enough hero (the inverted twin of the
   // top-priority villain flee). A gentle gather — lower speed than a flee or a forage, since it's
@@ -628,16 +633,20 @@ void steer_npcs(entt::registry& reg) {
       }
     }
 
-    // Priority 3.75 — retreat to a HEARTH to heal: a SAFE but WOUNDED colonist (health below
-    // kRetreatFraction of max) falls back to the nearest hearth to mend faster in its warmth
-    // (regenerate_vitals boosts regen there). Ranks below the NEEDS deliberately — a starving
-    // colonist can't heal anyway (the regen gate), so it forages/drinks first, then mends — and
-    // above arming up (survive before you gear). Once inside the hearth's own radius it HOLDS
-    // (stops, to sit in the warmth); outside, it heads in. This makes the hearth a USED landmark,
-    // not just a passive spot: wounded colonists gather at the fire. No hearth in range -> falls
-    // through (bit-identical to before hearths existed). Reuses the `stats` fetched for the hunger
-    // rung.
-    if (stats != nullptr && stats->health.current < stats->health.max * kRetreatFraction) {
+    // Priority 3.75 — retreat to a HEARTH to heal OR warm up: a SAFE colonist that is WOUNDED
+    // (health below kRetreatFraction) OR CHILLED (warmth below kColdSeekFraction) falls back to the
+    // nearest hearth — to mend faster in its warmth (regenerate_vitals boosts regen there) AND to
+    // re-warm (drain_warmth's fire beats the cold). Ranks below the NEEDS deliberately — a starving
+    // colonist can't heal anyway (the regen gate), so it forages/drinks first, then mends/warms —
+    // and above arming up (survive before you gear). Once inside the hearth's own radius it HOLDS
+    // (stops, to sit in the warmth); outside, it heads in. This makes the hearth a USED landmark:
+    // wounded AND chilled colonists gather at the fire. The CHILLED half is the temperature Need's
+    // seek want — it closes the "huddle by the fire" loop directly, not only via the
+    // freeze-into-wounded path. No hearth in range -> falls through. A colonist that is neither
+    // wounded NOR chilled (warmth full, every world without a ColdZone) skips this exactly as
+    // before -> bit-identical. Reuses the `stats` fetched for the hunger rung.
+    if (stats != nullptr && (stats->health.current < stats->health.max * kRetreatFraction ||
+                             stats->warmth.current < stats->warmth.max * kColdSeekFraction)) {
       entt::entity fire = entt::null;
       float nearest_fire = kHearthSeekRadius;
       float fire_radius = 0.0f;
