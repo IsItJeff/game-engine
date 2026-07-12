@@ -1190,9 +1190,22 @@ void tick_fatigue(entt::registry& reg, float dt) {
     Stats& s = view.get<Stats>(e);
     const Velocity* v = reg.try_get<Velocity>(e);
     if (v != nullptr && glm::length(v->value) > 0.0f) {
-      s.fatigue.current -= kMoveDrainPerSecond * dt;  // moving spends fatigue...
+      // SURVIVALIST eases the drain — a trained survivor tires SLOWER, lengthening the fatigue
+      // timer (never removing it: eased_bane caps the relief at half). This is the design's growth
+      // source and the ONE thing that buffers a need — VIT/Endurance stays pure combat defence, so
+      // survival stamina is its own trained thing. `relief` is the (1 - eased) multiplier: no
+      // Survivalist skill (level 1, or none) -> eased_bane(1, level) = 1.0 -> the FULL drain, so
+      // the two subtractions below are EXACTLY the pre-Survivalist ones (bit-identical, walkers AND
+      // sprinters — applying the factor per-component keeps the old float rounding). Trained in
+      // advance_progression, gated on low fatigue: you learn to endure only by pushing into
+      // exhaustion.
+      float relief = 1.0f;
+      if (const Skills* sk = reg.try_get<Skills>(e); sk != nullptr)
+        if (const Skill* surv = sk->find(SkillId::Survivalist))
+          relief = eased_bane(1.0f, surv->level);
+      s.fatigue.current -= kMoveDrainPerSecond * relief * dt;  // moving spends fatigue...
       if (reg.all_of<Sprinting>(e))
-        s.fatigue.current -= kSprintDrainPerSecond * dt;  // ...sprint more
+        s.fatigue.current -= kSprintDrainPerSecond * relief * dt;  // ...sprint more
     } else {
       float recover_rate = kRestRecoverPerSecond;  // standing still mends it (the odd need)...
       if (const Transform* t = reg.try_get<Transform>(e);
@@ -1392,6 +1405,7 @@ const SkillDef& skill_def(SkillId id) {
   // agility (DEX) that sharpens its dodge and aim. Main-only, a DEX skill beside Evasion and
   // Throwing.
   static const SkillDef kAthletics{AttrId::Dexterity, {}};
+  static const SkillDef kSurvivalist{AttrId::Endurance, {}};  // a VIT skill, like Conditioning
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -1417,6 +1431,8 @@ const SkillDef& skill_def(SkillId id) {
       return kResistance;
     case SkillId::Athletics:
       return kAthletics;
+    case SkillId::Survivalist:
+      return kSurvivalist;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -1462,6 +1478,12 @@ void advance_progression(entt::registry& reg) {
   // full-tilt dash is exertion in the AGILITY domain, granted ON TOP of Conditioning (you're moving
   // too).
   const Fixed kAthleticsPerTick = Fixed::from_ratio(20, 60);
+  // Pushing into EXHAUSTION trains Survivalist -> Endurance at the same 20 XP/sec: once fatigue
+  // drops below kExhaustionLearnAt you're learning to endure. Gated LOW so a rested colony (fatigue
+  // high — every existing fixture) trains nothing, exactly like the sprint-Athletics gate
+  // (bit-identical).
+  const Fixed kSurvivalistPerTick = Fixed::from_ratio(20, 60);
+  constexpr float kExhaustionLearnAt = 30.0f;  // fatigue below this = "pushing your limit"
 
   // NB: CharacterLevel is required here, so any new progression-capable entity must
   // be spawned WITH it (see world.cpp: player + NPC) — miss it and that entity
@@ -1488,6 +1510,14 @@ void advance_progression(entt::registry& reg) {
       // sprint stamina drain in update_stamina. Player-triggered like Throwing/Guarding.
       if (reg.all_of<Sprinting>(e))
         grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Athletics, kAthleticsPerTick,
+                       &character);
+      // ...and pushing INTO exhaustion (fatigue below kExhaustionLearnAt) trains SURVIVALIST ->
+      // Endurance: you learn to endure only by spending your reserves to the limit. Gated on LOW
+      // fatigue, so a rested colony trains nothing here and its Endurance is bit-identical.
+      // tick_fatigue reads the resulting Survivalist level to slow the drain (lengthening the
+      // timer).
+      if (view.get<Stats>(e).fatigue.current < kExhaustionLearnAt)
+        grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Survivalist, kSurvivalistPerTick,
                        &character);
     } else if (const Vital& stamina = view.get<Stats>(e).stamina; stamina.current < stamina.max) {
       grant_skill_xp(view.get<Skills>(e), attrs, SkillId::Recovery, kRecoveryPerTick, &character);

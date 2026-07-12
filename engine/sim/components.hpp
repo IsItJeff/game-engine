@@ -782,6 +782,11 @@ enum class SkillId : std::uint16_t {
                  // skill)
   Resistance,    // trained by ENDURING venom (tick_poison); main attribute Endurance (a VIT skill)
   Athletics,     // trained by SPRINTING (a burst of speed); main attribute Dexterity (agility)
+  Survivalist,   // trained by pushing into EXHAUSTION (low fatigue); main attribute Endurance. Its
+                 // level LENGTHENS the fatigue timer (slows the drain) — the design's "growth
+                 // lengthens but never removes the timer", the ONE thing that buffers a need (VIT/
+                 // Endurance stays pure combat defence). Added LAST so existing SkillId values keep
+                 // their numbers.
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
