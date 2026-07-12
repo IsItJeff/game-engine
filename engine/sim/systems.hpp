@@ -117,6 +117,12 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
 // it).
 void tick_poison(entt::registry& reg, float dt);
 
+// Count down the PANIC of every routed colonist (Panicked, emplaced by handle_deaths when a bonded
+// friend falls) and remove it when it lapses — the acute grief reaction wears off and the colonist
+// recovers its nerve. The timer twin of tick_poison; a no-op when nothing is panicked. Draws no
+// RNG.
+void tick_panic(entt::registry& reg, float dt);
+
 // Fly every in-flight Projectile toward its homing target and, on arrival, apply its carried damage
 // (crediting the owner Valor on a killing hit, but only for felling a hostile) and despawn. A shot
 // whose target has died mid-flight is despawned unhit (a wasted throw). The delayed-impact half of
