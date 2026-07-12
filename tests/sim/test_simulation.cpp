@@ -1719,8 +1719,9 @@ TEST_CASE("standing weights each deed dimension by the design's signed factors",
 TEST_CASE("a deed drifts the actor's matching personality axis, bounded and clamped", "[sim]") {
   // The design's "you are what you do": recording a deed nudges the actor's matching Personality
   // axis a bounded step — Valor hardens bravery, Charity softens toward compassion, Loyalty deepens
-  // the loyalty leaning — so a character is reshaped by its deeds. The drift CLAMPS at the ±100
-  // bound.
+  // the loyalty leaning, and Cruelty (the villain mirror of Charity) hardens compassion back DOWN —
+  // so a character is reshaped by its deeds, hero deeds LIFTING and villain deeds LOWERING. The
+  // drift CLAMPS at the ±100 bound in BOTH directions.
   entt::registry reg;
   const entt::entity n = reg.create();
   reg.emplace<eng::sim::Personality>(n, eng::sim::Personality{0, 0, 0, 0});
@@ -1738,9 +1739,20 @@ TEST_CASE("a deed drifts the actor's matching personality axis, bounded and clam
   REQUIRE(reg.get<eng::sim::Personality>(n).loyalty == 2);     // Loyalty -> the loyalty axis...
   REQUIRE(reg.get<eng::sim::Personality>(n).compassion == 2);  // ...and leaves compassion alone
 
+  // The VILLAIN mirror: a Cruelty deed drives compassion the OTHER way (DOWN toward callous), the
+  // one deed so far that LOWERS its axis — so it exactly undoes the earlier Charity here.
+  eng::sim::record_deed(reg, n, eng::sim::Deed::Cruelty, 1);
+  REQUIRE(reg.get<eng::sim::Personality>(n).compassion == 0);  // 2 - 2: Cruelty undoes the Charity
+  REQUIRE(reg.get<eng::sim::Personality>(n).loyalty == 2);     // ...and touches nothing else
+  REQUIRE(reg.get<eng::sim::Personality>(n).bravery == 4);
+
   // A long heroic career CLAMPS at the axis bound rather than overflowing the int8.
   for (int i = 0; i < 100; ++i) eng::sim::record_deed(reg, n, eng::sim::Deed::Valor, 1);
   REQUIRE(reg.get<eng::sim::Personality>(n).bravery == 100);  // pinned at +100, no wrap
+
+  // ...and a long CRUEL career clamps at the negative bound, the mirror of the heroic clamp.
+  for (int i = 0; i < 100; ++i) eng::sim::record_deed(reg, n, eng::sim::Deed::Cruelty, 1);
+  REQUIRE(reg.get<eng::sim::Personality>(n).compassion == -100);  // pinned at -100, no wrap
 }
 
 TEST_CASE("a deed on an entity with no Personality drifts nothing (stays Personality-free)",
