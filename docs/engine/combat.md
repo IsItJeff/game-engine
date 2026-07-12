@@ -300,8 +300,15 @@ swarm or hold through an enraged brute. The catch — and the reason it isn't fr
 upside — is that a raised guard **roots you** to `kGuardMoveScale` (35%) of your speed: you trade
 mobility for mitigation. **Plant and tank, or move and dodge — not both.** It rides the per-tick
 `MovePlayer` command (a held key, not an edge event), so the stance lasts exactly as long as you hold
-it, and the softening system reads `Blocking` on *any* entity — so an NPC-guard behaviour would fall
-out for free (today only the player, being input-driven, ever guards).
+it, and the softening system reads `Blocking` on *any* entity — so **NPCs guard too**: `npc_guard`
+has a *hardened* colonist (a **bulwark** — trained Endurance past `kBulwarkLevel`) **plant and raise
+a guard** when a creature is upon it, rooting in place to soak the softened blows, riposte, and
+**train Guarding** — the first path for a colonist to reach that skill at all, and the player==NPC
+parity the design guards. It plants only while **hale**, though: below half health it *doesn't* guard,
+so the wounded-retreat rung carries it to a hearth to mend instead of rooting it beside the creature
+to stand-and-die — the brave stand is a *healthy* veteran's choice. A *fresh* colonist (Endurance 1)
+never qualifies, so the guard only emerges after one has toughened up over a long fight — which keeps
+every existing steer test bit-identical.
 
 And a guard **bites back**: a blow turned on a raised guard chips the attacker for a flat
 `kRiposteDamage` (4) — a **riposte** — so planting your guard isn't purely defensive; it's a slow

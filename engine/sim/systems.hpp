@@ -35,6 +35,13 @@ void snapshot_previous(entt::registry& reg);
 // turns the velocity it sets into actual movement this tick.
 void steer_npcs(entt::registry& reg);
 
+// NPCs raise a guard: a hardened colonist (veteran Endurance) with a creature upon it PLANTS and
+// emplaces Blocking — so resolve_creature_contacts softens the blow, it ripostes, and it trains the
+// Guarding skill (the first NPC path to Guarding; only the player set Blocking before — a parity
+// hole). A fresh (level-1) NPC never qualifies, so it is bit-identical. MUST run after steer_npcs
+// (it overrides the flee velocity, rooting the guard) and before integrate_motion. No RNG.
+void npc_guard(entt::registry& reg);
+
 // Steer creatures: each Enemy homes straight in on the NEAREST person — the player or an
 // NPC (anything with Stats that isn't itself a creature) — the hostile mirror of
 // steer_npcs (which flees). Like steer_npcs, MUST run before integrate_motion so the
