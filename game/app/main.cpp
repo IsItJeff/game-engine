@@ -230,7 +230,7 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
                        fa.max);  // falls while exerting (worst sprinting), mends at rest
     const eng::sim::Vital& mp = stats->mp;
     ImGui::Text("mana: %.0f / %.0f", static_cast<double>(mp.current), static_cast<double>(mp.max));
-    ImGui::ProgressBar(mp.current / mp.max);  // spent by casting (C: bolt), regenerates at rest
+    ImGui::ProgressBar(mp.current / mp.max);  // spent by casting (C: bolt, H: mend), regens at rest
     const eng::sim::Vital& wm = stats->warmth;
     ImGui::Text("warmth: %.0f / %.0f", static_cast<double>(wm.current),
                 static_cast<double>(wm.max));
@@ -374,8 +374,12 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "kite forever); it trains Throwing -> Dexterity. C: CAST a magic bolt at the nearest "
       "creature "
       "in range — the ranged twin that spends MANA instead of stamina and scales with Intellect; "
-      "you "
-      "start knowing it, and casting trains Spellcasting -> Intellect. Standing to trade blows "
+      "you LEARN it by walking over a SPELLBOOK on the field, and casting trains Spellcasting -> "
+      "Intellect. H: MEND the nearest wounded ally in range — the SUPPORT twin that spends the "
+      "same "
+      "mana to restore a friend's health and scales with Wisdom (trains Healing -> Wisdom). "
+      "Standing "
+      "to trade blows "
       "slowly trains "
       "Dexterity too, "
       "so before long some hits are dodged outright. Swing J at a peaceful COLONIST with no "
@@ -444,6 +448,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool harvest_was_down = false;
   bool plant_was_down = false;
   bool cast_was_down = false;
+  bool heal_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -544,6 +549,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::cast(eng::sim::kLocalPlayer)});
     }
     cast_was_down = cast_raw;
+
+    // H, edge-triggered, casts a MEND at the nearest wounded ally in range — the support twin of C.
+    // Same mana bar and learned Spellcasting gate as the bolt; no wounded ally (or no mana)
+    // fizzles.
+    const bool heal_raw = keys[SDL_SCANCODE_H];
+    if (heal_raw && !heal_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::cast_heal(eng::sim::kLocalPlayer)});
+    }
+    heal_was_down = heal_raw;
 
     // K, HELD (not edge-triggered), raises a GUARD: incoming creature blows are softened but you
     // move slower. A held stance rather than a one-shot action, so it rides the per-tick MovePlayer

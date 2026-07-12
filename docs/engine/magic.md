@@ -13,6 +13,8 @@ mana, but it does nothing until you have *learned* to cast.
 | **`AttrId::Intellect`** | the design's 7th attribute, the **magic** one — scales a spell's power, fed by casting |
 | **`magic_bolt`** | the first **spell** — a homing bolt at the nearest hostile, the magic mirror of a throw |
 | **`Cast` command** | the funnel path (press **C**) that runs `magic_bolt` for the player |
+| **`heal_spell`** | the **support** spell — mends the nearest wounded ally, trains `Healing → Wisdom` |
+| **`CastHeal` command** | the funnel path (press **H**) that runs `heal_spell` for the player |
 
 ## Why it matters
 
@@ -65,11 +67,38 @@ hostile in range, on a full mana bar (a throttle to a considered shot, then a re
 spam). So a **colonist mage fights beside you** — the player==NPC parity the design wants. The kill
 credit and Valor flow through `advance_projectiles` exactly as a throw's do.
 
+### The support spell — `heal_spell`
+
+The first spell that reaches for a **friend**, not a foe — the co-op heart of an embodied colony that
+**heals its own** (press **H**, the `CastHeal` command). It is the bolt's support twin, built on the
+same shape:
+
+- **It mends the nearest wounded ally** — a *person* (not a creature, not a downed body, not the
+  caster itself) whose health is below max, within `kHealRange` (300). A full-health ally is never
+  targeted, so **no mana is wasted** topping up the hale, and there's **no over-heal** (the mend is
+  clamped at max).
+- **It spends the same mana** — `kHealManaCost` (25), an empty bar fizzles like the bolt. It lands
+  **instantly** on the ally (a mending word, no flying `Projectile`).
+- **Wisdom scales it, and it trains a new skill** — `kBaseHeal` (18) + a per-`Wisdom`-level delta,
+  scaled by the caster's `need_efficiency` (a starving healer mends weaker too). A connecting mend
+  grants `Healing → Wisdom` (the design's WIS support domain), so a healer sharpens by healing the way
+  a mage sharpens by casting. See [progression](progression.md).
+- **It shares the learned gate** — a caster who read the tome can *both* bolt and mend (Spellcasting
+  unlocks both for now; a dedicated Healing tome is a follow-up). So a non-caster still can't mend, and
+  a world without casters is bit-identical.
+
+Parity again: `npc_heal` drives the *same* `heal_spell` for any NPC that has learned to cast, on a
+**full mana bar**. Because it runs *after* `npc_cast` and shares that full-bar throttle, a battle-mage
+naturally **bolts a threat first** (spending its mana) and only **mends in a lull** when no bolt
+fired — offence-then-support falls out of the schedule order, no priority flag needed. So a colonist
+mage blasts monsters *and* patches up the wounded beside you.
+
 ## What's next
 
-This is a seam, not the whole trunk. **Learning** and **NPC casters** now exist (a `Spellbook` you
-read, and a colonist mage that casts beside you). Growing from here: **more spells** (a heal, an area
-blast, each its own book), NPCs *seeking out* tomes or a **mentor** to teach them, the **Focus /
-Attunement** skills that govern the mana pool's capacity and regen, and the **tech** branch (an Energy
-battery on gear,
-the design's twin trunk). Each is a small add on this foundation.
+This is a seam, not the whole trunk. **Learning**, **NPC casters**, and now **support magic** exist (a
+`Spellbook` you read, a colonist mage that casts beside you, and a mend that heals your allies). Growing
+from here: **more spells** (an area blast, a ward, each its own book), a **dedicated Healing tome** so
+the support skill has its own learn-path (today it rides the Spellcasting gate), NPCs *seeking out*
+tomes or a **mentor** to teach them, the **Focus / Attunement** skills that govern the mana pool's
+capacity and regen, and the **tech** branch (an Energy battery on gear, the design's twin trunk). Each
+is a small add on this foundation.

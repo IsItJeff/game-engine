@@ -1685,6 +1685,11 @@ const SkillDef& skill_def(SkillId id) {
   // casting the same way a thrower sharpens DEX by throwing. Main-only for now (aspects come with
   // the tree).
   static const SkillDef kSpellcasting{AttrId::Intellect, {}};
+  // Healing is a WISDOM skill — the design's WIS Healing/Medicine domain, the SUPPORT twin of
+  // Spellcasting's INT offence. Mending a wounded ally trains it, and its main attr feeds the WIS
+  // that scales the mend, so a healer sharpens by healing the way a mage sharpens by casting.
+  // Main-only for now (aspects come with the tree).
+  static const SkillDef kHealing{AttrId::Wisdom, {}};
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -1716,6 +1721,8 @@ const SkillDef& skill_def(SkillId id) {
       return kSpellcasting;
     case SkillId::Teaching:
       return kTeaching;
+    case SkillId::Healing:
+      return kHealing;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -2672,6 +2679,93 @@ void npc_cast(entt::registry& reg) {
     casters.push_back(n);
   }
   for (const entt::entity n : casters) magic_bolt(reg, n);
+}
+
+void heal_spell(entt::registry& reg, entt::entity caster) {
+  // The SUPPORT twin of magic_bolt — a learned caster MENDS the nearest wounded ally instead of
+  // bolting a foe, spending the same mana bar. Where the bolt reaches out to a hostile, the mend
+  // reaches to a FRIEND: the first co-op-native spell (an embodied colony heals its own). It reuses
+  // magic_bolt's shape (the learned Spellcasting gate + a mana cost + a stat-scaled effect trained
+  // by doing) but lands INSTANTLY on the ally (no Projectile — a mending word, not a flying bolt)
+  // and grows a NEW skill: Healing -> WISDOM (the design's support domain), so a healer sharpens by
+  // healing the way a mage sharpens by casting. Draws NO RNG.
+  constexpr float kHealRange = 300.0f;  // a touch shorter than the bolt's 350 — you tend the near
+  constexpr float kHealManaCost = 25.0f;  // the same cost as a bolt (a full 100 bar -> 4 mends)
+  constexpr float kBaseHeal = 18.0f;      // HP restored before Wisdom (a touch above a bolt's 14)
+  constexpr float kHealPerWisdom = 5.0f;  // each Wisdom level past 1 mends more
+  const Fixed kHealingPerCast = Fixed::from_int(10);
+
+  const Transform* tf = reg.try_get<Transform>(caster);
+  Attributes* attrs = reg.try_get<Attributes>(caster);
+  Skills* skills = reg.try_get<Skills>(caster);
+  Stats* stats = reg.try_get<Stats>(caster);
+  if (tf == nullptr || attrs == nullptr || skills == nullptr || stats == nullptr) return;
+
+  // THE LEARNED GATE: shares Spellcasting with the bolt — reading the arcane tome teaches BOTH the
+  // offensive bolt and this mending word, so a caster can do either. (A dedicated Healing tome /
+  // learn-path is a follow-up; the point here is the SPELL, and gating it on the same learned skill
+  // keeps a world of non-casters bit-identical — a plain colonist can't mend.)
+  if (skills->find(SkillId::Spellcasting) == nullptr) return;
+
+  // Nearest WOUNDED ally in range — a PERSON (Stats), not a creature, not a downed body, not the
+  // caster itself, and actually hurt (health below max), so a full-health ally is never targeted
+  // and no mana is wasted topping up the hale. Deterministic strict-<.
+  const Vec2 origin = tf->position;
+  entt::entity patient = entt::null;
+  float nearest = kHealRange;
+  auto allies = reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>);
+  for (const entt::entity a : allies) {
+    if (a == caster) continue;  // mend an ALLY, not yourself (self-heal is regenerate_vitals' job)
+    const Vital& h = allies.get<Stats>(a).health;
+    if (h.current >= h.max) continue;  // hale — nothing to mend
+    const float d = glm::distance(origin, allies.get<Transform>(a).position);
+    if (d < nearest) {
+      nearest = d;
+      patient = a;
+    }
+  }
+  if (patient == entt::null) return;  // no one to mend — a held cast: no mana spent, no XP
+
+  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the bolt.
+  if (stats->mp.current < kHealManaCost) return;
+  stats->mp.current -= kHealManaCost;
+
+  // A connecting mend trains Healing -> Wisdom, so a healer grows the WIS that sharpens the mend by
+  // casting it — the learn-by-doing loop, mirror of a bolt training Spellcasting -> INT.
+  CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
+  grant_skill_xp(*skills, *attrs, SkillId::Healing, kHealingPerCast, character);
+
+  // The mend: base + earned-Wisdom delta, scaled by the caster's need_efficiency (a starving healer
+  // mends weaker too — no support loophole, matching the bolt). Added to the ally, CLAMPED at max
+  // (no over-heal). The patient's Stats isn't the caster's, and this is a VALUE write, so it's
+  // view-safe.
+  Vital& h = reg.get<Stats>(patient).health;
+  const float mend = (kBaseHeal + static_cast<float>(attrs->wisdom.level - 1) * kHealPerWisdom) *
+                     need_efficiency(*stats);
+  h.current += mend;
+  if (h.current > h.max) h.current = h.max;
+}
+
+void npc_heal(entt::registry& reg) {
+  // NPCs that have LEARNED to cast MEND a nearby wounded ally — the support mirror of npc_cast,
+  // reusing the very same heal_spell so a colonist healer mends EXACTLY as the player does (the
+  // player==NPC parity). Only an Npc carrying Spellcasting (the shared learned gate) mends, and
+  // only on a FULL mana bar — the same throttle npc_cast uses, so a healer mends then recharges
+  // rather than spamming one every tick. heal_spell itself gates on a WOUNDED ally in range AND the
+  // mana it spends, so a healer with no one hurt (or no mana) is a silent no-op. Because npc_heal
+  // runs AFTER npc_cast and both need a FULL bar, a battle-mage naturally BOLTS a threat first
+  // (spending its mana) and only MENDS in a lull when no bolt fired — offence-then-support falls
+  // out of the order, no priority flag needed. heal_spell mutates only component VALUES (never the
+  // entity set), so it needs no collect-then-cast, but we mirror npc_cast's shape for symmetry.
+  std::vector<entt::entity> healers;
+  auto mages = reg.view<Npc, Transform, Attributes, Skills, Stats>();
+  for (const entt::entity n : mages) {
+    if (mages.get<Skills>(n).find(SkillId::Spellcasting) == nullptr) continue;  // never learned
+    const Vital& mp = mages.get<Stats>(n).mp;
+    if (mp.current < mp.max) continue;  // mend only on a full bar -> a mend, then a recharge
+    healers.push_back(n);
+  }
+  for (const entt::entity n : healers) heal_spell(reg, n);
 }
 
 void advance_projectiles(entt::registry& reg, float dt) {

@@ -40,6 +40,7 @@ enum class CommandKind {
   Harvest,       // gather the nearest ripe food plot in reach into a meal at your feet
   Plant,         // sow a new crop seedling at your feet (it grows, then can be harvested)
   Cast,          // cast a spell (a magic bolt) at the nearest hostile in range, spending mana
+  CastHeal,      // cast a MEND at the nearest wounded ally in range, spending mana (support magic)
 };
 
 struct Command {
@@ -121,6 +122,11 @@ inline Command plant(PlayerId player) {
 // the intent carries only who is casting.
 inline Command cast(PlayerId player) {
   return Command{CommandKind::Cast, player, {}, {}, 0.0f};
+}
+// CastHeal: the support twin of Cast — the target (the nearest wounded ally in range) is computed
+// server-side, so the intent carries only who is mending.
+inline Command cast_heal(PlayerId player) {
+  return Command{CommandKind::CastHeal, player, {}, {}, 0.0f};
 }
 
 }  // namespace eng::sim

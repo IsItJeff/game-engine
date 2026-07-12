@@ -516,6 +516,7 @@ void World::step() {
   tick_panic(registry_, dt);           // ...a routed mourner's panic ebbs (before deaths)
   creature_spit(registry_, dt);        // ranged creatures launch a spit at a person...
   npc_cast(registry_);                 // ...colonist mages fling a bolt at a hostile...
+  npc_heal(registry_);                 // ...or, in a lull, mend a wounded ally (support magic)...
   advance_projectiles(registry_, dt);  // ...and thrown/spat/cast shots fly home and land
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt,
                 drop_rng_);        // ...then 0-HP reaped (drop_rng_ rolls any fine loot quality)
@@ -769,6 +770,18 @@ void World::apply_command(const Command& cmd) {
       for (const entt::entity a : casters) {
         if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
         magic_bolt(registry_, a);
+      }
+      break;
+    }
+    case CommandKind::CastHeal: {
+      // The SUPPORT twin of Cast: the player mends the nearest wounded ally in range (heal_spell),
+      // spending MANA and gated on the same learned Spellcasting skill. Same match-by-player-id and
+      // view as Cast; heal_spell mutates only VALUES (no spawn), so the iteration is trivially
+      // stable.
+      auto casters = registry_.view<PlayerControlled, Transform, Attributes, Skills, Stats>();
+      for (const entt::entity a : casters) {
+        if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
+        heal_spell(registry_, a);
       }
       break;
     }
