@@ -1690,6 +1690,10 @@ const SkillDef& skill_def(SkillId id) {
   // that scales the mend, so a healer sharpens by healing the way a mage sharpens by casting.
   // Main-only for now (aspects come with the tree).
   static const SkillDef kHealing{AttrId::Wisdom, {}};
+  // Cooking is a second INTELLECT skill beside Spellcasting — the design's INT Cooking domain (its
+  // non-magic sibling). Preparing a meal trains it, and its main attr feeds the INT that scales the
+  // meal, so a cook sharpens by cooking the way a mage sharpens by casting. Main-only for now.
+  static const SkillDef kCooking{AttrId::Intellect, {}};
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -1723,6 +1727,8 @@ const SkillDef& skill_def(SkillId id) {
       return kTeaching;
     case SkillId::Healing:
       return kHealing;
+    case SkillId::Cooking:
+      return kCooking;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -3010,19 +3016,23 @@ void spawn_pickup(entt::registry& reg, Vec2 pos) {
 }
 
 // Spawn a MEAL on the ground at `pos` — a harvested-crop food, the payoff of the food economy. It
-// is a Pickup like a loot orb, but PURE food: it fills more hunger (kMealFood, > an orb's 50) and,
-// being a prepared meal rather than monster loot, grants NONE of the orb's combat rewards (no heal,
-// no permanent max-HP). A warm orange dot so it reads as food, not treasure.
-void spawn_meal(entt::registry& reg, Vec2 pos) {
-  constexpr float kMealFood = 100.0f;  // two orbs' worth — preparing a crop stretches it. A knob.
+// is a Pickup like a loot orb, but PURE food: it fills more hunger (kMealFood, > an orb's 50 and >
+// the ~60 you'd graze from the stock it costs) and, being a prepared meal rather than monster loot,
+// grants NONE of the orb's combat rewards (no heal, no permanent max-HP). A warm orange dot so it
+// reads as food, not treasure. The base sits BELOW the hunger cap (100) on purpose: that headroom
+// is what lets a skilled COOK's `food_scale` surplus actually LAND on a famished eater (a full
+// belly can't hold more of either) rather than being clamped away.
+void spawn_meal(entt::registry& reg, Vec2 pos, float food_scale = 1.0f) {
+  constexpr float kMealFood =
+      70.0f;  // a solid meal — beats an orb (50) and grazing the stock. Knob.
   const entt::entity e = reg.create();
   reg.emplace<Transform>(e, pos);
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<RenderDot>(e, Vec3{0.9f, 0.6f, 0.2f}, 4.0f);  // small warm-orange meal
   Pickup& pk = reg.emplace<Pickup>(e);
-  pk.heal = 0.0f;          // a meal is food, not combat loot — no restorative heal...
-  pk.bonus_max_hp = 0.0f;  // ...and no permanent HP bump (that's the monster-drop reward)
-  pk.food = kMealFood;     // but it fills you more than any orb
+  pk.heal = 0.0f;                    // a meal is food, not combat loot — no restorative heal...
+  pk.bonus_max_hp = 0.0f;            // ...and no permanent HP bump (that's the monster-drop reward)
+  pk.food = kMealFood * food_scale;  // a better COOK stretches the same crop further (food_scale)
 }
 
 }  // namespace
@@ -3057,7 +3067,30 @@ bool harvest_nearest_crop(entt::registry& reg, entt::entity harvester) {
   }
   if (best == entt::null) return false;               // nothing ripe within reach
   plots.get<FoodSource>(best).stock -= kHarvestCost;  // spend the plot's growth...
-  spawn_meal(reg, pos);  // ...for a prepared meal where the harvester stands
+
+  // COOKING scales the meal: a better cook prepares the same crop into MORE food. An unlearned cook
+  // (or none) is level 1 -> food_scale ×1.0 -> the exact base meal, so a fresh world is
+  // bit-identical. Read the LEVEL (a value copy) BEFORE spawn_meal — which creates an entity and
+  // reallocates pools — then RE-FETCH the component pointers AFTER for the training, so no
+  // component handle crosses the realloc (the discipline the `pos` capture above already follows).
+  constexpr float kCookingYieldPerLevel =
+      0.10f;  // each Cooking level past 1 stretches the meal 10%
+  float food_scale = 1.0f;
+  if (const Skills* sk = reg.try_get<Skills>(harvester); sk != nullptr)
+    if (const Skill* cook = sk->find(SkillId::Cooking))
+      food_scale = 1.0f + static_cast<float>(cook->level - 1) * kCookingYieldPerLevel;
+  spawn_meal(reg, pos, food_scale);  // ...for a prepared meal where the harvester stands
+
+  // Preparing a meal TRAINS Cooking -> Intellect (learns it at level 1 on the first harvest) — the
+  // learn-by-doing loop, so a colonist that farms a lot becomes the colony's cook. Gated on the
+  // progression pair; a harvester without it just doesn't grow, so it's bit-identical for anyone
+  // not progressing. Pointers RE-FETCHED here, after spawn_meal's realloc.
+  const Fixed kCookingPerHarvest =
+      Fixed::from_int(10);  // XP for preparing a meal (matches a swing)
+  if (Skills* sk = reg.try_get<Skills>(harvester); sk != nullptr)
+    if (Attributes* attrs = reg.try_get<Attributes>(harvester); attrs != nullptr)
+      grant_skill_xp(*sk, *attrs, SkillId::Cooking, kCookingPerHarvest,
+                     reg.try_get<CharacterLevel>(harvester));
   return true;
 }
 

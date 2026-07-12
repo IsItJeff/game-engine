@@ -353,6 +353,15 @@ orb (50, the old flat rate → bit-identical) or a meal (more). `harvest_nearest
 actor-agnostic — the same call an NPC farm behaviour will use later — so the player and the colony
 will harvest identically, the parity every Need keeps.
 
+And a **better cook stretches the crop further**: `harvest_nearest_crop` scales the meal's `food` by
+the harvester's **`Cooking`** skill (each level +10%), and preparing a meal *trains* Cooking → **Intellect**
+(the design's INT cooking domain, [progression](progression.md)). The base meal sits *below* the hunger
+cap on purpose, so that surplus actually **lands on a famished eater** — a starving colonist is filled
+more by a skilled cook's meal (a nearly-full one tops off from either; a belly holds only so much).
+An unlearned cook (level 1) prepares a plain ×1.0 meal, so the scaling is bit-identical at level 1 —
+the food economy grows a *skill* the way combat does. (Carryable leftovers that feed *several* mouths
+are a natural follow-up.)
+
 ### Planting: sow your own garden
 
 Harvesting works a crop you *found*. **Planting** lets you make one. Press **T** (a `Plant` command
