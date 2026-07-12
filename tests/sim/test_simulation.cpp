@@ -2887,6 +2887,29 @@ TEST_CASE("a thrown attack chips a distant creature and spends stamina", "[sim]"
           eng::Fixed{});  // trained Throwing -> DEX
 }
 
+TEST_CASE("a defter thrower's bolt flies faster: dexterity's Speed aspect", "[sim]") {
+  // DEX's design "Speed" aspect: a defter thrower launches a FASTER projectile, so it reaches the
+  // target sooner and is wasted less often when the target dies mid-flight (advance_projectiles
+  // despawns a shot whose target died first). DEX 1 (every existing throw test) -> the flat speed
+  // (bit-identical); a trained DEX speeds it, capped at 2x.
+  const auto bolt_speed = [](int dex) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).dexterity.level = dex;
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});  // past melee, in throw range
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+    reg.emplace<eng::sim::Enemy>(foe);
+    eng::sim::perform_throw(reg, atk);
+    return reg.get<eng::sim::Projectile>(*reg.view<eng::sim::Projectile>().begin()).speed;
+  };
+  REQUIRE(bolt_speed(10) > bolt_speed(1));  // a defter thrower's bolt is faster than a novice's...
+  REQUIRE(bolt_speed(1000) == Approx(bolt_speed(1) * 2.0f));  // ...but capped at 2x, never runaway
+}
+
 TEST_CASE("a throw beyond its range whiffs: no damage, no stamina spent", "[sim]") {
   // The range gate. A creature past the throw range is a held throw — nothing thrown, so no stamina
   // is spent (the cost is only paid on a connecting hurl).
