@@ -1766,6 +1766,69 @@ TEST_CASE("an NPC strikes a hazard in reach and trains Striking -> Strength", "[
   REQUIRE(world.registry().get<eng::sim::Attributes>(npc).strength.xp > eng::Fixed{});
 }
 
+TEST_CASE("a power swing hits harder but costs more stamina than a plain one", "[sim]") {
+  // The offensive stance (PowerAttack, set from the held power key): a swing lands harder for a
+  // dearer stamina cost. Same attacker, same target, same seed — only the PowerAttack marker
+  // differs.
+  struct Blow {
+    float dealt;
+    float spent;
+  };
+  const auto swing = [](bool powered) {
+    entt::registry reg;
+    std::mt19937 rng{1234};
+    const entt::entity attacker = reg.create();
+    reg.emplace<eng::sim::Transform>(attacker, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(attacker);  // STR 1 -> the same base damage both cases
+    reg.emplace<eng::sim::Skills>(attacker);
+    auto& stats = reg.emplace<eng::sim::Stats>(attacker);  // full stamina
+    if (powered) reg.emplace<eng::sim::PowerAttack>(attacker);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});  // in reach
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Attributes>(foe);  // VIT 1 -> same mitigation, DEX 1 -> never dodges
+    auto& foe_stats = reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    const float foe_before = foe_stats.health.current;
+    const float stam_before = stats.stamina.current;
+    eng::sim::perform_attack(reg, attacker, rng);
+    return Blow{foe_before - reg.get<eng::sim::Stats>(foe).health.current,
+                stam_before - reg.get<eng::sim::Stats>(attacker).stamina.current};
+  };
+  const Blow plain = swing(false);
+  const Blow heavy = swing(true);
+  REQUIRE(plain.dealt > 0.0f);         // a plain swing lands (baseline)...
+  REQUIRE(heavy.dealt > plain.dealt);  // ...a power swing hits harder...
+  REQUIRE(heavy.spent > plain.spent);  // ...and drains more stamina for it
+}
+
+TEST_CASE("a power swing fizzles when too winded to afford it", "[sim]") {
+  // The power stance costs kPowerStaminaCost (18): a fighter with enough for a plain swing (>=7)
+  // but not a power one (<18) lands NOTHING while powered — the heavier blow self-gates on the
+  // stamina it can't pay, exactly as a plain swing fizzles below 7. So powering isn't free: it can
+  // leave you unable to swing at all when your wind is low.
+  const auto swing_lands = [](bool powered, float stamina) {
+    entt::registry reg;
+    std::mt19937 rng{1234};
+    const entt::entity attacker = reg.create();
+    reg.emplace<eng::sim::Transform>(attacker, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(attacker);
+    reg.emplace<eng::sim::Skills>(attacker);
+    reg.emplace<eng::sim::Stats>(attacker).stamina.current = stamina;
+    if (powered) reg.emplace<eng::sim::PowerAttack>(attacker);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Attributes>(foe);
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    const float before = reg.get<eng::sim::Stats>(foe).health.current;
+    eng::sim::perform_attack(reg, attacker, rng);
+    return before - reg.get<eng::sim::Stats>(foe).health.current > 0.0f;  // did the blow land?
+  };
+  REQUIRE(swing_lands(false, 10.0f));       // 10 stamina is plenty for a plain swing (cost 7)...
+  REQUIRE_FALSE(swing_lands(true, 10.0f));  // ...but not a power swing (cost 18) -> it fizzles
+  REQUIRE(swing_lands(true, 20.0f));        // ...20 affords the power swing -> it lands
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

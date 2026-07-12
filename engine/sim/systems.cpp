@@ -1756,6 +1756,12 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // disengage and recover, the "manage your wind" loop that keeps a fight from being a free
   // stand-and-win. A full 100-bar sustains ~14 swings. Knob.
   constexpr float kMeleeStaminaCost = 7.0f;
+  // A POWER swing (the held power stance) hits HARDER but costs MORE stamina — the offensive twin
+  // of sprint/guard, each trading the bar. 1.75x damage for the dearer 18-stamina cost (vs the base
+  // 7, ~2.6x): fewer, heavier blows that fell a brute in less swings, at the price of winding you
+  // faster (so it's a burst, not the pace). Knobs.
+  constexpr float kPowerDamage = 1.75f;       // a powered swing's damage multiplier
+  constexpr float kPowerStaminaCost = 18.0f;  // ...and its dearer stamina cost (vs the base 7)
 
   // A swinger needs a position (to reach from) and the progression pair to train.
   const Transform* tf = reg.try_get<Transform>(attacker);
@@ -1816,10 +1822,18 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
                          atk_stats->health.current < atk_stats->health.max * kBerserkThreshold)
                             ? kBerserkDamage
                             : 1.0f;
+  // The held POWER stance (PowerAttack marker, set from the MovePlayer command like Blocking/
+  // Sprinting) makes this swing hit harder for a dearer stamina cost. No marker (every NPC, or a
+  // player not holding it) -> 1.0 / the base cost -> bit-identical. Read once for BOTH the damage
+  // multiplier here and the cost in too_winded just below. It multiplies raw like berserk does — a
+  // fourth, choice-driven damage factor beside veteran / need_eff / berserk.
+  const bool powered = reg.all_of<PowerAttack>(attacker);
+  const float power = powered ? kPowerDamage : 1.0f;
+  const float melee_cost = powered ? kPowerStaminaCost : kMeleeStaminaCost;
   const float raw = (kBaseAttackDamage +
                      static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength * veteran +
                      static_cast<float>(gear_strength) * kDamagePerStrength) *
-                    need_eff * berserk;
+                    need_eff * berserk * power;
 
   // STAMINA — a CONNECTING swing costs it, and an empty bar can't lift the weapon. too_winded()
   // fizzles (returns true, spends nothing) when a Stats-bearing fighter is below the cost; else it
@@ -1833,9 +1847,9 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // player and NPCs alike (both route through here). `atk_stats` was fetched above for the
   // need/berserk reads.
   const auto too_winded = [&]() {
-    if (atk_stats == nullptr) return false;                           // no Stats -> swings freely
-    if (atk_stats->stamina.current < kMeleeStaminaCost) return true;  // winded -> the swing dies
-    atk_stats->stamina.current -= kMeleeStaminaCost;  // a connecting swing spends it
+    if (atk_stats == nullptr) return false;                    // no Stats -> swings freely
+    if (atk_stats->stamina.current < melee_cost) return true;  // winded -> the swing dies
+    atk_stats->stamina.current -= melee_cost;                  // a connecting swing spends it
     return false;
   };
 

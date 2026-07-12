@@ -359,7 +359,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "garden, don't just find one). "
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "brute takes several, fewer as your Strength climbs (it hits harder), while "
-      "your VIT softens its blows. F: THROW at the nearest creature far out of melee reach — a "
+      "your VIT softens its blows. Hold CTRL while you swing to POWER the blow — it hits ~1.75x "
+      "harder but costs far more stamina (fell a brute in fewer swings, at the price of winding "
+      "you faster). F: THROW at the nearest creature far out of melee reach — a "
       "modest but reliable chip that SPENDS STAMINA (soften an approaching swarm, but you can't "
       "kite forever); it trains Throwing -> Dexterity. Standing to trade blows slowly trains "
       "Dexterity too, "
@@ -529,13 +531,18 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // both.
     const bool sprint =
         !imgui_wants_keys && (keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT]);
+    // Hold CTRL to POWER your swings — each hits harder but costs more stamina (see PowerAttack),
+    // the offensive twin of sprint. Also a held stance on the per-tick MovePlayer command;
+    // orthogonal to guard/sprint (it shapes the ATTACK, not the movement), so it stacks with
+    // either.
+    const bool power = !imgui_wants_keys && (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]);
 
     // --- advance the simulation in fixed steps ---
     const int steps = paused ? 0 : timestep.advance(frame_seconds);
     for (int i = 0; i < steps; ++i) {
       // One input Command per tick — the client's only way to affect the world.
-      transport.send(
-          eng::net::Message{eng::sim::move_player(eng::sim::kLocalPlayer, dir, guard, sprint)});
+      transport.send(eng::net::Message{
+          eng::sim::move_player(eng::sim::kLocalPlayer, dir, guard, sprint, power)});
       server.tick();
     }
 

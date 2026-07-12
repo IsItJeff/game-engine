@@ -72,6 +72,15 @@ flowchart TD
   Cruelty deed that sinks their standing. Hostiles always win the target, so this only
   fires with nothing else to fight; it is the villain path, covered in
   [Morality](morality.md#how-it-works).
+- **Power swings (hold CTRL)** — the offensive third of the held-stance trio (sprint = mobility,
+  guard = defence, **power = offence**, each trading the stamina bar). While the power key is down the
+  player carries a `PowerAttack` marker, and a marked swing hits `kPowerDamage` (**1.75×**) harder for
+  `kPowerStaminaCost` (**18**, vs the base 7) — fewer, heavier blows that fell a brute in less swings,
+  at the price of winding you faster. It self-gates on that dearer cost: with enough wind for a plain
+  swing (≥ 7) but not a power one (< 18) the powered swing **fizzles** entirely, just as any swing
+  does below its cost — so powering can leave you unable to strike when your bar is low. The multiplier
+  rides `raw` alongside `berserk`/`need_eff`; an unmarked swing (every NPC, or a player not holding it)
+  → 1.0 / the base cost → bit-identical.
 
 ### The damage contest — Strength vs VIT
 
