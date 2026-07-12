@@ -2258,7 +2258,8 @@ void magic_bolt(entt::registry& reg, entt::entity caster) {
   // bar the physical fighter never touches. It reuses the very Projectile the throw flies (tinted
   // arcane), and INTELLECT scales its damage (the design's magic attribute), trained BY casting
   // (Spellcasting -> INT) so a mage sharpens by casting the way a thrower sharpens DEX by throwing.
-  // Draws NO RNG — a plain, reliable bolt, like the throw. Player-only for now (no NPC caster).
+  // Draws NO RNG — a plain, reliable bolt, like the throw. Actor-agnostic: the player casts it via
+  // the Cast command, a colonist mage via npc_cast (just below) — the player==NPC parity.
   constexpr float kSpellRange = 350.0f;        // the same long reach as a throw
   constexpr float kSpellManaCost = 25.0f;      // each cast spends this (a full 100 bar -> 4 bolts)
   constexpr float kBaseSpellDamage = 14.0f;    // raw before Intellect (a touch above a throw's 8)
@@ -2317,6 +2318,30 @@ void magic_bolt(entt::registry& reg, entt::entity caster) {
   reg.emplace<PrevTransform>(shot, origin);
   reg.emplace<RenderDot>(shot, Vec3{0.6f, 0.3f, 0.95f}, 4.0f);  // arcane violet bolt
   reg.emplace<Projectile>(shot, Projectile{target, caster, applied, kProjectileSpeed});
+}
+
+void npc_cast(entt::registry& reg) {
+  // NPCs that have LEARNED to cast fling a bolt at a nearby hostile — the caster mirror of
+  // npc_attack (melee) and the player's Cast command, reusing the very same magic_bolt so a
+  // colonist mage casts EXACTLY as the player does (the player==NPC parity the design demands).
+  // Only an Npc carrying Spellcasting casts (learned, not innate — from a spawn cantrip or a read
+  // Spellbook), and only on a FULL mana bar: that throttles it to a considered bolt then a
+  // recharge, so it never spams a bolt every tick or dumps its whole bar in one burst — a rhythm
+  // WITHOUT a cooldown component (mana only falls by casting and refills steadily, so "full" recurs
+  // about every kSpellManaCost/regen seconds). magic_bolt itself gates on a target in range AND the
+  // mana it spends, so a manaless or targetless mage is a silent no-op. Collect-then-cast:
+  // magic_bolt spawns a Projectile (emplacing Transform), so gather the casters first and cast
+  // AFTER the walk, never mutating the pool mid-view.
+  std::vector<entt::entity> casters;
+  auto mages = reg.view<Npc, Transform, Attributes, Skills, Stats>();
+  for (const entt::entity n : mages) {
+    if (mages.get<Skills>(n).find(SkillId::Spellcasting) == nullptr) continue;  // never learned
+    const Vital& mp = mages.get<Stats>(n).mp;
+    if (mp.current < mp.max)
+      continue;  // cast only on a full bar -> a bolt, then a recharge (no spam)
+    casters.push_back(n);
+  }
+  for (const entt::entity n : casters) magic_bolt(reg, n);
 }
 
 void advance_projectiles(entt::registry& reg, float dt) {
@@ -3202,17 +3227,18 @@ void collect_pickups(entt::registry& reg, float dt) {
 }
 
 void study_spellbooks(entt::registry& reg) {
-  // The design's "magic is LEARNED" made real: a player standing on a Spellbook READS it and gains
+  // The design's "magic is LEARNED" made real: a person standing on a Spellbook READS it and gains
   // the Spellcasting skill, so casting is EARNED by finding a tome rather than innate. The learning
   // twin of collect_pickups (walk over a grounded item to gain from it), and the same collect-then-
-  // destroy so a consumed book never invalidates the view mid-walk. Player-only for now (the player
-  // reads books; teaching NPCs is a later slice), gated on NOT already knowing the spell — so a
-  // book is spent only on a read that actually teaches, and a caster who already knows it leaves
-  // the tome.
+  // destroy so a consumed book never invalidates the view mid-walk. ANY person with a Skills sheet
+  // reads — the player AND an NPC (the player==NPC parity: a colonist that finds a tome becomes a
+  // mage too, which npc_cast then lets cast). Creatures carry no Skills, so they never reach here;
+  // Downed bodies are excluded (an unconscious reader learns nothing). Gated on NOT already knowing
+  // the spell — a book is spent only on a read that actually teaches; a caster leaves the tome.
   constexpr float kStudyReach = 15.0f;  // same reach as a pickup grab
   std::vector<entt::entity> read;       // books consumed after the walk (never destroy mid-view)
   auto books = reg.view<Spellbook, Transform>();
-  auto learners = reg.view<PlayerControlled, Transform, Skills>();
+  auto learners = reg.view<Skills, Transform>(entt::exclude<Downed>);
   for (const entt::entity book : books) {
     const Vec2 book_pos = books.get<Transform>(book).position;
     for (const entt::entity p : learners) {

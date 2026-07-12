@@ -3316,6 +3316,72 @@ TEST_CASE("a spellbook out of reach or already known is left untouched", "[sim]"
   REQUIRE(book_survives(0.0f, true));     // ...or a reader who already knows the spell -> not spent
 }
 
+TEST_CASE("a colonist mage casts a bolt at a nearby creature: NPC casting parity", "[sim]") {
+  // The player==NPC parity for magic: an Npc that has LEARNED Spellcasting and has a full mana bar
+  // flings a bolt at a hostile in range through the SAME magic_bolt the player casts. A colonist
+  // mage fights beside you.
+  entt::registry reg;
+  const entt::entity mage = reg.create();
+  reg.emplace<eng::sim::Npc>(mage);
+  reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(mage);
+  reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);  // learned to cast
+  reg.emplace<eng::sim::Stats>(mage);                                          // a full mana bar
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});  // past melee, in bolt range
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::npc_cast(reg);
+  REQUIRE(reg.view<eng::sim::Projectile>().size() == 1);  // the colonist mage flung a bolt
+}
+
+TEST_CASE("an unlearned or half-drained colonist does not cast", "[sim]") {
+  // The two gates on an NPC caster: it must have LEARNED Spellcasting, and it casts only on a FULL
+  // mana bar (the throttle that stops per-tick spam). Either failing means no bolt.
+  const auto casts = [](bool learned, bool full_mana) {
+    entt::registry reg;
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(npc);
+    eng::sim::Skills& sk = reg.emplace<eng::sim::Skills>(npc);
+    if (learned) sk.train(eng::sim::SkillId::Spellcasting);
+    eng::sim::Stats& stats = reg.emplace<eng::sim::Stats>(npc);
+    if (!full_mana)
+      stats.mp.current = stats.mp.max * 0.5f;  // half a bar -> throttled, waits to top up
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(foe);
+    reg.emplace<eng::sim::Enemy>(foe);
+    eng::sim::npc_cast(reg);
+    return reg.view<eng::sim::Projectile>().size() > 0;
+  };
+  REQUIRE_FALSE(casts(false, true));  // hasn't learned Spellcasting -> no cast...
+  REQUIRE_FALSE(casts(true, false));  // ...nor a learned mage on a half-empty bar (the throttle)...
+  REQUIRE(casts(true, true));         // ...but a learned mage on a full bar casts
+}
+
+TEST_CASE("an NPC learns Spellcasting from a spellbook too: reading is not player-only", "[sim]") {
+  // The learning half of the parity: study_spellbooks now teaches ANY person, so a colonist that
+  // finds a tome becomes a mage exactly as the player does.
+  entt::registry reg;
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Npc>(colonist);
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Skills>(colonist);  // no Spellcasting yet
+  const entt::entity book = reg.create();
+  reg.emplace<eng::sim::Transform>(book, eng::Vec2{5.0f, 0.0f});  // within study reach
+  reg.emplace<eng::sim::Spellbook>(book);
+
+  eng::sim::study_spellbooks(reg);
+  REQUIRE(reg.get<eng::sim::Skills>(colonist).find(eng::sim::SkillId::Spellcasting) !=
+          nullptr);                // the colonist read the tome and learned to cast
+  REQUIRE_FALSE(reg.valid(book));  // ...and consumed it, exactly as a player would
+}
+
 TEST_CASE("a defter thrower's bolt flies faster: dexterity's Speed aspect", "[sim]") {
   // DEX's design "Speed" aspect: a defter thrower launches a FASTER projectile, so it reaches the
   // target sooner and is wasted less often when the target dies mid-flight (advance_projectiles
