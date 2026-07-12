@@ -2775,7 +2775,11 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
     // MUTUALLY EXCLUSIVE — a drop is plain OR venomous OR keen, never both — so no two traits stack
     // on one item and no traits[] list is needed: one draw splits the range into a venomous band, a
     // keen band just past it, then plain (the ~70% remainder).
-    const std::uint32_t roll = rng();
+    // `auto`, NOT uint32_t: std::mt19937::result_type is uint_fast32_t, which is 64-bit on some
+    // stdlibs (libstdc++) — assigning it to a uint32_t narrows and trips -Wshorten-64-to-32
+    // -Werror. The VALUE is always in [0, 2^32), so the threshold compares below are identical on
+    // every platform regardless of the storage width.
+    const auto roll = rng();
     const float q = fine_quality(rng);  // then the rolled quality (band-tested, not exact)
     if (roll < kVenomousDropThreshold)
       spawn_venomous_steel(reg, pos, q);  // heavy poison blade (-STR, +venom)
