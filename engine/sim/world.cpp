@@ -515,6 +515,16 @@ void World::apply_command(const Command& cmd) {
         } else {
           registry_.remove<Sprinting>(e);
         }
+        // Mark the POWER stance (like Blocking/Sprinting) so perform_attack lands the heavier,
+        // dearer swing. Orthogonal to guard/sprint — it shapes your ATTACK, not your speed — so
+        // it's set straight from the held flag with no movement gating. perform_attack self-gates
+        // on the stamina it can't afford, so no need to check stamina here (unlike sprint, whose
+        // marker drives a separate drain).
+        if (cmd.power) {
+          registry_.emplace_or_replace<PowerAttack>(e);
+        } else {
+          registry_.remove<PowerAttack>(e);
+        }
       }
       break;
     }

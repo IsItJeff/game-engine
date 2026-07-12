@@ -66,11 +66,19 @@ struct Command {
   // Held-key like guard; guard takes precedence (you can't sprint with your guard up). Placed LAST
   // so the existing positional Command{...} inits keep meaning.
   bool sprint = false;
+
+  // MovePlayer: is the player holding POWER this tick? A power stance makes each swing hit harder
+  // (kPowerDamage) but cost more stamina (kPowerStaminaCost) — the offensive twin of guard/sprint,
+  // marking the player PowerAttack so perform_attack lands the heavier blow. Held-key like the
+  // other two, orthogonal to them (power shapes your ATTACK, not your movement). Placed LAST so the
+  // existing positional Command{...} inits keep meaning.
+  bool power = false;
 };
 
 // Convenience constructors, so call sites read as intent, not struct-filling.
-inline Command move_player(PlayerId player, Vec2 dir, bool guard = false, bool sprint = false) {
-  return Command{CommandKind::MovePlayer, player, dir, {}, 0.0f, guard, sprint};
+inline Command move_player(PlayerId player, Vec2 dir, bool guard = false, bool sprint = false,
+                           bool power = false) {
+  return Command{CommandKind::MovePlayer, player, dir, {}, 0.0f, guard, sprint, power};
 }
 inline Command spawn_mote(Vec2 pos) {
   return Command{CommandKind::SpawnMote, kLocalPlayer, {}, pos};

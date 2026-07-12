@@ -492,6 +492,15 @@ inline constexpr float kSprintMoveScale = 1.6f;  // how much faster a sprint mov
 inline constexpr float kSprintDrainBonus =
     40.0f;  // ...and the EXTRA stamina/sec it burns (2x total)
 
+// The OFFENSIVE third of the held-stance trio (Sprinting = mobility, Blocking = defence,
+// PowerAttack = offence — each trading the stamina bar for its edge). Set from the MovePlayer
+// command's `power` flag (a held key), like Blocking from guard: while it's up, perform_attack
+// lands a HARDER but dearer swing (kPowerDamage for kPowerStaminaCost). An input-driven stance, so
+// today only the player powers up; no PowerAttack (every NPC, or a player not holding it) -> the
+// base swing -> bit-identical. The cost/damage knobs live in perform_attack (systems.cpp) beside
+// the melee ones.
+struct PowerAttack {};
+
 // How much an EXHAUSTED character (stamina drained to 0 by moving) is slowed — a crawl, not a stop,
 // so the spent can always limp to safety while stamina recovers. Shared so the player (MovePlayer)
 // and NPCs (steer_npcs) tire identically — the "the bane bites both" parity the codebase keeps.
