@@ -529,6 +529,10 @@ struct Pickup {
   float heal = 25.0f;
   float bonus_max_hp = 2.0f;  // permanent max-HP gain on collect (a small loot reward)
   float lifetime = 20.0f;     // seconds before an uncollected orb fades away
+  float food = 50.0f;  // hunger it refills when eaten — a monster-drop orb's default. A MEAL
+                       // (spawn_meal, harvested from a ripe crop) sets this higher: prepared
+                       // food fills more than the loot you scavenge. Appended LAST so the
+                       // orb default is unchanged (bit-identical) — collect_pickups reads it.
 };
 
 // A weapon lying on the ground, waiting to be WIELDED (the Equip command). The equip-

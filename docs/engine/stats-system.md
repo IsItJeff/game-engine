@@ -229,13 +229,15 @@ steers it toward the nearest food orb, and it eats on arrival through the same
 the first *want-driven* NPC motion (until now they only ever fled), and it turns the loot
 orbs into a shared resource the colony competes over.
 
-!!! note "Two food sources now"
+!!! note "Three ways to feed now"
     Loot orbs — dropped by creature deaths — are the scattered, one-shot food, clustered where
-    the fighting is. The **first piece of a real food economy** now sits alongside them: a fixed,
-    regrowing `FoodSource` plot a hungry colonist walks to and grazes (see [Food plots](#food-plots-a-renewable-source)
-    below), so a quiet corner *near a garden* no longer means starvation. The richer economy —
-    planted crops, farming, stored meals — grows from this seed. (The drain is also kept gentle so
-    the 12 s colony spawner out-paces attrition regardless.)
+    the fighting is. A fixed, regrowing `FoodSource` plot a hungry colonist walks to and **grazes**
+    sits alongside them (see [Food plots](#food-plots-a-renewable-source) below), so a quiet corner
+    *near a garden* no longer means starvation. And you can **harvest** a ripe plot into a portable
+    **meal** that fills more than grazing it raw (see [Meals](#meals-harvest-dont-just-graze)) — the
+    seam of a real food economy. The richer version — planted crops, farming, stored larders — grows
+    from here. (The drain is also kept gentle so the 12 s colony spawner out-paces attrition
+    regardless.)
 
 **Water** is the fourth vital and the **second** Need — hunger's twin, and proof the Need shape
 generalises. It is the *same* falling `Vital` (`drain_water` mirrors `drain_hunger`: gentle at rest,
@@ -308,6 +310,24 @@ first of the design's non-combat attributes, and its first payoff is right here 
 how much a forager draws per tick (nature knowledge), so a seasoned forager tops off faster at the
 same patch. It doesn't grow the pools or a fighter build (`build_title` ignores it); it grows the
 survival economy. See [progression](progression.md).
+
+### Meals: harvest, don't just graze
+
+Grazing eats a patch bite-by-bite. **Harvesting** turns it into *production*. Press **G** (a
+`Harvest` command through the funnel) near a ripe plot and `harvest_nearest_crop` spends a chunk of
+its `stock` to drop a single **meal** — a `Pickup` like a loot orb, but *prepared*: it refills more
+hunger than that stock grazed raw, and being food rather than monster loot it grants none of the
+orb's combat rewards (no heal, no permanent max-HP). So a plot is worth more worked than grubbed at.
+The meal sits where it's cut — a discrete morsel any hungry colonist walks to and eats on contact,
+exactly like a loot orb (carrying one to whoever's hungriest is a later slice, not this seam). A
+patch too bare to bother (`stock` below the harvest cost) yields nothing — no half-meals.
+
+Every `Pickup` now carries its own `food` value, so one `collect_pickups` feeds you whether it's an
+orb (50, the old flat rate → bit-identical) or a meal (more). `harvest_nearest_crop` is
+actor-agnostic — the same call an NPC farm behaviour will use later — so the player and the colony
+will harvest identically, the parity every Need keeps. This is the seam of the food economy the three
+needs pressure you toward: crop → harvest → meal, with planting, cooking and stored larders growing
+from here.
 
 ## Extending it
 

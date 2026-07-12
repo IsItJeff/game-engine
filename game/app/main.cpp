@@ -353,6 +353,8 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "weapon (harder hits, slower), a GREEN venom blade (weaker hits that POISON the foe, but "
       "nimble), or bronze armour (more defence, slower stamina regen), each its own slot; "
       "Q: drop the weapon again to shed the heft and move free. "
+      "G: harvest a ripe food plot in reach into a MEAL at your feet — it fills more hunger "
+      "than grazing the patch raw (prepared food goes further). "
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "brute takes several, fewer as your Strength climbs (it hits harder), while "
       "your VIT softens its blows. F: THROW at the nearest creature far out of melee reach — a "
@@ -422,6 +424,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool throw_was_down = false;
   bool equip_was_down = false;
   bool drop_was_down = false;
+  bool harvest_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -495,6 +498,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::drop(eng::sim::kLocalPlayer)});
     }
     drop_was_down = drop_raw;
+
+    // G, edge-triggered, GATHERS a ripe food plot in reach into a meal at your feet — the food
+    // economy: a prepared meal fills more hunger than grazing the same patch raw. Same funnel:
+    // input becomes a Harvest command the server applies.
+    const bool harvest_raw = keys[SDL_SCANCODE_G];
+    if (harvest_raw && !harvest_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::harvest(eng::sim::kLocalPlayer)});
+    }
+    harvest_was_down = harvest_raw;
 
     // K, HELD (not edge-triggered), raises a GUARD: incoming creature blows are softened but you
     // move slower. A held stance rather than a one-shot action, so it rides the per-tick MovePlayer
