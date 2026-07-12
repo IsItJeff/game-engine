@@ -1177,6 +1177,12 @@ void tick_fatigue(entt::registry& reg, float dt) {
   constexpr float kMoveDrainPerSecond = 0.4f;    // ...spent per second while moving (walking)...
   constexpr float kSprintDrainPerSecond =
       0.4f;  // ...and again on top while sprinting (the top tier)
+  // Rest is DEEPEST by the fire: resting in a Hearth's warmth recovers fatigue this much faster —
+  // the design's "sleep fast" tier, realized through the existing safe rest spot rather than a new
+  // sit/sleep stance, and the fatigue twin of the health/stamina hearth boosts (same 2.0 knob). So
+  // the hearth is now a FULL recovery hub — health, stamina, gear, AND fatigue. No hearth in reach
+  // -> the base rate -> bit-identical.
+  constexpr float kHearthFatigueBoost = 2.0f;
   // Every PERSON tires — the player and NPCs (Stats without the Enemy marker), the same set the
   // other needs drain. Creatures are pure combat foes, no fatigue bar.
   auto view = reg.view<Stats>(entt::exclude<Enemy>);
@@ -1188,7 +1194,11 @@ void tick_fatigue(entt::registry& reg, float dt) {
       if (reg.all_of<Sprinting>(e))
         s.fatigue.current -= kSprintDrainPerSecond * dt;  // ...sprint more
     } else {
-      s.fatigue.current += kRestRecoverPerSecond * dt;  // ...standing still mends it (the odd need)
+      float recover_rate = kRestRecoverPerSecond;  // standing still mends it (the odd need)...
+      if (const Transform* t = reg.try_get<Transform>(e);
+          t != nullptr && in_a_hearth(reg, t->position))
+        recover_rate *= kHearthFatigueBoost;  // ...and the fire's warmth mends it faster still
+      s.fatigue.current += recover_rate * dt;
     }
     if (s.fatigue.current < 0.0f) s.fatigue.current = 0.0f;                    // never below empty
     if (s.fatigue.current > s.fatigue.max) s.fatigue.current = s.fatigue.max;  // ...nor above full

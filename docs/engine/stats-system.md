@@ -270,8 +270,16 @@ where they stand, **even at full health**, into the exact same `Downed` window a
 resets fatigue along with the other vitals, so you don't drop straight back down. Exhaustion is thus
 a *recoverable* fall (ally-rescuable, or a timed respawn), not a death — the great equalizer the
 design wants. This is player-only for now, mirroring the `Downed` mechanic (an NPC's fatigue just
-sits at 0); the deeper **sit/sleep** recovery tiers and a growth source (gear + a Survivalist skill)
-that *lengthens* the timer are the remaining slices.
+sits at 0).
+
+Rest is **deepest by the fire**: resting in a `Hearth`'s warmth mends fatigue `kHearthFatigueBoost`
+(2×) faster — the design's "sleep fast" tier realized through the *existing* safe rest spot rather
+than a new sit/sleep stance, and the fatigue twin of the health and stamina hearth boosts (the fire
+already speeds `regenerate_vitals` and `update_stamina`). So the hearth is now a **full** recovery
+hub — health, stamina, gear, *and*
+fatigue — a real reason to fall back to base when you're worn down. No hearth in reach → the base
+recovery rate → bit-identical. A growth source (gear + a Survivalist skill) that *lengthens* the
+timer is the remaining slice.
 
 ### Food plots: a renewable source
 
