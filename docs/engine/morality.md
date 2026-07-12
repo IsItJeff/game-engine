@@ -119,9 +119,11 @@ Morality and personality aren't two separate ledgers — a deed does *two* thing
 one `record_deed` write-point. Besides adding to the ledger, it **drifts the actor's
 matching `Personality` axis** a small, bounded step: **Valor → bravery** (fighting
 monsters hardens you), **Charity → compassion** (hauling up the fallen softens you),
-**Loyalty → loyalty** (standing by your own deepens the leaning), and — the villain
-mirror — **Cruelty → compassion *down*** (striking the helpless hardens you back toward
-callous, the one deed so far that *lowers* its axis rather than lifting it). This
+**Loyalty → loyalty** (standing by your own deepens the leaning), the villain
+mirror **Cruelty → compassion *down*** (striking the helpless hardens you back toward
+callous — the one deed that *lowers* its axis), and **Violence → bravery** (the kill steels the
+nerve — a killer grows desensitized, not softer; so a *lethal* cruel strike reshapes two axes at
+once, cooling compassion via Cruelty **and** warming the nerve via Violence). This
 is the design's *"you are what you do"* / "the war changed him" — a character reshaped by
 its own history, not just a fixed dial rolled at birth, with hero deeds lifting and villain
 deeds lowering.
@@ -141,8 +143,8 @@ system **reads** the *player's* Personality: `steer_npcs` (the only reader of a 
 the `Npc` view, and the player isn't an `Npc`. Its Personality *is* written — here, and by **grief**
 once the player has bonded (grief is a `<Personality, Relationships>` view a rescued player joins) —
 but those writes are sim-inert, so the drift is a **render-only** character arc: the player's blue dot
-warms with its deeds, nothing more. And only the four wired deeds drift — the last two (Violence,
-Honesty) wire themselves the day their deeds land.
+warms with its deeds, nothing more. **Five** deeds drift now — every deed that has an event — so only
+**Honesty** waits, and only because no honesty/deceit event exists yet.
 
 Drift isn't only earned by *your own* deeds — it can be dealt by **loss**. When a colonist
 you were truly bonded to (**Friend** or above, see [relationships](relationships.md)) is

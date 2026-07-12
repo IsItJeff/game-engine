@@ -2482,11 +2482,10 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
   // and any bare test entity) drifts nothing and STAYS Personality-free, so the absent-Personality
   // world is preserved. The PLAYER now carries a neutral Personality (build_scene), so its own
   // deeds reshape it here too — and because no sim system reads the player's Personality, that
-  // stays a render-only character arc, not a mechanics change. Four deeds drift now; the last two
-  // (Violence, Honesty) wire themselves the day they need to. Pure integer math (no RNG), clamped
-  // in int before the int8 cast so a long career can't overflow. Most deeds LIFT their axis; a
-  // VILLAIN deed lowers it (a negative step), so the ledger's hero/villain split shows up in the
-  // personality too.
+  // stays a render-only character arc, not a mechanics change. FIVE deeds drift now; only Honesty
+  // (which has no event yet) waits. Pure integer math (no RNG), clamped in int before the int8 cast
+  // so a long career can't overflow. Most deeds LIFT their axis; a VILLAIN deed lowers it (a
+  // negative step), so the ledger's hero/villain split shows up in the personality too.
   if (Personality* p = reg.try_get<Personality>(actor)) {
     std::int8_t* axis = nullptr;
     int step = kDeedDriftStep;  // the default: a deed strengthens its leaning
@@ -2500,6 +2499,14 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
     } else if (kind == Deed::Cruelty) {
       axis = &p->compassion;   // the villain MIRROR of Charity: striking the helpless HARDENS you,
       step = -kDeedDriftStep;  // drifting compassion DOWN toward callous ("the war changed him")
+    } else if (kind == Deed::Violence) {
+      axis =
+          &p->bravery;  // a KILLER grows desensitized — nerve UP (the default lifting step).
+                        // Bravery is NERVE, not goodness; the villainy is tracked by standing, so
+                        // a murderer reads as a BOLD one: shrunk small by infamy (renown_scale)
+                        // yet warmed by nerve (the tint). A lethal cruel strike thus reshapes TWO
+                        // axes at once — Cruelty cools compassion, Violence steels the nerve — so
+                        // a KILL hardens you more, and differently, than a mere wound.
     }
     if (axis != nullptr) drift_axis(*axis, step);  // shared clamp — grief uses it too
   }
