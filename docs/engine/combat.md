@@ -579,6 +579,15 @@ and the concrete seed of the design's PROTECT stance.
 `handle_deaths` runs *before* `regenerate_vitals` (and a Downed player is excluded from
 regen), so a just-killed thing can't heal back above 0 the same tick.
 
+**A fallen colonist drops the kit it earned.** When a slain NPC was wielding a weapon or wearing
+armour (a non-empty `Equipped` slot), that gear lands *where it fell* — a blade and plate you (or
+another colonist, via `npc_equip`) can recover, so a hard-won kit **outlives its bearer** rather than
+vanishing with the corpse. It's the equipment economy's death end, the twin of a slain brute paying
+out a weapon. Recovered gear drops **plain** — baseline quality, no rolled trait, no RNG draw (the
+finer, trait-rolled loot is reserved for a tough *kill*) — matching the `Drop` command's "a dropped
+weapon is a plain one" simplification, so the drop stream stays bit-identical. A bare, unarmed
+colonist leaves nothing.
+
 !!! note "A Downed body is inert — one invariant across every people-facing system"
     Once you're `Downed` you're not a participant, in *any* direction: you don't self-heal
     (`regenerate_vitals`) or **mend your gear by the fire** (`mend_gear` — and that one *would*

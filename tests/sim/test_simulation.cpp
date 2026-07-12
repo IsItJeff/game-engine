@@ -5547,6 +5547,39 @@ TEST_CASE("item quality scales the equipped boon but not the bane: a finer blade
   REQUIRE(plate.stamina_regen_penalty == Approx(0.30f));  // ...bane unscaled
 }
 
+TEST_CASE("a slain colonist drops the kit it earned: a fallen ally's gear is recoverable",
+          "[sim]") {
+  // The equipment economy's death end: a fallen NPC's wielded weapon AND worn armour land where it
+  // fell, so an ally's kit can be recovered — while a bare colonist leaves nothing. The gear drops
+  // PLAIN (baseline quality, no trait), so it draws no rng.
+  entt::registry reg;
+  const eng::Vec2 soldier_pos{100.0f, 100.0f};
+  const entt::entity soldier = reg.create();
+  reg.emplace<eng::sim::Npc>(soldier);
+  reg.emplace<eng::sim::Transform>(soldier, soldier_pos);
+  reg.emplace<eng::sim::Stats>(soldier, eng::sim::Vital{0.0f, 60.0f, 0.0f});  // dead
+  eng::sim::Equipped& eq = reg.emplace<eng::sim::Equipped>(soldier);
+  eq.strength_bonus = 3;                       // it was WIELDING a weapon...
+  eq.defence_bonus = 6.0f;                     // ...and WEARING armour
+  const entt::entity civilian = reg.create();  // a bare colonist, also slain
+  reg.emplace<eng::sim::Npc>(civilian);
+  reg.emplace<eng::sim::Transform>(civilian, eng::Vec2{500.0f, 500.0f});
+  reg.emplace<eng::sim::Stats>(civilian, eng::sim::Vital{0.0f, 60.0f, 0.0f});  // dead, no Equipped
+
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f);
+
+  REQUIRE(reg.storage<eng::sim::Weapon>().size() == 1);  // the soldier's blade dropped...
+  REQUIRE(reg.storage<eng::sim::Armour>().size() ==
+          1);  // ...and its plate (the civilian left none)
+  const entt::entity blade = *reg.view<eng::sim::Weapon>().begin();
+  REQUIRE(reg.get<eng::sim::Transform>(blade).position.x ==
+          Approx(soldier_pos.x));  // where the soldier fell
+  REQUIRE(reg.get<eng::sim::Weapon>(blade).venom_per_second == Approx(0.0f));  // a PLAIN blade...
+  REQUIRE(reg.get<eng::sim::Weapon>(blade).quality == Approx(1.0f));  // ...at baseline quality
+  const entt::entity plate = *reg.view<eng::sim::Armour>().begin();
+  REQUIRE(reg.get<eng::sim::Transform>(plate).position.x == Approx(soldier_pos.x));
+}
+
 TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
   // The loot economy, keyed on DropKind and resolving independently: a brute yields raw OFFENCE (a
   // steel weapon), a swarmer SUSTAIN (a health orb), a sentinel DEFENCE (armour), and a spitter a
