@@ -544,6 +544,13 @@ struct Pickup {
                        // orb default is unchanged (bit-identical) — collect_pickups reads it.
 };
 
+// A SPELLBOOK lying on the ground, waiting to be READ. The design's "magic is LEARNED" made real:
+// walking over one teaches the reader the Spellcasting skill (study_spellbooks), so a caster EARNS
+// the right to cast by finding a tome rather than being born with it. A marker only — the one spell
+// it teaches (Spellcasting) is implicit while that's the sole spell; a `SkillId taught` field is
+// the natural growth when a second spell exists. Consumed on a read that teaches something.
+struct Spellbook {};
+
 // A weapon lying on the ground, waiting to be WIELDED (the Equip command). The equip-
 // counterpart of Pickup: not consumed for a one-off effect but WORN — its bonuses fold
 // into an Equipped cache on the wearer until swapped. The first item that changes HOW you

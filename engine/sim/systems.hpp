@@ -356,4 +356,10 @@ void spawn_keen_steel(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 // uncollected (so drops from far-off kills don't pile up forever). Collect-then-destroy.
 void collect_pickups(entt::registry& reg, float dt);
 
+// Learn magic by READING: a player standing on a Spellbook gains the Spellcasting skill and the
+// tome is consumed — the design's "magic is learned, not innate" made a found-and-read loop.
+// Player-only for now; skips a caster who already knows the spell (the book is spent only on a real
+// lesson). Collect-then-destroy, like collect_pickups.
+void study_spellbooks(entt::registry& reg);
+
 }  // namespace eng::sim

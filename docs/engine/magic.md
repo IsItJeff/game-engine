@@ -36,9 +36,12 @@ you can cast, so a world with no caster is **bit-identical** to before mana exis
 
 `magic_bolt` casts **only if the caster carries the `Spellcasting` skill**. That one check is the
 whole "magic is taught, not innate" rule: a colonist who never learned it does nothing, whatever its
-mana. The player **starts** having learned one spell — a starter cantrip (`build_scene` trains it at
-spawn) — so magic is castable from the off. Teaching it to NPCs, and learning *more* spells from a
-book or a mentor, are the next slices of the trunk.
+mana. And you **earn** it — the player starts *without* Spellcasting and learns it by **reading a
+`Spellbook`** (`study_spellbooks`): walk onto the arcane-violet tome `build_scene` places off to one
+side, and you gain the skill (the book is then consumed). So learning magic is a small quest — go
+find the tome — not a freebie at spawn. `study_spellbooks` is player-only for now and skips a caster
+who already knows the spell (a book is spent only on a real lesson); teaching it to NPCs, and learning
+*more* spells from further books or a mentor, are the next slices of the trunk.
 
 ### The first spell — `magic_bolt`
 
@@ -61,7 +64,8 @@ player-only for now (there is no NPC caster yet). The kill credit and Valor flow
 
 ## What's next
 
-This is the seam, not the trunk. Growing from here: **learning** (spellbooks / mentors instead of a
-free starter cantrip), **more spells** (a heal, an area blast), an **NPC caster**, the **Focus /
-Attunement** skills that govern the mana pool's capacity and regen, and the **tech** branch (an
-Energy battery on gear, the design's twin trunk). Each is a small add on this foundation.
+This is a seam, not the whole trunk. **Learning** now exists — a `Spellbook` you read — so growing
+from here: **more spells** (a heal, an area blast, each its own book), an **NPC caster** (and NPCs
+*learning* from tomes or a mentor, the parity the design wants), the **Focus / Attunement** skills
+that govern the mana pool's capacity and regen, and the **tech** branch (an Energy battery on gear,
+the design's twin trunk). Each is a small add on this foundation.

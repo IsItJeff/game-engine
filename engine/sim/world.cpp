@@ -62,6 +62,19 @@ entt::entity make_hearth(entt::registry& reg, Vec2 pos, float radius) {
   return e;
 }
 
+// Create a SPELLBOOK on the ground — a tome the player walks over to LEARN Spellcasting
+// (study_spellbooks). The design's "magic is read/taught": a small arcane-violet dot (matching the
+// bolt it unlocks) a would-be mage seeks out. Scenery until read; no Stats/Velocity.
+entt::entity make_spellbook(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.6f, 0.3f, 0.95f},
+                         6.0f);  // arcane violet, like the bolt it grants
+  reg.emplace<Spellbook>(e);
+  return e;
+}
+
 // Create one NPC: a wandering non-player character. It has Stats (so it takes
 // contact damage and could regenerate) and the Npc marker (so handle_deaths
 // destroys it on death rather than respawning it — permadeath). It is otherwise a
@@ -316,6 +329,10 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // A hearth near the centre — an ember-orange glow you can retreat to and MEND faster between
   // fights (the base-building recovery seed). Rooted to the spot: heal here, or act in the field.
   make_hearth(reg, Vec2{center.x, center.y}, 80.0f);
+  // A SPELLBOOK off to one side — walk over it to LEARN Spellcasting and unlock the C-key bolt. Set
+  // apart from the player's centre spawn so learning magic is a short quest (go read the tome), not
+  // a freebie at your feet.
+  make_spellbook(reg, Vec2{kFieldWidth * 0.25f, kFieldHeight * 0.35f});
 
   const entt::entity player = reg.create();
   reg.emplace<Transform>(player, center);
@@ -325,12 +342,10 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   reg.emplace<RenderDot>(player, Vec3{0.3f, 0.8f, 1.0f}, 10.0f);  // bright blue
   reg.emplace<Stats>(player, Vital{70.0f, 100.0f, 8.0f});         // spawn worn; heals 8/sec
   reg.emplace<Skills>(player);  // trains with activity; feeds Attributes (see advance_progression)
-  // The player starts having LEARNED one spell — a starter cantrip — so magic is castable from the
-  // off (Cast -> magic_bolt gates on carrying this skill). This is the design's "magic is learned,
-  // not innate": an untrained colonist has NO Spellcasting and can't cast at all, however full its
-  // mana bar. The player is the only caster in the world, so this changes nothing else; teaching it
-  // to NPCs and learning MORE spells (from a book or a mentor) are later slices of the magic trunk.
-  reg.get<Skills>(player).train(SkillId::Spellcasting);
+  // The player starts WITHOUT magic — no Spellcasting, so Cast does nothing yet. Magic is now
+  // EARNED: read the Spellbook placed below (study_spellbooks) to learn to cast. That makes the
+  // design's "magic is learned, not innate" a found-and-read loop rather than a free gift, and
+  // drops the starter-cantrip compromise the first magic seam shipped with.
   reg.emplace<Attributes>(player);
   reg.emplace<CharacterLevel>(player);
   // A NEUTRAL personality (all axes 0), the design's "players start neutral, drift from deeds": the
@@ -438,6 +453,7 @@ void World::step() {
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt,
                 drop_rng_);        // ...then 0-HP reaped (drop_rng_ rolls any fine loot quality)
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
+  study_spellbooks(registry_);     // ...and read a spellbook you're standing on to LEARN to cast
   drink(registry_, dt);            // anyone standing in a water source refills their canteen
   graze(registry_, dt);  // ...and in a food plot refills hunger (the plot regrows/depletes)
   npc_equip(registry_);  // unarmed NPCs wield a dropped weapon they've reached
