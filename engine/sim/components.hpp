@@ -622,6 +622,13 @@ struct Armour {
   // armour spawned today), so bit-identical. The BANE (stamina-regen) stays full — shrinking it is
   // the orthogonal VIT mastery (borne_regen_penalty). Last for positional-init safety.
   float quality = 1.0f;
+  // WARDED — the thorns trait, armour's FIRST flavourful trait (the defensive twin of the weapon's
+  // venom/keen). If > 0 the plate is SPIKED: every creature blow it absorbs reflects this flat chip
+  // back onto the attacker (resolve_creature_contacts), routed through the creature's own Stats
+  // like the guard's riposte, so a warded tank punishes a swarm for hitting it. Bought with a notch
+  // of raw defence (spawn_warded_armour), so it is never pure-upside. 0 = a plain plate,
+  // bit-identical for anyone not wearing a warded one. Last for positional-init safety.
+  float thorns_per_hit = 0.0f;
 };
 
 // The cached bonuses of everything a character is wearing — the design's EquipMods, folded ONCE
@@ -655,6 +662,11 @@ struct Equipped {
   // Luck-driven crit chance in perform_attack. 0 = a plain blade (bit-identical). Last field, same
   // positional-init and zero-fill guarantee as the durability fields above.
   float crit_bonus = 0.0f;
+  // The worn plate's WARDED thorns, copied from Armour::thorns_per_hit on equip; a creature blow
+  // this plate absorbs reflects it back onto the attacker (resolve_creature_contacts). 0 = plain
+  // plate or bare (bit-identical). Cleared when the armour slot clears (plate shatters). Last
+  // field, same positional-init and zero-fill guarantee as the fields above.
+  float armour_thorns = 0.0f;
 };
 
 // --- Stats system ---

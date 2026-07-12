@@ -390,6 +390,21 @@ void spawn_venomous_steel(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 // parity-clean. Draws no RNG (the caller rolled).
 void spawn_keen_steel(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 
+// The WARDED (spiked) plate's paired numbers — armour's FIRST flavourful trait, the defensive twin
+// of venomous/keen steel. It trades a notch of raw defence (kWardedDefence, below plain plate's 6)
+// for THORNS (kWardedThorns): every creature blow it absorbs chips the attacker back. So it is
+// never pure-upside — you soak a little less to punish the swarm. Knobs.
+inline constexpr float kWardedDefence =
+    4.0f;  // plain plate's 6 down two — the paired -defence trade
+inline constexpr float kWardedThorns =
+    2.5f;  // ...bought with spikes: flat chip back per blow soaked
+
+// Spawn a WARDED plate — a piece of Armour that rolled the thorns trait, the defensive counterpart
+// of spawn_keen_steel/spawn_venomous_steel. Reduced defence (kWardedDefence) in exchange for
+// reflecting kWardedThorns onto any creature that strikes the wearer (resolve_creature_contacts). A
+// distinct spiked-iron tint so it reads apart from plain bronze plate. Draws no RNG.
+void spawn_warded_armour(entt::registry& reg, Vec2 pos, float quality = 1.0f);
+
 // Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
 // player overlaps restores its `heal` health (capped) AND permanently raises max HP by
 // its `bonus_max_hp`, then is consumed; an orb whose lifetime runs out fades away

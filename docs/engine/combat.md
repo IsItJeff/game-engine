@@ -550,16 +550,36 @@ list**: the variants never stack, so no list is needed until they must. And you 
 finer item **glints brighter** on the field (`quality_sheen`, a pure presentation helper the renderer
 applies — baseline 1.0 renders unchanged), so a fine drop catches the eye without a numeric UI.
 
+Armour gets its **first flavourful trait** too — the **warded** (spiked) plate, the defensive twin of
+the venom/keen blade. Until now armour had only its flat defence + the stamina-regen bane; a warded
+plate (a cold spiked-iron dot, `spawn_warded_armour`) trades a notch of that defence (`kWardedDefence`
+4, below plain plate's 6) for **thorns**: every creature blow it absorbs reflects a flat
+`kWardedThorns` (2.5) chip back onto the attacker (`resolve_creature_contacts`), routed through the
+creature's own `Stats` exactly like the guard's [riposte](#raising-a-guard--active-block-k) — so a
+thorns hit that lands the last blow reaps the creature via `handle_deaths` (loot still drops) and, like
+the riposte, credits **no Valor** (the beast breaks itself on your spikes). Thorns and the riposte are
+*independent*, so a **guarding** wearer in warded plate fires **both** on one turned blow — the
+stamina-costed riposte (4) *and* the free thorns (2.5), 6.5 back — each still bounded by its own limit
+(the riposte by your stamina, the thorns by the plate's 30-blow durability), so it's a bigger bite, not
+an unbounded one. It reuses the whole shipped armour path: `Armour`/`Equipped` each gain one
+`thorns_per_hit`/`armour_thorns` field (appended last, default 0 → bit-identical), the equip fold copies
+it, and it clears when the plate shatters. A stand-and-tank build — soak a little less, punish the swarm
+for swinging — never pure-upside.
+
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), hardcoded defs (plain
-    steel, a venom fang, an armour, and two rolled steel variants — *venomous* and *keen*) each pairing
-    a boon (`+Attribute`/`+defence`/`+venom`/`+crit`) with a bane, so weapon and armour banes stay
-    *distinct* even as the blades share a kind. Each archetype's kill already feeds this loop as
-    *creature loot* (the four `DropKind`s). The rest of the design's Equipment — NPC armour-*seeking*,
-    the `Item{def, quality, durability, traits[]}` model (`quality` scales the boon at equip AND rolls
-    per fine drop; **two named traits** now roll — venom via existing fields, keen via a single added
-    `crit_bonus`; a `traits[]` *list* waits until two traits must STACK on one item, which the
-    mutually-exclusive roll avoids), the `+skill/+aspect` bonuses (which ride the
+    steel, a venom fang, a plain and a *warded* armour, and two rolled steel variants — *venomous* and
+    *keen*) each pairing a boon (`+Attribute`/`+defence`/`+venom`/`+crit`/`+thorns`) with a bane, so
+    weapon and armour banes stay *distinct* even as the blades share a kind. Each archetype's kill
+    already feeds this loop as *creature loot* (the four `DropKind`s). The rest of the design's
+    Equipment — NPC armour-*seeking*, the `Item{def, quality, durability, traits[]}` model (`quality`
+    scales the boon at equip AND rolls per fine drop; **three named traits** exist — venom via existing
+    fields and keen via an added `crit_bonus` on the weapon, warded via a `thorns_per_hit` on the
+    armour; the two *weapon* traits roll on a fine battlefield drop (`handle_deaths`) while *warded* is
+    scene-spawned only for now — wiring a portable draw into the armour-drop branch, so a warded build
+    is renewable like the venom one, is the natural next step; a `traits[]` *list* waits until two
+    traits must STACK on one item, which the mutually-exclusive roll avoids), the `+skill/+aspect`
+    bonuses (which ride the
     [SkillDef](progression.md) seam), and wear/repair — layer on top without reworking this plumbing.
 
 ### Dying — `handle_deaths` (Downed, then rescue or respawn)
