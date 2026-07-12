@@ -345,6 +345,30 @@ TEST_CASE("fatigue falls while exerting and recovers at rest (the third need)", 
           Approx(100.0f));  // a rester at full CLAMPS, never overflows max
 }
 
+TEST_CASE("resting by a hearth recovers fatigue faster than resting in the open", "[sim]") {
+  // The "sleep fast" tier via the EXISTING hearth (no new stance): a colonist resting in the fire's
+  // warmth mends fatigue faster than one resting alone in the field — the fatigue twin of the
+  // health and stamina hearth boosts, making the hearth a full recovery hub. No hearth -> the base
+  // rate.
+  const auto fatigue_after_rest = [](bool near_hearth) {
+    entt::registry reg;
+    if (near_hearth) {
+      const entt::entity fire = reg.create();
+      reg.emplace<eng::sim::Transform>(fire, eng::Vec2{0.0f, 0.0f});
+      reg.emplace<eng::sim::Hearth>(fire, eng::sim::Hearth{60.0f});  // warmth radius 60
+    }
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Transform>(e, eng::Vec2{0.0f, 0.0f});  // at the fire (or an empty field)
+    reg.emplace<eng::sim::Velocity>(e);                          // at rest
+    reg.emplace<eng::sim::Stats>(e).fatigue.current = 50.0f;     // half-rested, room to recover
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) eng::sim::tick_fatigue(reg, dt);
+    return reg.get<eng::sim::Stats>(e).fatigue.current;
+  };
+  REQUIRE(fatigue_after_rest(true) >
+          fatigue_after_rest(false));  // the fire mends fatigue faster than the open field
+}
+
 TEST_CASE("exhaustion collapses a player: empty fatigue puts you Downed, a revive restores it",
           "[sim]") {
   // The design's "empty fatigue -> Downed": a player worn to 0 fatigue COLLAPSES (Downed, helpless)
