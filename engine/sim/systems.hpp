@@ -203,6 +203,15 @@ void perform_throw(entt::registry& reg, entt::entity attacker);
 // it). Draws no rng.
 void magic_bolt(entt::registry& reg, entt::entity caster);
 
+// Cast a MEND — the support twin of magic_bolt. A learned caster (Spellcasting) restores HP to the
+// nearest WOUNDED ally in range, spending mana, and trains Healing -> WISDOM (the mend scales with
+// WIS, the way a bolt scales with INT). Instant (no Projectile — a mending word), clamped at max
+// (no over-heal), never self (that's regenerate_vitals). A no-op if the caster hasn't learned to
+// cast, no ally is hurt in range, or the mana bar is empty — so a non-caster world is
+// bit-identical. Actor- agnostic: the player casts it via the CastHeal command, an NPC via npc_heal
+// (the parity). No RNG.
+void heal_spell(entt::registry& reg, entt::entity caster);
+
 // NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),
 // training Striking -> Strength just as the player does — so NPCs build Strength too,
 // not only Endurance. Complements steer_npcs (flee): a threat that closes to reach
@@ -218,6 +227,14 @@ void npc_attack(entt::registry& reg, std::mt19937& rng);
 // magic_bolt no-ops with no target or no mana. MUST run after integrate_motion (positions current)
 // and before advance_projectiles (so a fresh bolt flies the same tick). Draws no RNG.
 void npc_cast(entt::registry& reg);
+
+// NPCs mend: every Npc that has LEARNED Spellcasting and has a FULL mana bar mends the nearest
+// wounded ally (via the shared heal_spell) — the support twin of npc_cast, closing the player==NPC
+// parity for healing. Runs AFTER npc_cast and shares the full-bar throttle, so a battle-mage bolts
+// a threat first (spending mana) and only mends in a lull — offence-then-support falls out of the
+// order. heal_spell no-ops with no wounded ally or no mana. MUST run after integrate_motion
+// (current positions). Draws no RNG.
+void npc_heal(entt::registry& reg);
 
 // Wear the nearest dropped GEAR within reach of `wearer` — a Weapon or a piece of Armour,
 // whichever is closer — folding its mods into the matching SLOT of an Equipped cache and

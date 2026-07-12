@@ -3693,6 +3693,73 @@ TEST_CASE("an NPC learns Spellcasting from a spellbook too: reading is not playe
   REQUIRE_FALSE(reg.valid(book));  // ...and consumed it, exactly as a player would
 }
 
+TEST_CASE("a learned caster mends a wounded ally: the heal spell restores health", "[sim]") {
+  // The support twin of the bolt: a caster restores a nearby wounded ally's HP, spending mana. The
+  // LEARNED gate (shared with the bolt) is what keeps a non-caster world bit-identical — a plain
+  // colonist with a full mana bar still can't mend.
+  const auto ally_health_after = [](bool learned) {
+    entt::registry reg;
+    const entt::entity caster = reg.create();
+    reg.emplace<eng::sim::Transform>(caster, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(caster);
+    reg.emplace<eng::sim::Stats>(caster);  // mana starts full
+    auto& sk = reg.emplace<eng::sim::Skills>(caster);
+    if (learned) sk.train(eng::sim::SkillId::Spellcasting);  // read the tome -> can bolt AND mend
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally, eng::Vec2{20.0f, 0.0f});  // within heal range
+    reg.emplace<eng::sim::Stats>(ally).health.current = 30.0f;       // wounded (below max 100)
+    eng::sim::heal_spell(reg, caster);
+    return reg.get<eng::sim::Stats>(ally).health.current;
+  };
+  REQUIRE(ally_health_after(true) > 30.0f);            // a learned caster mends the wounded ally
+  REQUIRE(ally_health_after(false) == Approx(30.0f));  // a non-caster can't mend (the learned gate)
+}
+
+TEST_CASE("the mend clamps at max and skips a hale ally: no over-heal no wasted mana", "[sim]") {
+  entt::registry reg;
+  const entt::entity caster = reg.create();
+  reg.emplace<eng::sim::Transform>(caster, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(caster);
+  auto& cs = reg.emplace<eng::sim::Stats>(caster);
+  reg.emplace<eng::sim::Skills>(caster).train(eng::sim::SkillId::Spellcasting);
+  const entt::entity ally = reg.create();
+  reg.emplace<eng::sim::Transform>(ally, eng::Vec2{20.0f, 0.0f});
+  auto& as = reg.emplace<eng::sim::Stats>(ally);
+
+  SECTION("a hale ally is never targeted so no mana is spent") {
+    const float mana_before = cs.mp.current;
+    eng::sim::heal_spell(reg, caster);  // the ally starts at full health -> nothing to mend
+    REQUIRE(reg.get<eng::sim::Stats>(ally).health.current == Approx(as.health.max));  // still full
+    REQUIRE(reg.get<eng::sim::Stats>(caster).mp.current == Approx(mana_before));  // no mana wasted
+  }
+  SECTION("a lightly-wounded ally is mended but capped at max") {
+    as.health.current = as.health.max - 5.0f;  // a scratch a full mend (18) would overshoot
+    eng::sim::heal_spell(reg, caster);
+    REQUIRE(reg.get<eng::sim::Stats>(ally).health.current ==
+            Approx(as.health.max));  // capped, never over-healed
+  }
+}
+
+TEST_CASE("an NPC caster mends a wounded ally too: healing has player==NPC parity", "[sim]") {
+  // The support mirror of NPC casting: npc_heal drives the same heal_spell, so a colonist healer
+  // mends exactly as the player does — but only on a FULL mana bar (the throttle npc_cast shares).
+  entt::registry reg;
+  const entt::entity healer = reg.create();
+  reg.emplace<eng::sim::Npc>(healer);
+  reg.emplace<eng::sim::Transform>(healer, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(healer);
+  reg.emplace<eng::sim::Stats>(healer);  // full mana -> it will act
+  reg.emplace<eng::sim::Skills>(healer).train(eng::sim::SkillId::Spellcasting);
+  const entt::entity ally = reg.create();
+  reg.emplace<eng::sim::Npc>(ally);
+  reg.emplace<eng::sim::Transform>(ally, eng::Vec2{20.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(ally).health.current = 30.0f;  // wounded
+
+  eng::sim::npc_heal(reg);
+
+  REQUIRE(reg.get<eng::sim::Stats>(ally).health.current > 30.0f);  // the NPC healer mended its ally
+}
+
 TEST_CASE("a defter thrower's bolt flies faster: dexterity's Speed aspect", "[sim]") {
   // DEX's design "Speed" aspect: a defter thrower launches a FASTER projectile, so it reaches the
   // target sooner and is wasted less often when the target dies mid-flight (advance_projectiles

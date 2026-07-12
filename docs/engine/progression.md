@@ -4,14 +4,17 @@
 
 Characters grow by *doing*. A **skill** improves with the activity that trains it,
 skills roll up into broad **attributes**, and attributes shape what you feel in play.
-Fourteen strands are wired end to end so far, across all seven attributes:
+Sixteen strands are wired end to end so far, across all seven attributes:
 
 - staying active trains **Conditioning**, **surviving damage** trains **Toughness**,
   **resting to recover** spent stamina trains **Recovery**, **turning a blow with a raised
   guard** trains **Guarding** (`resolve_creature_contacts`, Toughness's *active* twin — grow
   Endurance by *blocking* a hit rather than *surviving* it), and **enduring venom** trains
   **Resistance** (`tick_poison`, Toughness's *poison* twin — keep shrugging off venom and you grow
-  the very VIT that shaves it, immunity through exposure) — all five raise
+  the very VIT that shaves it, immunity through exposure), and **pushing into exhaustion** trains
+  **Survivalist** (`tick_fatigue` — drive your fatigue to the edge and you grow the Endurance that
+  then *slows* how fast fatigue drains, so hard living lengthens your stamina in the field) — all six
+  raise
   **Endurance**, which grows your **max health and stamina**, speeds how fast
   stamina comes back, softens the venom you take, *and* lets you **bear armour** better (a hardy body
   shrugs off part of plate's stamina-recovery bane, `borne_regen_penalty` — the armour twin of
@@ -71,6 +74,11 @@ Fourteen strands are wired end to end so far, across all seven attributes:
   mentor grows Teaching → Charisma. So a craft **spreads** through the colony beside its master, not
   only by each hand's own doing. It needs a real skill **gap** to fire (a mentor at level ≥ 3, a
   student well behind), which can't exist at spawn — so it emerges only after a colony has veterans.
+- **mending a wounded ally** (a `heal_spell`, the **H** command) trains **Healing**, a **second**
+  feeder of **Wisdom** beside Foraging — the design's WIS support domain. Each level mends more, the
+  restorative mirror of casting sharpening a bolt. Like a bolt it's *learned* (it rides the same
+  Spellcasting gate for now) and spends mana — but it reaches for a **friend**, not a foe, so it's the
+  first strand grown by *helping* another rather than fighting or gathering.
 
 The player and NPCs run the identical machinery — progression *and* combat — so a
 long-lived NPC that has moved, been hurt, and fought grows genuinely tougher and

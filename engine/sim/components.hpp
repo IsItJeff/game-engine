@@ -888,6 +888,9 @@ enum class SkillId : std::uint16_t {
   Teaching,  // trained by MENTORING — passing a skill you've mastered to a nearby novice (teach).
              // Main attribute Charisma (the design's CHA "Teaching" skill, its 2nd feeder beside
              // Leadership): leading by instruction. Added LAST so existing SkillId values hold.
+  Healing,   // trained by MENDING a wounded ally (heal_spell). Main attribute WISDOM: the design's
+             // WIS Healing/Medicine domain, the support twin of Spellcasting's offence (WIS scales
+             // the mend as INT scales a bolt). Added LAST so existing SkillId values hold.
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
