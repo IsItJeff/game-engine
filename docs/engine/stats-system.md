@@ -205,8 +205,11 @@ ways `drain_hunger` encodes:
 - It has **`regen_per_second` = 0**: hunger never fills on its own. You refill it only by
   *eating* — today the health orbs that slain creatures drop are also food
   (`collect_pickups` tops hunger up), so the fight → orb → grab loop already feeds you.
-- It **drains faster while exerting** (moving) than at rest — the design's "exertion drains
-  needs" rule, the same moving/idle split `update_stamina` uses.
+- It **drains faster the harder you exert** — the design's "exertion drains needs" rule, in three
+  tiers like stamina: **rest < walk < sprint**. Resting loses the base rate, moving adds an exertion
+  step, and a **sprint** (holding SHIFT) adds another on top — so a dash across the map arrives both
+  hungrier and thirstier than a walk. Water drains identically (`drain_water` is `drain_hunger`'s
+  twin), so keeping the colony fed and watered is a cost of moving fast, not just of moving.
 
 At empty, hunger **starves** you: it chips `health` each tick, so an unfed character dies
 through the *same* `handle_deaths` path as any other zero-HP death (not through a special

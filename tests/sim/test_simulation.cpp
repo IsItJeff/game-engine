@@ -291,6 +291,33 @@ TEST_CASE("hunger drains faster while moving than at rest", "[sim]") {
           reg.get<eng::sim::Stats>(rester).hunger.current);  // exertion costs extra hunger
 }
 
+TEST_CASE("sprinting drains hunger and water faster than walking (the exertion tiers)", "[sim]") {
+  // The design's exertion tiers rest < walk < sprint, now applied to the NEEDS (not just stamina):
+  // a SPRINT burns hunger and water faster than a walk, so a dash across the map arrives hungrier
+  // AND thirstier. Both entities MOVE (the same walk drain); the ONLY difference is the Sprinting
+  // stance, so this isolates the sprint tier. A walker without Sprinting is the bit-identical
+  // baseline.
+  entt::registry reg;
+  const entt::entity walker = reg.create();
+  reg.emplace<eng::sim::Stats>(walker);
+  reg.emplace<eng::sim::Velocity>(walker, eng::Vec2{50.0f, 0.0f});  // moving = walking
+  const entt::entity sprinter = reg.create();
+  reg.emplace<eng::sim::Stats>(sprinter);
+  reg.emplace<eng::sim::Velocity>(sprinter, eng::Vec2{50.0f, 0.0f});  // moving too...
+  reg.emplace<eng::sim::Sprinting>(sprinter);                         // ...but sprinting
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) {
+    eng::sim::drain_hunger(reg, dt);
+    eng::sim::drain_water(reg, dt);
+  }
+
+  REQUIRE(reg.get<eng::sim::Stats>(sprinter).hunger.current <
+          reg.get<eng::sim::Stats>(walker).hunger.current);  // sprint burns more hunger...
+  REQUIRE(reg.get<eng::sim::Stats>(sprinter).water.current <
+          reg.get<eng::sim::Stats>(walker).water.current);  // ...and more water than a walk
+}
+
 TEST_CASE("an empty stomach starves health", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();
