@@ -500,11 +500,15 @@ plate more `+defence` (`equip_nearest_gear` scales the boon at equip; the `int` 
 a named ceiling). The **bane stays full**: quality lifts the *upside* only, so *shrinking* the bane is
 the ORTHOGONAL **mastery** track (Strength eases a weapon's heft, Endurance an armour's stamina bane —
 `eased_bane`). Two independent axes — quality is *how good the item is*, mastery *how well you wield
-it*. **Per-source quality now lands**: a slain brute drops FINE steel and a sentinel FINE plate
-(`kFineDropQuality` 1.25 → `+5 Strength`, `7.5 defence`), so felling a tough foe pays out better than
-the gear you start with — the first place quality is *visible in play*. What you *start* with, the
-venom fang, and a player's dropped blade stay quality **1.0** (baseline). Deterministic per drop
-source (no roll yet); **rolled** quality + traits layer on next. And you can *see* it: a finer item
+it*. **Fine loot is now ROLLED**: a slain brute's steel and a sentinel's plate roll a `quality`
+in `[kFineQualityMin, kFineQualityMax)` (1.1–1.4), so two tough kills yield subtly different gear and
+looting stays interesting past the first drop — a finer plate is always better than the starting 6.0
+defence, and steel is `+4`–`+5` Strength (the `int` truncation can round a modest roll back to the
+baseline integer; armour's float defence shows every roll). The roll is drawn from a **dedicated**
+`drop_rng_` stream, so it never perturbs the creature/combat waves — every dodge, spawn and wave is
+bit-identical, *only* the dropped quality varies. What you *start* with, the venom fang, and a
+player's dropped blade stay quality **1.0** (baseline). Deterministic (same seed → same rolls);
+**traits** layer on next. And you can *see* it: a finer item
 **glints brighter** on the field (`quality_sheen`, a pure presentation helper the renderer applies —
 baseline 1.0 renders unchanged), so a fine drop catches the eye without a numeric UI.
 
@@ -515,8 +519,8 @@ baseline 1.0 renders unchanged), so a fine drop catches the eye without a numeri
     lighter venom) and a slower second wind on armour, so weapon and armour banes stay *distinct*
     even as the two blades share a kind. Each archetype's kill already feeds this loop as *creature
     loot* (the four `DropKind`s). The rest of the design's Equipment — NPC armour-*seeking*, the
-    `Item{def, quality, durability, traits[]}` model (`quality`'s seam now lands — it scales the boon
-    at equip; rolled tiers + `traits[]` are next), the `+skill/+aspect` bonuses (which ride the
+    `Item{def, quality, durability, traits[]}` model (`quality` now scales the boon at equip AND
+    rolls per fine drop; `traits[]` are next), the `+skill/+aspect` bonuses (which ride the
     [SkillDef](progression.md) seam), and wear/repair — layer on top without reworking this plumbing.
 
 ### Dying — `handle_deaths` (Downed, then rescue or respawn)
