@@ -170,6 +170,33 @@ TEST_CASE("a wounded colonist retreats to a hearth and holds in its warmth", "[s
   REQUIRE(held.y == 0.0f);
 }
 
+TEST_CASE("a chilled colonist heads for the fire: warmth drives a hearth-seek like a wound",
+          "[sim]") {
+  // The temperature Need's SEEK want: a colonist with low WARMTH (but full health) heads for the
+  // nearest hearth to re-warm, exactly as a wounded one heads there to mend — closing the "huddle
+  // by the fire" loop directly, not only via the freeze-into-wounded path. Full warmth -> no seek,
+  // so the retreat rung's warmth clause is dormant and every warm colony steers as before
+  // (bit-identical).
+  const auto steer = [](float warmth, float npc_x) {
+    entt::registry reg;
+    const entt::entity fire = reg.create();
+    reg.emplace<eng::sim::Transform>(fire, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Hearth>(fire, eng::sim::Hearth{60.0f});  // warm radius 60
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{npc_x, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc, eng::Vec2{7.0f, 0.0f});  // a drift; a seek overrides it
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Stats>(npc).warmth.current =
+        warmth;  // full health, so the WOUND case is off
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(npc).value;
+  };
+  REQUIRE(steer(30.0f, 200.0f).x <
+          0.0f);  // chilled + out in the cold (200 > 60) -> heads in (-x)...
+  REQUIRE(steer(100.0f, 200.0f).x >
+          0.0f);  // ...fully warm -> ignores the fire, keeps its drift (+x)
+}
+
 TEST_CASE("moving drains the player's stamina", "[sim]") {
   eng::sim::World world;  // player spawns with full stamina (100)
   const entt::entity player = world.player();
