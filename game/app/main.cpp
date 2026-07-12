@@ -355,6 +355,8 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "Q: drop the weapon again to shed the heft and move free. "
       "G: harvest a ripe food plot in reach into a MEAL at your feet — it fills more hunger "
       "than grazing the patch raw (prepared food goes further). "
+      "T: plant a new crop where you stand — it grows over time, then G harvests it (plant a "
+      "garden, don't just find one). "
       "J: strike the nearest mote or creature in reach — motes pop in one hit; a "
       "brute takes several, fewer as your Strength climbs (it hits harder), while "
       "your VIT softens its blows. F: THROW at the nearest creature far out of melee reach — a "
@@ -425,6 +427,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool equip_was_down = false;
   bool drop_was_down = false;
   bool harvest_was_down = false;
+  bool plant_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -507,6 +510,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::harvest(eng::sim::kLocalPlayer)});
     }
     harvest_was_down = harvest_raw;
+
+    // T, edge-triggered, PLANTS a crop seedling at your feet — the front of the food chain. It
+    // grows over time (the same regrow that recovers a grazed patch) and once ripe you HARVEST it
+    // (G). Same funnel: input becomes a Plant command the server applies.
+    const bool plant_raw = keys[SDL_SCANCODE_T];
+    if (plant_raw && !plant_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::plant(eng::sim::kLocalPlayer)});
+    }
+    plant_was_down = plant_raw;
 
     // K, HELD (not edge-triggered), raises a GUARD: incoming creature blows are softened but you
     // move slower. A held stance rather than a one-shot action, so it rides the per-tick MovePlayer

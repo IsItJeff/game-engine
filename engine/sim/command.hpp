@@ -38,6 +38,7 @@ enum class CommandKind {
   Equip,         // wield the nearest dropped Weapon within reach
   Drop,          // ditch the wielded weapon at your feet, shedding its heft
   Harvest,       // gather the nearest ripe food plot in reach into a meal at your feet
+  Plant,         // sow a new crop seedling at your feet (it grows, then can be harvested)
 };
 
 struct Command {
@@ -101,6 +102,11 @@ inline Command drop(PlayerId player) {
 // intent carries only who is gathering.
 inline Command harvest(PlayerId player) {
   return Command{CommandKind::Harvest, player, {}, {}, 0.0f};
+}
+// Plant: the crop is sown at the planter's own position (computed server-side), so the intent
+// carries only who is planting.
+inline Command plant(PlayerId player) {
+  return Command{CommandKind::Plant, player, {}, {}, 0.0f};
 }
 
 }  // namespace eng::sim

@@ -802,6 +802,31 @@ TEST_CASE("a bare or out-of-reach crop cannot be harvested", "[sim]") {
           Approx(10.0f));  // the bare plot is untouched
 }
 
+TEST_CASE("a planted crop starts bare and ripens over time into a harvestable meal", "[sim]") {
+  // The FRONT of the food chain: plant a SEEDLING (no stock yet) where you stand, let the existing
+  // regrow grow it, and once ripe it harvests into a meal — plant -> grow -> harvest -> meal,
+  // whole.
+  entt::registry reg;
+  const entt::entity farmer = reg.create();
+  reg.emplace<eng::sim::Transform>(farmer, eng::Vec2{100.0f, 50.0f});
+
+  const entt::entity crop = eng::sim::plant_crop(reg, farmer);
+  REQUIRE(reg.all_of<eng::sim::FoodSource>(crop));
+  REQUIRE(reg.get<eng::sim::Transform>(crop).position.x == Approx(100.0f));  // sown where you stand
+  REQUIRE(reg.get<eng::sim::Transform>(crop).position.y == Approx(50.0f));
+  REQUIRE(reg.get<eng::sim::FoodSource>(crop).stock ==
+          Approx(0.0f));                                       // a seedling — nothing to eat
+  REQUIRE_FALSE(eng::sim::harvest_nearest_crop(reg, farmer));  // too young to harvest yet
+
+  // Grow it: graze regrows every plot each tick, grazers present or not.
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 60 * eng::sim::kTicksPerSecond; ++i) eng::sim::graze(reg, dt);  // 60s
+
+  REQUIRE(reg.get<eng::sim::FoodSource>(crop).stock > 60.0f);  // ripened past the harvest cost...
+  REQUIRE(eng::sim::harvest_nearest_crop(reg, farmer));        // ...so now it yields a meal
+  REQUIRE(reg.view<eng::sim::Pickup>().size() == 1);           // the crop you sowed fed you
+}
+
 TEST_CASE("a hungry NPC eats a food orb too, like the player", "[sim]") {
   entt::registry reg;
   const entt::entity npc = reg.create();

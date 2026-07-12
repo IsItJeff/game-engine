@@ -645,6 +645,21 @@ void World::apply_command(const Command& cmd) {
       for (const entt::entity p : harvesters) harvest_nearest_crop(registry_, p);
       break;
     }
+    case CommandKind::Plant: {
+      // Sow a crop seedling at your feet — the FRONT of the food chain (plant -> grow -> harvest ->
+      // meal), via the shared plant_crop (the same one a future NPC farmer calls). Match the
+      // commanding player, skip a downed one. Collect-then-act like Harvest: plant_crop creates an
+      // entity (emplacing Transform), which can realloc the pool this view walks.
+      std::vector<entt::entity> planters;
+      auto players = registry_.view<PlayerControlled, Transform>();
+      for (const entt::entity p : players) {
+        if (players.get<PlayerControlled>(p).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(p)) continue;  // helpless — can't plant
+        planters.push_back(p);
+      }
+      for (const entt::entity p : planters) plant_crop(registry_, p);
+      break;
+    }
   }
 }
 
