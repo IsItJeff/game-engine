@@ -1719,9 +1719,9 @@ TEST_CASE("standing weights each deed dimension by the design's signed factors",
 TEST_CASE("a deed drifts the actor's matching personality axis, bounded and clamped", "[sim]") {
   // The design's "you are what you do": recording a deed nudges the actor's matching Personality
   // axis a bounded step — Valor hardens bravery, Charity softens toward compassion, Loyalty deepens
-  // the loyalty leaning, and Cruelty (the villain mirror of Charity) hardens compassion back DOWN —
-  // so a character is reshaped by its deeds, hero deeds LIFTING and villain deeds LOWERING. The
-  // drift CLAMPS at the ±100 bound in BOTH directions.
+  // the loyalty leaning, Cruelty (the villain mirror of Charity) hardens compassion back DOWN, and
+  // Violence (the kill) steels the NERVE — bravery UP, a killer desensitized. So a character is
+  // reshaped by its deeds; the drift CLAMPS at the ±100 bound in BOTH directions.
   entt::registry reg;
   const entt::entity n = reg.create();
   reg.emplace<eng::sim::Personality>(n, eng::sim::Personality{0, 0, 0, 0});
@@ -1745,6 +1745,13 @@ TEST_CASE("a deed drifts the actor's matching personality axis, bounded and clam
   REQUIRE(reg.get<eng::sim::Personality>(n).compassion == 0);  // 2 - 2: Cruelty undoes the Charity
   REQUIRE(reg.get<eng::sim::Personality>(n).loyalty == 2);     // ...and touches nothing else
   REQUIRE(reg.get<eng::sim::Personality>(n).bravery == 4);
+
+  // Violence (the death that follows a lethal cruel strike) steels the NERVE — bravery UP, like
+  // Valor: a killer grows desensitized, not softer. So a lethal betrayal reshapes TWO axes at once
+  // — Cruelty cooled compassion above, Violence warms bravery here.
+  eng::sim::record_deed(reg, n, eng::sim::Deed::Violence, 1);
+  REQUIRE(reg.get<eng::sim::Personality>(n).bravery == 6);     // 4 + 2: nerve up, like a Valor deed
+  REQUIRE(reg.get<eng::sim::Personality>(n).compassion == 0);  // ...and leaves compassion alone
 
   // A long heroic career CLAMPS at the axis bound rather than overflowing the int8.
   for (int i = 0; i < 100; ++i) eng::sim::record_deed(reg, n, eng::sim::Deed::Valor, 1);
