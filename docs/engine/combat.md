@@ -507,21 +507,27 @@ defence, and steel is `+4`–`+5` Strength (the `int` truncation can round a mod
 baseline integer; armour's float defence shows every roll). The roll is drawn from a **dedicated**
 `drop_rng_` stream, so it never perturbs the creature/combat waves — every dodge, spawn and wave is
 bit-identical, *only* the dropped quality varies. What you *start* with, the venom fang, and a
-player's dropped blade stay quality **1.0** (baseline). Deterministic (same seed → same rolls);
-**traits** layer on next. And you can *see* it: a finer item
-**glints brighter** on the field (`quality_sheen`, a pure presentation helper the renderer applies —
-baseline 1.0 renders unchanged), so a fine drop catches the eye without a numeric UI.
+player's dropped blade stay quality **1.0** (baseline). Deterministic (same seed → same rolls). And a
+fine steel drop can rarely (~15%) roll the **first named TRAIT**: a *venomous* variant — a heavy
+poison blade that keeps steel's full heft but trades one notch of Strength for hits that **envenom**
+(reusing the whole shipped venom → Poisoned path), a paired +/- that is never pure-upside. That
+variant decision is a *portable* raw `mt19937` draw (identical on every platform), a NAMED intra-item
+trade without a new field or a `traits[]` list (both premature). And you can *see* quality: a finer
+item **glints brighter** on the field (`quality_sheen`, a pure presentation helper the renderer
+applies — baseline 1.0 renders unchanged), so a fine drop catches the eye without a numeric UI.
 
 !!! note "The minimal slice of P5, growing"
-    Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), three hardcoded
-    defs (a steel weapon, a venom weapon, an armour) each pairing a boon
+    Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), hardcoded defs (plain
+    steel, a venom fang, an armour, and now a rolled *venomous steel* variant) each pairing a boon
     (`+Attribute`/`+defence`/`+venom`) with a bane — a move-heft on either weapon (heavier steel,
     lighter venom) and a slower second wind on armour, so weapon and armour banes stay *distinct*
-    even as the two blades share a kind. Each archetype's kill already feeds this loop as *creature
+    even as the blades share a kind. Each archetype's kill already feeds this loop as *creature
     loot* (the four `DropKind`s). The rest of the design's Equipment — NPC armour-*seeking*, the
-    `Item{def, quality, durability, traits[]}` model (`quality` now scales the boon at equip AND
-    rolls per fine drop; `traits[]` are next), the `+skill/+aspect` bonuses (which ride the
-    [SkillDef](progression.md) seam), and wear/repair — layer on top without reworking this plumbing.
+    `Item{def, quality, durability, traits[]}` model (`quality` scales the boon at equip AND rolls per
+    fine drop; the **first named trait** — venomous steel — now rolls too, expressed through existing
+    fields; a `traits[]` *list* waits until two named traits must stack on one item), the
+    `+skill/+aspect` bonuses (which ride the [SkillDef](progression.md) seam), and wear/repair — layer
+    on top without reworking this plumbing.
 
 ### Dying — `handle_deaths` (Downed, then rescue or respawn)
 

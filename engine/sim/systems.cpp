@@ -2357,6 +2357,31 @@ void spawn_venom_weapon(entt::registry& reg, Vec2 pos) {
   w.venom_per_second = 6.0f;  // its hits poison (health/sec); a knob
 }
 
+// A steel blade that rolled VENOMOUS (the first named equipment TRAIT). Mirrors spawn_weapon's
+// steel — full +4-base Strength scaled by quality, the SAME 0.25 heft bane — but knocks the base
+// Strength down one notch (kVenomousStrength) and turns on venom (kVenomousVenomPerSecond). So it's
+// a HEAVY poison blade: less nimble and less venomous than the spitter's fang, but hitting harder —
+// a NAMED intra-item trade (poison build vs raw power), the qualitative variety the flat boon/bane
+// pairs lacked, and never pure-upside (the +venom is paid for in -Strength, atop steel's unchanged
+// heft). Reuses the whole shipped venom path: the equip fold copies venom_per_second into
+// Equipped.weapon_venom, perform_attack applies Poisoned, tick_poison chips it — NOTHING new in
+// equip or combat. A distinct venom-tinted-steel dot so it reads apart from plain steel and the
+// green fang.
+void spawn_venomous_steel(entt::registry& reg, Vec2 pos, float quality) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.55f, 0.72f, 0.45f},
+                         6.0f);  // venom-tinted steel (between the two)
+  Weapon& w = reg.emplace<Weapon>(e);
+  w.strength_bonus = kVenomousStrength;  // steel's +4 down one notch — the paired -STR trade
+  w.venom_per_second =
+      kVenomousVenomPerSecond;  // ...bought with a modest envenoming proc (the boon)
+  // move_penalty keeps its default 0.25 (steel's full heft — the bane is untouched, quality lifts
+  // only the upside), and quality scales the reduced +Strength boon exactly like any fine steel.
+  w.quality = quality;
+}
+
 void decay_standing(entt::registry& reg) {
   // Leaky moral DECAY, the slow counter-current to record_deed: every kDecayPeriod ticks each
   // nonzero deed dimension creeps ONE step toward 0, so a reputation FADES if it isn't renewed —
@@ -2698,10 +2723,29 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
   // order (weapons then armour, each vector already in deterministic entity order), so the sequence
   // replays identically. Orb + venom drops stay baseline 1.0 (no draw). ponytail: one band for both
   // fine kinds; a per-archetype band is the refinement if a sentinel should out-roll a brute.
+  //
+  // A fine STEEL drop also rolls the VENOMOUS trait. That decision is a single RAW drop_rng_ draw
+  // taken BEFORE the quality draw (see the inline note below for why order matters) — a portable
+  // mt19937 uint compare, NOT a uniform_real, so which drops come out venomous is identical on
+  // every stdlib, unlike the quality band. ~15% of fine steel becomes a heavy poison blade
+  // (spawn_venomous_steel: +venom, one notch less Strength, the same full heft). It reuses the
+  // entire shipped venom path, so equip/combat are untouched. Only STEEL rolls it — the fang is
+  // already venomous and the orb/armour are other kinds.
   std::uniform_real_distribution<float> fine_quality{kFineQualityMin, kFineQualityMax};
   for (const entt::entity e : dead) reg.destroy(e);
   for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);  // swarmer sustain
-  for (const Vec2& pos : weapon_drops) spawn_weapon(reg, pos, fine_quality(rng));  // rolled offence
+  for (const Vec2& pos : weapon_drops) {
+    // Draw the VENOMOUS decision FIRST, as a raw mt19937 uint compare: raw engine output is bit-
+    // PORTABLE across stdlibs, so which drops come out venomous is identical on every platform (the
+    // uniform_real quality draw that follows is NOT portable — it's only ever band-tested). Drawing
+    // it first also lets a fresh-seeded test pin the variant deterministically.
+    const bool venomous = rng() < kVenomousDropThreshold;
+    const float q = fine_quality(rng);  // then the rolled quality (band-tested, not exact)
+    if (venomous)
+      spawn_venomous_steel(reg, pos, q);  // rare venomous variant (heavy poison blade)
+    else
+      spawn_weapon(reg, pos, q);  // plain steel (today's path)
+  }
   for (const Vec2& pos : armour_drops) spawn_armour(reg, pos, fine_quality(rng));  // rolled defence
   for (const Vec2& pos : venom_drops) spawn_venom_weapon(reg, pos);  // poison build (baseline)
 }
