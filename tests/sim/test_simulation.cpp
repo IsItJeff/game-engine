@@ -1829,6 +1829,31 @@ TEST_CASE("a power swing fizzles when too winded to afford it", "[sim]") {
   REQUIRE(swing_lands(true, 20.0f));        // ...20 affords the power swing -> it lands
 }
 
+TEST_CASE("a power swing knocks the struck foe back a plain one does not", "[sim]") {
+  // The power stance's spacing payoff: a powered hit SHOVES the target away (kKnockback) along the
+  // attacker->target line, so you can make room in a swarm; an ordinary swing leaves it where it
+  // stood. The shove lands AFTER the damage, so it doesn't change what the blow deals.
+  const auto foe_x_after = [](bool powered) {
+    entt::registry reg;
+    std::mt19937 rng{1234};
+    const entt::entity attacker = reg.create();
+    reg.emplace<eng::sim::Transform>(attacker, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(attacker);
+    reg.emplace<eng::sim::Skills>(attacker);
+    reg.emplace<eng::sim::Stats>(attacker);  // full stamina -> affords the power swing
+    if (powered) reg.emplace<eng::sim::PowerAttack>(attacker);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});  // in reach, on the +x side
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Attributes>(foe);  // DEX 1 -> never dodges, so the blow lands
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    eng::sim::perform_attack(reg, attacker, rng);
+    return reg.get<eng::sim::Transform>(foe).position.x;
+  };
+  REQUIRE(foe_x_after(false) == Approx(10.0f));  // a plain swing leaves the foe where it stood...
+  REQUIRE(foe_x_after(true) > 10.0f);  // ...a power swing shoves it back, away from origin
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
