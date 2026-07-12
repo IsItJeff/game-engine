@@ -1807,6 +1807,64 @@ TEST_CASE("taking damage trains Toughness, which feeds Endurance", "[sim]") {
   REQUIRE(world.registry().get<eng::sim::Attributes>(player).endurance.xp > eng::Fixed{});
 }
 
+TEST_CASE("a skilled colonist teaches a nearby novice: skills spread by mentorship", "[sim]") {
+  // Mentorship: a colonist far ahead in a skill grants a nearby, much-lower one XP in it (learning
+  // it if new), and grows its own Teaching -> Charisma for passing it on — so a craft spreads
+  // through the colony beside its master, not only by each person's own toil.
+  entt::registry reg;
+  const entt::entity mentor = reg.create();
+  reg.emplace<eng::sim::Npc>(mentor);
+  reg.emplace<eng::sim::Transform>(mentor, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(mentor);
+  reg.emplace<eng::sim::CharacterLevel>(mentor);
+  reg.emplace<eng::sim::Skills>(mentor).train(eng::sim::SkillId::Striking).level = 5;  // a veteran
+  const entt::entity student = reg.create();
+  reg.emplace<eng::sim::Npc>(student);
+  reg.emplace<eng::sim::Transform>(student, eng::Vec2{10.0f, 0.0f});  // within mentor reach (40)
+  reg.emplace<eng::sim::Attributes>(student);
+  reg.emplace<eng::sim::CharacterLevel>(student);
+  reg.emplace<eng::sim::Skills>(student);  // a novice — no Striking (a level-1 baseline)
+
+  eng::sim::teach(reg);
+
+  const eng::sim::Skill* learned =
+      reg.get<eng::sim::Skills>(student).find(eng::sim::SkillId::Striking);
+  REQUIRE(learned != nullptr);          // the student picked up the mentor's craft...
+  REQUIRE(learned->xp > eng::Fixed{});  // ...gaining XP in it
+  REQUIRE(reg.get<eng::sim::Skills>(mentor).find(eng::sim::SkillId::Teaching) !=
+          nullptr);  // ...and the mentor grew its Teaching skill...
+  REQUIRE(reg.get<eng::sim::Attributes>(mentor).charisma.xp > eng::Fixed{});  // ...-> Charisma
+}
+
+TEST_CASE("mentorship needs a real gap: fresh colonists teach nothing", "[sim]") {
+  // The bit-identity gate: a mentor must be well ahead (kMentorLevel) AND have a student in reach
+  // who trails it — a fresh colony (everyone level 1) has no such pair, so no one teaches (every
+  // existing progression test is untouched). A skilled mentor with no student near also teaches no
+  // one.
+  const auto taught = [](int mentor_striking, float student_dist) {
+    entt::registry reg;
+    const entt::entity mentor = reg.create();
+    reg.emplace<eng::sim::Npc>(mentor);
+    reg.emplace<eng::sim::Transform>(mentor, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mentor);
+    reg.emplace<eng::sim::CharacterLevel>(mentor);
+    eng::sim::Skills& msk = reg.emplace<eng::sim::Skills>(mentor);
+    if (mentor_striking > 1) msk.train(eng::sim::SkillId::Striking).level = mentor_striking;
+    const entt::entity student = reg.create();
+    reg.emplace<eng::sim::Npc>(student);
+    reg.emplace<eng::sim::Transform>(student, eng::Vec2{student_dist, 0.0f});
+    reg.emplace<eng::sim::Attributes>(student);
+    reg.emplace<eng::sim::CharacterLevel>(student);
+    reg.emplace<eng::sim::Skills>(student);
+    eng::sim::teach(reg);
+    return reg.get<eng::sim::Skills>(student).find(eng::sim::SkillId::Striking) != nullptr;
+  };
+  REQUIRE(taught(5, 10.0f));  // a level-5 mentor + a nearby novice -> teaches (the anchor)...
+  REQUIRE_FALSE(
+      taught(1, 10.0f));  // ...a FRESH mentor (all level 1) -> nothing to pass on (the gate)
+  REQUIRE_FALSE(taught(5, 500.0f));  // ...a veteran but no student in reach -> teaches no one
+}
+
 TEST_CASE("train_on_damage ignores non-finite and non-positive damage", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();

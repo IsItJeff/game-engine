@@ -471,6 +471,7 @@ void World::step() {
   tick_fatigue(registry_, dt);    // ...and tire while exerting, recovering at rest (the 3rd need)
   drain_warmth(registry_,
                dt);  // ...and CHILL in a cold zone, re-warming by a fire (freezing chips)
+  teach(registry_);  // ...veterans pass a mastered skill to a nearby novice (mentorship)
   advance_progression(registry_);  // activity -> skill+attribute XP -> level -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});
   // Collision runs after movement (positions are current), then death is checked

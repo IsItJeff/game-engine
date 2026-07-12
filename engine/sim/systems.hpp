@@ -250,6 +250,14 @@ entt::entity plant_crop(entt::registry& reg, entt::entity planter);
 // Character Level's veteran multiplier. Runs on the player and NPCs alike. No `dt`
 // — the timestep is fixed, so XP is a constant per-tick amount. (The XP curve
 // `xp_to_next` and the effect curve `power` live in progression/curve.hpp.)
+// MENTORSHIP: a colonist far ahead in a skill teaches it to a nearby much-lower one — the student
+// gains XP in that skill, the mentor grows a Teaching -> Charisma skill for passing it on. So
+// skills SPREAD through the colony, not only from each person's own doing. Gated on a skill-level
+// gap that can't exist at spawn (all skills start at level 1), so a fresh/short-run world is
+// bit-identical. Runs on players and NPCs alike (creatures have no Skills). Place it just before
+// advance_progression so the lesson's XP banks the same tick. No dt (fixed timestep).
+void teach(entt::registry& reg);
+
 void advance_progression(entt::registry& reg);
 
 // The rolled-quality band for a FINE drop (a slain brute's steel, a sentinel's plate): its
