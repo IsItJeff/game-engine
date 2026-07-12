@@ -323,8 +323,16 @@ void spawn_npc_if_due(entt::registry& reg, float& timer, std::mt19937& rng, floa
   // determinism hole.
   const Vec2 wander{vel(rng), vel(rng)};
   const Personality p = roll_archetype(rng, unit);
-  make_npc(reg, pos, wander, p.bravery, p.greed, p.compassion, p.industry, p.sociability,
-           p.loyalty);
+  const entt::entity e = make_npc(reg, pos, wander, p.bravery, p.greed, p.compassion, p.industry,
+                                  p.sociability, p.loyalty);
+  // A genuinely BRAVE reinforcement (a Stalwart, or a jittered other that rolled high) DREAMS of
+  // battle — give it the Warrior aspiration, so an idle, hale one seeks out creatures to fight
+  // (steer_npcs' hunt rung) instead of gathering at the fire. Keyed on the personality we ALREADY
+  // rolled (no extra rng draw, so the spawner's stream is unchanged), so the world stays
+  // deterministic same-build. Openers and every test NPC get no aspiration, so those scenes are
+  // bit-identical — this only shapes the ongoing reinforcements. A tuning knob.
+  constexpr int kWarriorAspirationBravery = 60;
+  if (p.bravery >= kWarriorAspirationBravery) reg.emplace<Aspiration>(e, Aspiration{});
 }
 
 // Build the opening scene: a controllable player in the centre, a few wandering

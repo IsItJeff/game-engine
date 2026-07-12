@@ -245,6 +245,16 @@ void steer_npcs(entt::registry& reg) {
   // entity it RESENTS (affinity <= kGrudgeThreshold). Smaller than the friend-gather range (a
   // personal-space bubble, not a cross-field draw). Reuses kRallySpeed. A knob.
   constexpr float kAvoidRadius = 150.0f;
+  // Hunt: an idle colonist that DREAMS of battle (an Aspiration of kind Warrior) seeks the nearest
+  // creature within this range and CHARGES it — the first proactive, goal-driven steer. The range
+  // is wide (it spots a fight across much of the field) but the rung is LOW priority, so only a
+  // content warrior — fed, watered, warm, unwounded, unafraid — goes looking; a hurting one tended
+  // its needs on a rung above. The charge speed is brisk (a warrior commits), between a forage and
+  // a rescue. npc_attack (which strikes the nearest creature in Strength-reach every tick) does the
+  // actual fighting once the charge closes the gap; this rung only supplies the intent to close it.
+  // Knobs.
+  constexpr float kHuntRange = 300.0f;
+  constexpr float kHuntSpeed = 85.0f;
 
   // Nested loops: every NPC against every hazard / orb / fallen ally / weapon — O(n*m), fine
   // for a handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts
@@ -776,6 +786,41 @@ void steer_npcs(entt::registry& reg) {
         const float len = glm::length(away);
         if (len > 0.0f) npcs.get<Velocity>(n).value = (away / len) * kRallySpeed * move_scale;
         continue;  // keeping its distance — skip the rally/bond gather rungs below
+      }
+    }
+
+    // Priority 5.5 — PURSUE AN ASPIRATION (the WARRIOR hunt): the first PROACTIVE rung. Every want
+    // above is a REACTION — flee a threat, rescue a friend, feed a need, mend a wound, avoid a
+    // rival. This one is a DREAM: a colonist that carries an Aspiration of kind Warrior, having
+    // nothing to fear or need (it reached this far down the ladder), goes LOOKING for a fight —
+    // steering toward the nearest creature within kHuntRange to close and engage it. It does NOT do
+    // the fighting here: npc_attack strikes the nearest creature in Strength-reach every tick, so
+    // once this charge closes the gap the blows land on their own — this rung only supplies the
+    // intent to close it. Sits ABOVE the idle rally/bond/gather rungs (a warrior seeks battle
+    // rather than loiter by the fire) but BELOW every need and fear (a hungry, cold, or wounded
+    // warrior tends that first — those rungs already `continue`d), so the drive is self-limiting: a
+    // hurting warrior retreats and heals (the P3.75 hearth rung) and only a hale, content one
+    // hunts. Creatures aren't a flee threat for an un-panicked colonist (only Panicked ones bolt
+    // from them), so a warrior that charges in STANDS and trades blows — glory or death, its
+    // choice. No Aspiration (every colonist today, every existing test) -> try_get is null ->
+    // skipped -> bit-identical. Reuses the `creatures` view fetched at the top of the loop for the
+    // DEFEND rung.
+    if (const Aspiration* asp = reg.try_get<Aspiration>(n);
+        asp != nullptr && asp->kind == AspirationKind::Warrior) {
+      entt::entity quarry = entt::null;
+      float nearest_foe = kHuntRange;
+      for (const entt::entity c : creatures) {
+        const float d = glm::distance(pos, creatures.get<Transform>(c).position);
+        if (d < nearest_foe) {
+          nearest_foe = d;
+          quarry = c;
+        }
+      }
+      if (quarry != entt::null) {
+        const Vec2 toward = creatures.get<Transform>(quarry).position - pos;
+        const float len = glm::length(toward);
+        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kHuntSpeed * move_scale;
+        continue;  // charging the fight — skip the idle rally/bond/gather rungs below
       }
     }
 
