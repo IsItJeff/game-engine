@@ -75,6 +75,19 @@ entt::entity make_cold_zone(entt::registry& reg, Vec2 pos, float radius) {
   return e;
 }
 
+// Create a MIRE — a boggy patch that DRAGS on movement (slow_in_mire scales the velocity of anyone
+// crossing it). Neutral terrain, not a hazard: it doesn't hurt, it just slows — so it reshapes a
+// chase or a flight rather than threatening. A murky brown disc drawn at its reach. Scenery — no
+// Stats/Velocity.
+entt::entity make_mire(entt::registry& reg, Vec2 pos, float radius, float slow_factor) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.4f, 0.32f, 0.2f}, radius);  // murky brown mud, at its reach
+  reg.emplace<MireZone>(e, MireZone{radius, slow_factor});
+  return e;
+}
+
 // Create a SPELLBOOK on the ground — a tome the player walks over to LEARN Spellcasting
 // (study_spellbooks). The design's "magic is read/taught": a small arcane-violet dot (matching the
 // bolt it unlocks) a would-be mage seeks out. Scenery until read; no Stats/Velocity.
@@ -362,6 +375,12 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // for NPCs, which have no dedicated seek-warmth rung yet. Its near edge clears the player's
   // centre spawn, so you start warm and choose when to brave the cold.
   make_cold_zone(reg, Vec2{center.x + 150.0f, center.y}, 120.0f);
+  // A MIRE to the WEST — a murky bog that DRAGS on anyone crossing it (slow_in_mire), the movement
+  // twin of the cold zone's Need-drain. Set well off the player's centre spawn (its near edge
+  // clears it), so you start on firm ground and choose when to slog through — and so a creature
+  // chasing you west bogs down in it, a bit of tactical terrain to kite a brute across. Neutral: it
+  // slows friend and foe alike, never hurts.
+  make_mire(reg, Vec2{center.x - 170.0f, center.y}, 110.0f, 0.4f);
 
   const entt::entity player = reg.create();
   reg.emplace<Transform>(player, center);
@@ -471,7 +490,9 @@ void World::step() {
   steer_npcs(registry_);  // NPCs decide where to flee (may set their velocity)
   npc_guard(registry_);   // ...a hardened colonist instead PLANTS and raises a guard on a creature
   chase_prey(registry_);  // creatures decide to home in on the nearest person (player or NPC)
-  integrate_motion(registry_, dt);
+  slow_in_mire(registry_);  // ...then anyone standing in a bog crawls: scale the FINAL velocity...
+  integrate_motion(registry_,
+                   dt);           // ...before this applies it. Mire AFTER all setters, before here
   npc_attack(registry_, rng_);    // NPCs strike any hazard now in reach (positions are current)
   update_stamina(registry_, dt);  // moving costs stamina; resting restores it
   drain_hunger(registry_, dt);    // people get hungry; starving (0) chips health before deaths
