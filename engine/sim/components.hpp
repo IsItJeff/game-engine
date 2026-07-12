@@ -319,6 +319,27 @@ inline float renown_scale(std::int32_t standing_value) {
   return 1.0f - t * kInfamyMaxShrink;  // villains shrink to a shunned husk
 }
 
+// How much brighter a fine item glints per point of quality above baseline, and the ceiling so an
+// exceptional item catches the eye without blowing out to a featureless white blob. Presentation
+// KNOBS — tuned against the steel-grey / bronze gear dots in the live renderer.
+inline constexpr float kQualitySheenPerPoint = 0.8f;  // +80% of the quality surplus, as brightness
+inline constexpr float kQualitySheenCap = 1.4f;  // ...but never brighter than +40%, stays a dot
+
+// Presentation-only, a sibling of wounded_brightness: how bright to draw a GROUNDED item given its
+// QUALITY, so a FINER drop (a tough kill's loot, quality > 1.0) glints against a baseline one and
+// you can SEE at a glance which pickup is worth the grab — the visible half of per-source loot
+// quality (the numbers already differ; this makes the eye read it). Returns a colour multiplier
+// >= 1.0: baseline quality 1.0 (and any shoddy sub-1.0 item) -> exactly 1.0 (drawn as authored,
+// bit- identical), rising with the quality SURPLUS to kQualitySheenCap. A pure function of quality
+// (the renderer reads the Weapon/Armour component and passes its `quality` in), so it's
+// unit-testable and the sim never reads colour. ponytail: BRIGHTENS only; a sub-1.0 "shoddy" DIM is
+// the follow-up cue if worse-than-baseline gear ever ships (nothing drops below 1.0 today).
+inline float quality_sheen(float quality) {
+  if (quality <= 1.0f) return 1.0f;  // baseline (or shoddy) draws as authored — bit-identical
+  const float sheen = 1.0f + (quality - 1.0f) * kQualitySheenPerPoint;
+  return sheen < kQualitySheenCap ? sheen : kQualitySheenCap;
+}
+
 // The lower title threshold — cross it (in either direction) and you stop being anonymous. The
 // upper one reuses kRenownFullAt, so the title flips to "Renowned" exactly when the renown dot-size
 // caps.

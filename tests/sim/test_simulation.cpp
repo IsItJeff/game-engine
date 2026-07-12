@@ -3773,6 +3773,23 @@ TEST_CASE("poison_tint_strength greens a dot more with a stronger dose and then 
   REQUIRE(eng::sim::kPoisonTintCap < 1.0f);   // and the cap keeps the dot readable, never all green
 }
 
+TEST_CASE("quality_sheen brightens a finer item and then caps: baseline unchanged", "[sim]") {
+  // Pure presentation helper: a colour multiplier so a FINER grounded item (a tough kill's loot)
+  // glints against a baseline one. Baseline is the EXACT identity, a finer item is strictly
+  // brighter (monotonic), and even an extreme quality caps so the dot never blows out to a white
+  // blob.
+  REQUIRE(eng::sim::quality_sheen(1.0f) == 1.0f);  // baseline -> {x1} EXACTLY: an IEEE identity, so
+                                                   // ordinary gear renders bit-identical to before
+  REQUIRE(eng::sim::quality_sheen(0.5f) ==
+          1.0f);  // a shoddy sub-baseline item also draws as authored
+  const float fine = eng::sim::quality_sheen(1.25f);  // the kFineDropQuality a brute/sentinel drops
+  REQUIRE(fine > 1.0f);                               // ...glints brighter than baseline...
+  REQUIRE(eng::sim::quality_sheen(1.5f) > fine);  // ...and a finer one brighter still (monotonic)
+  REQUIRE(eng::sim::quality_sheen(1000.0f) ==
+          Approx(eng::sim::kQualitySheenCap));  // an extreme quality -> capped, not a blinding blob
+  REQUIRE(eng::sim::kQualitySheenCap > 1.0f);   // and the cap is a real brightening (never dimmer)
+}
+
 TEST_CASE("personality_tint warms the brave and cools the coward, neutral untinted", "[sim]") {
   // Pure presentation helper: a colour multiplier so bravery reads on screen. Neutral is the
   // identity, the extremes shift red-vs-blue in mirror image, and green is never touched (so a

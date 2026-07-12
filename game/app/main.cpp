@@ -68,6 +68,20 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     // guard on `rgb`.
     eng::Vec3 rgb = dot.color;
 
+    // Quality sheen: a FINER grounded item glints brighter, so a fine drop (a tough kill's loot,
+    // quality > 1.0) catches the eye against a baseline one and you can SEE it's worth the grab —
+    // the visible half of per-source loot quality. Weapon and Armour components live ONLY on
+    // grounded pickups (equip CONSUMES the entity), so a try_get hit here IS a lootable item on the
+    // ground; each carries a `quality`. Baseline 1.0 -> 1.0, so ordinary gear (and the venom fang)
+    // is unchanged. A steady INTRINSIC cue, so it sits at the base before the health/venom/flash
+    // overlays (which grounded gear never has anyway — no Stats/Poisoned). Presentation-only: the
+    // sim never reads colour.
+    if (const auto* wpn = world.registry().try_get<eng::sim::Weapon>(e)) {
+      rgb *= eng::sim::quality_sheen(wpn->quality);
+    } else if (const auto* arm = world.registry().try_get<eng::sim::Armour>(e)) {
+      rgb *= eng::sim::quality_sheen(arm->quality);
+    }
+
     // Personality tint: colour a colonist by its BRAVERY (warm = brave, cool = coward) so the
     // build_scene spread reads on screen. Only NPCs carry Personality (the player and creatures
     // don't), so the try_get guard alone scopes it — no special-casing needed.
