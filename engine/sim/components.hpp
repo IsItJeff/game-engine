@@ -799,6 +799,22 @@ struct FoodSource {
   float radius = 60.0f;            // how close you must be to graze
 };
 
+// What a colonist DREAMS of — the design's "Aspirations (hopes/dreams) steer behaviour". Every
+// steer rung wired so far is REACTIVE (flee a threat, forage when hungry, gather when idle); this
+// is the first PROACTIVE one: an idle, safe colonist that carries an Aspiration goes and PURSUES
+// it instead of merely ambling to the fire. It is a soft drive, not a compulsion — it sits LOW in
+// the steer ladder, so any real want (fear, a wounded friend, hunger, thirst, cold) is tended
+// first; only a content colonist chases its dream. New kinds append LAST (exhaustive -Wswitch-free
+// for now — one kind, one direct compare; refactor to a switch when a second lands). The component
+// is DEFAULT-ABSENT: no entity carries it unless explicitly given one, so the pursuit rung is a
+// no-op for everyone else and the pre-Aspiration world is bit-identical.
+enum class AspirationKind : std::uint8_t {
+  Warrior,  // dreams of battle — an idle, hale one seeks the nearest creature to fight
+};
+struct Aspiration {
+  AspirationKind kind = AspirationKind::Warrior;
+};
+
 // --- Progression: skills feed attributes ---
 //
 // The game grows characters the "learn by doing" way, and in three layers:

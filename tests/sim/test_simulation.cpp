@@ -1321,6 +1321,53 @@ TEST_CASE("rally needs a real hero: below the Known line, an idle colonist stays
           Approx(0.0f));  // +10 standing, below Known (15) -> still no pull
 }
 
+TEST_CASE("an idle warrior charges the nearest creature: a proactive aspiration steers the hunt",
+          "[sim]") {
+  // The first PROACTIVE steer: a colonist that DREAMS of battle (an Aspiration of kind Warrior),
+  // with nothing to fear or need, goes LOOKING for a fight — steering toward a creature to close
+  // and engage it (npc_attack lands the blows once it arrives). The GATE that keeps every other
+  // colonist — and every existing scene — bit-identical is the Aspiration component: without it the
+  // rung is a no-op, so the same idle colonist stays put.
+  const auto hunt_vx = [](bool is_warrior) {
+    entt::registry reg;
+    const entt::entity creature = reg.create();
+    reg.emplace<eng::sim::Transform>(creature, eng::Vec2{200.0f, 0.0f});  // to the RIGHT, in range
+    reg.emplace<eng::sim::Enemy>(creature);
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    if (is_warrior) reg.emplace<eng::sim::Aspiration>(colonist);  // defaults to kind Warrior
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(hunt_vx(true) > 0.0f);            // a warrior charges RIGHT, toward the creature
+  REQUIRE(hunt_vx(false) == Approx(0.0f));  // no aspiration -> no hunt -> stays put (the gate)
+}
+
+TEST_CASE("the warrior's hunt is a low want: fear outranks the dream of battle", "[sim]") {
+  // The hunt sits BELOW every need and fear, so a warrior in danger tends that first. A creature to
+  // the LEFT would draw the charge left; a HAZARD to the left (which the fear rung flees) sends it
+  // right instead. Fleeing RIGHT proves survival beat the aspiration — the drive is self-limiting.
+  entt::registry reg;
+  const entt::entity creature = reg.create();
+  reg.emplace<eng::sim::Transform>(creature, eng::Vec2{-100.0f, 0.0f});  // a fight, to the LEFT
+  reg.emplace<eng::sim::Enemy>(creature);
+  const entt::entity hazard = reg.create();
+  reg.emplace<eng::sim::Transform>(hazard, eng::Vec2{-40.0f, 0.0f});  // close danger, also LEFT
+  reg.emplace<eng::sim::Hazard>(hazard);
+  const entt::entity warrior = reg.create();
+  reg.emplace<eng::sim::Transform>(warrior, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(warrior);
+  reg.emplace<eng::sim::Npc>(warrior);
+  reg.emplace<eng::sim::Aspiration>(warrior);
+
+  eng::sim::steer_npcs(reg);
+
+  // Flees RIGHT (+x) from the hazard — it does NOT charge left to the creature while in danger.
+  REQUIRE(reg.get<eng::sim::Velocity>(warrior).value.x > 0.0f);
+}
+
 TEST_CASE("sociability shapes how far an idle colonist travels to rally to a hero", "[sim]") {
   // The fifth personality axis, read by the rally rung's radius exactly as industry reads the
   // arm-up radius (so every acting steer rung now reads a trait). Base rally radius is 220; a hero
