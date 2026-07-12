@@ -2439,7 +2439,57 @@ void spawn_pickup(entt::registry& reg, Vec2 pos) {
   reg.emplace<Pickup>(e);
 }
 
+// Spawn a MEAL on the ground at `pos` — a harvested-crop food, the payoff of the food economy. It
+// is a Pickup like a loot orb, but PURE food: it fills more hunger (kMealFood, > an orb's 50) and,
+// being a prepared meal rather than monster loot, grants NONE of the orb's combat rewards (no heal,
+// no permanent max-HP). A warm orange dot so it reads as food, not treasure.
+void spawn_meal(entt::registry& reg, Vec2 pos) {
+  constexpr float kMealFood = 100.0f;  // two orbs' worth — preparing a crop stretches it. A knob.
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.9f, 0.6f, 0.2f}, 4.0f);  // small warm-orange meal
+  Pickup& pk = reg.emplace<Pickup>(e);
+  pk.heal = 0.0f;          // a meal is food, not combat loot — no restorative heal...
+  pk.bonus_max_hp = 0.0f;  // ...and no permanent HP bump (that's the monster-drop reward)
+  pk.food = kMealFood;     // but it fills you more than any orb
+}
+
 }  // namespace
+
+// Gather the nearest RIPE food plot within reach into a meal at the harvester's feet — the seam of
+// the food economy. A patch you'd otherwise graze bite-by-bite is instead PREPARED: it spends a
+// chunk of the plot's stock (kHarvestCost) to drop a single MEAL worth more hunger than that stock
+// grazed raw (spawn_meal's kMealFood), so working the land beats grubbing at it. Returns whether
+// anything was harvested. Public and actor-agnostic so it is the ONE definition both the player's
+// Harvest command and (later) an NPC farm behaviour call — the player==NPC parity the design wants.
+// A plot below the cost isn't ripe enough to bother (no half-meals), so a bare or barely-grown
+// patch yields nothing. ponytail: nearest ripe plot only, no "best yield" search — one plot exists
+// and they don't cluster; revisit if crops ever pack in.
+bool harvest_nearest_crop(entt::registry& reg, entt::entity harvester) {
+  constexpr float kHarvestCost =
+      60.0f;  // plot stock a harvest spends — a patch must be fairly ripe
+  const Transform* ht = reg.try_get<Transform>(harvester);
+  if (ht == nullptr) return false;
+  const Vec2 pos = ht->position;  // capture BEFORE spawn_meal, which reallocates the Transform pool
+
+  entt::entity best = entt::null;
+  float best_dist = 0.0f;
+  auto plots = reg.view<FoodSource, Transform>();
+  for (const entt::entity src : plots) {
+    if (plots.get<FoodSource>(src).stock < kHarvestCost) continue;  // not ripe enough to gather
+    const float d = glm::distance(pos, plots.get<Transform>(src).position);
+    if (d > plots.get<FoodSource>(src).radius) continue;  // out of reach (same range you'd graze)
+    if (best == entt::null || d < best_dist) {
+      best = src;
+      best_dist = d;
+    }
+  }
+  if (best == entt::null) return false;               // nothing ripe within reach
+  plots.get<FoodSource>(best).stock -= kHarvestCost;  // spend the plot's growth...
+  spawn_meal(reg, pos);  // ...for a prepared meal where the harvester stands
+  return true;
+}
 
 // Spawn a Weapon on the ground at `pos` — the ONE canonical dropped-weapon entity (a
 // steel-grey dot + Weapon), so a slain BRUTE's drop (handle_deaths) and a player's Drop
@@ -2983,10 +3033,11 @@ void collect_pickups(entt::registry& reg, float dt) {
       health.current += pk.heal * luck_yield;                        // a lucky scavenger mends more
       if (health.current > health.max) health.current = health.max;  // capped, no overheal
 
-      // The orb is also FOOD: eating it refills hunger, so the same fight -> orb -> grab loop
-      // keeps you fed. (A knob; the orb is the first food source until real crops/meals exist.)
-      constexpr float kFoodPerOrb = 50.0f;
-      stats.hunger.current += kFoodPerOrb;
+      // Eating it refills hunger — every Pickup carries its own food value, so the same
+      // fight -> orb -> grab loop keeps you fed AND a harvested MEAL (pk.food set higher by
+      // spawn_meal) fills you more than the loot you scavenge. An orb's default is 50 (the old
+      // flat rate), so this is bit-identical for orbs.
+      stats.hunger.current += pk.food;
       if (stats.hunger.current > stats.hunger.max) stats.hunger.current = stats.hunger.max;
 
       // Grabbing loot trains Scavenging -> Luck (deterministic XP, no RNG), so foraging

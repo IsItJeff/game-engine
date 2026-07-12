@@ -754,6 +754,54 @@ TEST_CASE("eating a loot orb refills hunger", "[sim]") {
   REQUIRE(!reg.valid(orb));                                          // and was consumed
 }
 
+TEST_CASE("harvesting a ripe crop drops a meal that fills more than a loot orb", "[sim]") {
+  // The food economy's seam: instead of grazing a patch bite-by-bite you HARVEST it — spending
+  // plot stock for one prepared MEAL that fills more hunger than the raw loot you'd scavenge.
+  entt::registry reg;
+  const entt::entity plot = reg.create();
+  reg.emplace<eng::sim::Transform>(plot, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::FoodSource>(plot);  // default: stock 100, radius 60 — ripe and in reach
+
+  const entt::entity farmer = reg.create();
+  reg.emplace<eng::sim::Transform>(farmer, eng::Vec2{10.0f, 0.0f});  // within the plot's radius
+  auto& stats = reg.emplace<eng::sim::Stats>(farmer);
+  stats.hunger.current = 0.0f;  // starving, so the whole refill is visible (not capped away)
+
+  REQUIRE(eng::sim::harvest_nearest_crop(reg, farmer));         // a ripe plot in reach yields
+  REQUIRE(reg.get<eng::sim::FoodSource>(plot).stock < 100.0f);  // ...paid for from the plot's stock
+
+  auto meals = reg.view<eng::sim::Pickup>();
+  REQUIRE(meals.size() == 1);                                      // exactly one meal dropped
+  REQUIRE(reg.get<eng::sim::Pickup>(meals.front()).food > 50.0f);  // worth more than an orb's 50
+
+  eng::sim::collect_pickups(reg, 1.0f / 60.0f);                      // eat it (farmer stands on it)
+  REQUIRE(reg.get<eng::sim::Stats>(farmer).hunger.current > 50.0f);  // a fuller meal than an orb
+}
+
+TEST_CASE("a bare or out-of-reach crop cannot be harvested", "[sim]") {
+  // Two ways a harvest yields nothing: the patch is too bare to bother (stock below the cost), or
+  // it is out of reach. Either way no meal appears and the plot is left untouched.
+  entt::registry reg;
+  const entt::entity bare = reg.create();
+  reg.emplace<eng::sim::Transform>(bare, eng::Vec2{0.0f, 0.0f});
+  eng::sim::FoodSource low{};
+  low.stock = 10.0f;  // below the harvest cost — not ripe enough to gather
+  reg.emplace<eng::sim::FoodSource>(bare, low);
+
+  const entt::entity ripe_far = reg.create();
+  reg.emplace<eng::sim::Transform>(ripe_far, eng::Vec2{500.0f, 0.0f});  // full but far out of reach
+  reg.emplace<eng::sim::FoodSource>(ripe_far);
+
+  const entt::entity farmer = reg.create();
+  reg.emplace<eng::sim::Transform>(farmer,
+                                   eng::Vec2{0.0f, 0.0f});  // on the bare plot, far from ripe
+
+  REQUIRE_FALSE(eng::sim::harvest_nearest_crop(reg, farmer));  // nothing ripe within reach
+  REQUIRE(reg.view<eng::sim::Pickup>().size() == 0);           // no meal spawned
+  REQUIRE(reg.get<eng::sim::FoodSource>(bare).stock ==
+          Approx(10.0f));  // the bare plot is untouched
+}
+
 TEST_CASE("a hungry NPC eats a food orb too, like the player", "[sim]") {
   entt::registry reg;
   const entt::entity npc = reg.create();

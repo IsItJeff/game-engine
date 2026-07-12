@@ -629,6 +629,22 @@ void World::apply_command(const Command& cmd) {
       }
       break;
     }
+    case CommandKind::Harvest: {
+      // Work a ripe food plot in reach into a MEAL at your feet — the food economy's seam, via the
+      // shared harvest_nearest_crop (the same one an NPC farmer will call, so they gather
+      // identically). Match the commanding player, skip a downed one. Collect-then-act like Drop:
+      // harvest_nearest_crop spawns a meal (emplacing Transform), which can realloc the pool this
+      // view walks, so gather the harvesters first and harvest AFTER the walk.
+      std::vector<entt::entity> harvesters;
+      auto players = registry_.view<PlayerControlled, Transform>();
+      for (const entt::entity p : players) {
+        if (players.get<PlayerControlled>(p).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(p)) continue;  // helpless — can't harvest
+        harvesters.push_back(p);
+      }
+      for (const entt::entity p : harvesters) harvest_nearest_crop(registry_, p);
+      break;
+    }
   }
 }
 

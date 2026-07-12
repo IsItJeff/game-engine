@@ -193,6 +193,13 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer);
 // after integrate_motion (positions current). steer_npcs walks the unarmed ones to a blade first.
 void npc_equip(entt::registry& reg);
 
+// Gather the nearest ripe food plot within reach into a MEAL at the harvester's feet — the food
+// economy's seam: a prepared meal (spawn_meal) fills more hunger than grazing the same stock raw.
+// Spends a chunk of the plot's stock; a plot too bare to bother yields nothing. Returns whether a
+// crop was harvested. THE one definition shared by the player's Harvest command and (later) an NPC
+// farm behaviour, so the two harvest identically (the player==NPC parity guardrail).
+bool harvest_nearest_crop(entt::registry& reg, entt::entity harvester);
+
 // Advance progression, the whole "learn by doing" chain in one pass over every
 // entity with Skills + Attributes + Stats + Velocity + CharacterLevel: activity
 // earns XP for the skill it trains, that skill's main attribute, AND a fraction to
