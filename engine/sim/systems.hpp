@@ -81,6 +81,14 @@ void drain_water(entt::registry& reg, float dt);
 // to. Downed bodies and creatures don't drink. (P6.)
 void drink(entt::registry& reg, float dt);
 
+// Tick the Fatigue need — the THIRD survival Need, and the one that RECOVERS with rest. Every
+// person loses fatigue while exerting (moving, faster sprinting — the same rest<walk<sprint tiers
+// the other needs use) and regains it while standing still. Unlike hunger/water it self-recovers,
+// so it's the "you can't run forever" pressure rather than a "feed me" one. Clamped to [0, max].
+// The empty- collapse consequence and the sit/sleep faster-rest tiers are follow-up slices; this is
+// the seam.
+void tick_fatigue(entt::registry& reg, float dt);
+
 // Tend the food plots and feed grazers: every FoodSource regrows its stock a little each tick, then
 // hands food to nearby hungry people (refilling hunger, DEPLETING the plot). A picked-bare plot
 // can't feed until it regrows — the design's renewable-but-finite food production. (P6.)

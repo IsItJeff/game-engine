@@ -671,6 +671,16 @@ struct Stats {
   // as starving. Falls independently of hunger, so a colonist can be watered yet starving, or vice
   // versa.
   Vital water{100.0f, 100.0f, 0.0f};  // falls over time; 0 = dehydrating
+  // The THIRD survival Need, Fatigue — and the odd one out: unlike hunger/water (which only ever
+  // fall, refilled by eating/drinking), fatigue RECOVERS with REST. It falls as you EXERT (walk,
+  // sprint — the same tiers the other needs use) and rises when you stand still, so it's the "you
+  // can't run forever" pressure that the sprint you already pay stamina for now also costs in the
+  // long run. `tick_fatigue` owns it (regen 0 here so the generic regenerate_vitals leaves it
+  // alone). 0 = exhausted; the COLLAPSE-at-empty consequence and the sit/sleep faster-rest tiers
+  // are the next slices — this field + drain/recover is the seam. Appended LAST so every positional
+  // Stats{Vital
+  // ...} init (health only) default-fills it, bit-identical.
+  Vital fatigue{100.0f, 100.0f, 0.0f};  // falls while exerting, rises at rest; 0 = exhausted
 };
 
 // How hard a character can fight given how FED and WATERED it is — the design's "an empty Need is
