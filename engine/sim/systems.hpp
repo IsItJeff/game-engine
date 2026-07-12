@@ -200,6 +200,12 @@ void npc_equip(entt::registry& reg);
 // farm behaviour, so the two harvest identically (the player==NPC parity guardrail).
 bool harvest_nearest_crop(entt::registry& reg, entt::entity harvester);
 
+// Sow a new crop SEEDLING where the planter stands — the FRONT of the food chain (plant -> grow ->
+// harvest -> meal). It is a FoodSource like the wild garden but starts with zero stock, so it feeds
+// no one until the existing regrow (graze) grows it ripe. Returns the new crop entity. Actor-
+// agnostic and public: the one call the player's Plant command and a later NPC farmer both make.
+entt::entity plant_crop(entt::registry& reg, entt::entity planter);
+
 // Advance progression, the whole "learn by doing" chain in one pass over every
 // entity with Skills + Attributes + Stats + Velocity + CharacterLevel: activity
 // earns XP for the skill it trains, that skill's main attribute, AND a fraction to

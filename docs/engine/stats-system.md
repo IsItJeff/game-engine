@@ -325,9 +325,22 @@ patch too bare to bother (`stock` below the harvest cost) yields nothing — no 
 Every `Pickup` now carries its own `food` value, so one `collect_pickups` feeds you whether it's an
 orb (50, the old flat rate → bit-identical) or a meal (more). `harvest_nearest_crop` is
 actor-agnostic — the same call an NPC farm behaviour will use later — so the player and the colony
-will harvest identically, the parity every Need keeps. This is the seam of the food economy the three
-needs pressure you toward: crop → harvest → meal, with planting, cooking and stored larders growing
-from here.
+will harvest identically, the parity every Need keeps.
+
+### Planting: sow your own garden
+
+Harvesting works a crop you *found*. **Planting** lets you make one. Press **T** (a `Plant` command
+through the same funnel) and `plant_crop` sows a new `FoodSource` **seedling** where you stand — a
+crop like the wild garden but starting with **zero stock**, so it feeds no one yet. It grows on the
+*same* regrow that recovers a grazed patch (`graze` tops every plot up each tick), so about half a
+minute later it has ripened past the harvest cost and **G** turns it into a meal. That closes the
+loop end to end: **plant → grow → harvest → meal**, each step reusing the machinery of the one before
+it — planting is quite literally "spawn a `FoodSource` that starts bare". `plant_crop` is
+actor-agnostic like `harvest_nearest_crop`, so a later NPC farmer sows exactly as you do.
+
+This is the seam of the food economy the three needs pressure you toward. Cooking (better meals from
+raw ones), seed costs and stored larders grow from here; for now planting is free and uncapped — a
+sandbox to build the garden in.
 
 ## Extending it
 

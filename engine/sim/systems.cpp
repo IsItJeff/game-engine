@@ -2491,6 +2491,30 @@ bool harvest_nearest_crop(entt::registry& reg, entt::entity harvester) {
   return true;
 }
 
+// Sow a crop seedling where the planter stands — the front of the food chain. A FoodSource like the
+// wild garden, but it starts EMPTY (stock 0): it feeds no one until the same regrow that recovers a
+// grazed patch (graze) grows it up to ripe (~half a minute at the default 2/stock/s), at which
+// point harvest_nearest_crop turns it into a meal. So planting reuses the growth and harvest
+// machinery already there — the whole new mechanic is "spawn one that starts bare". A dull
+// young-green dot so a seedling reads as not-yet-food next to the bright wild garden. ponytail:
+// free to plant, no seed cost or per-player cap — a sandbox seam; add scarcity (a seed item, a plot
+// limit) when the economy needs it to matter.
+entt::entity plant_crop(entt::registry& reg, entt::entity planter) {
+  constexpr float kCropRadius = 45.0f;  // a tilled patch's reach — a knob
+  const Transform* pt = reg.try_get<Transform>(planter);
+  if (pt == nullptr) return entt::null;  // nowhere to sow — no phantom crop at the origin
+  const Vec2 pos = pt->position;         // copy BEFORE create reallocates the Transform pool
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.35f, 0.45f, 0.15f}, kCropRadius);  // a young, dull-green sprout
+  FoodSource fs{};
+  fs.stock = 0.0f;  // a SEEDLING — nothing to eat yet; the regrow must grow it before it ripens
+  fs.radius = kCropRadius;
+  reg.emplace<FoodSource>(e, fs);
+  return e;
+}
+
 // Spawn a Weapon on the ground at `pos` — the ONE canonical dropped-weapon entity (a
 // steel-grey dot + Weapon), so a slain BRUTE's drop (handle_deaths) and a player's Drop
 // command produce an identical, re-wieldable pickup. Public so both callers share this one
