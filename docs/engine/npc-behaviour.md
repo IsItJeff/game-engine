@@ -313,6 +313,29 @@ arrives to hunt.
     blend many influences, and this is deliberately the one-decision version. Write
     the concrete thing first; add the blend on the second real need.
 
+### Terrain: a mire drags on whatever the ladder chose
+
+The steer ladder decides a *direction and speed*; the **ground** then gets a say. A **`MireZone`** — a
+boggy patch of mud — is the first piece of terrain that touches movement: `slow_in_mire` scales the
+velocity of anyone standing in it by the mire's `slow_factor` (**0.4** = a crawl to ~40% speed). It is
+**not a rung** — it doesn't decide *where* to go, it drags on the choice already made, so a colonist
+fleeing, foraging, or charging across the mud all bog down the same way. It slows **player, NPC, and
+creature alike** — mud doesn't care who you are, which makes it *tactical* from both sides: lead a
+charging brute through it to gain ground, or get caught fleeing across it. The one exception is the
+ambient **motes** (`Hazard` drifters): they're the one mover nothing re-drives each tick, so slowing
+them *in place* would compound to a dead stop they never recover from — the mire is **agent** terrain
+(things that re-choose their heading each frame), so a mote just drifts on through (`exclude<Hazard>`).
+
+The **ordering is load-bearing**: `slow_in_mire` runs *after* every velocity-setter (the command
+funnel, `steer_npcs`, `npc_guard`, `chase_prey`) and *just before* `integrate_motion`, so it scales the
+*final* velocity — the one about to be applied. Those setters overwrite velocity fresh each tick, so
+stepping off the mud restores full speed next frame with no drag to undo, and the slow composes
+**multiplicatively** with the exhaustion crawl and the equip-heft that are already baked in (a tired,
+armoured colonist in a bog is slower still). Overlapping mires don't stack — the **stickiest** (smallest
+`slow_factor`) wins, applied once, so it stays deterministic. With **no `MireZone`** placed the slow
+view is empty and every velocity is untouched — a world without mud moves exactly as before,
+bit-identical.
+
 ## What to expect
 
 Spawn a mote (`Space`) near the green dots in the demo and watch them scatter — fleeing
@@ -344,9 +367,10 @@ then act, is what stays.
 ## Key files
 
 - `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / defend / forage / drink / retreat-to-hearth-or-fire / arm-up / avoid-cold / avoid-grudge / **warrior-hunt** / rally / bond / hearth-gather ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, defend, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius **and** (proportionally) the hearth-gather radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, a **defend** rung (just below the downed-rescue) rushes an idle colonist toward a **bonded friend** a creature is bearing down on (`affinity ≥ kBondPull`, a creature within `kDefendThreatRadius`), an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — a **bond** rung (below rally) pulls it toward a bonded friend it likes, and a lowest **hearth-gather** rung ambles a sociable idle colonist to the nearest fire; the ladder's first **proactive** want, a **warrior-hunt** rung (just above rally), sends an idle colonist that carries an `Aspiration` of kind `Warrior` charging the nearest creature within `kHuntRange` (`npc_attack` lands the blows on arrival); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
-- `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `Aspiration` + `AspirationKind` (the first proactive drive, default-absent so it's dormant until seeded). `engine/sim/world.cpp` — `make_npc` sets `Personality` (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`, and a *brave* one is given the `Warrior` `Aspiration`).
-- `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`) and `npc_equip` (after it).
-- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player; a downed villain is neither feared nor rescued — the villain-veto, in both steer and `handle_deaths`), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally, and the **warrior-hunt** (an idle `Warrior` charges the nearest creature; without the aspiration it stays put; and fear outranks the hunt).
+- `engine/sim/systems.hpp` / `systems.cpp` — `slow_in_mire` (the terrain drag: scale the velocity of anyone standing in a `MireZone` by its `slow_factor`; runs *after* every velocity-setter and *before* `integrate_motion`; the stickiest overlapping mire wins, applied once; empty view when no mire → bit-identical).
+- `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `Aspiration` + `AspirationKind` (the first proactive drive, default-absent so it's dormant until seeded); `MireZone` (boggy terrain, default-absent scenery). `engine/sim/world.cpp` — `make_npc` sets `Personality` (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`, and a *brave* one is given the `Warrior` `Aspiration`); `make_mire` places the bog (one west of centre in `build_scene`).
+- `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`), `slow_in_mire` (between `chase_prey` and `integrate_motion`), and `npc_equip` (after it).
+- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player; a downed villain is neither feared nor rescued — the villain-veto, in both steer and `handle_deaths`), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally, the **warrior-hunt** (an idle `Warrior` charges the nearest creature; without the aspiration it stays put; and fear outranks the hunt), and the **mire** (velocity scales inside a bog but not outside; overlapping mires apply the stickiest factor once).
 
 ## Go deeper
 

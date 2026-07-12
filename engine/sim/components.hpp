@@ -786,6 +786,18 @@ struct ColdZone {
   float radius = 0.0f;
 };
 
+// A MIRE — a boggy patch (mud, quicksand) that DRAGS on anyone crossing it. Where the ColdZone
+// drains a Need, this touches MOVEMENT: while an entity stands inside the radius, `slow_in_mire`
+// scales its velocity for that tick by `slow_factor` (< 1), so people AND creatures alike bog down
+// — neutral terrain that reshapes a chase or a flight (lead a charging brute through the mud to
+// gain ground) without blocking passage. Scenery (Transform + a murky render disc + this); no
+// Stats/Velocity. Default-absent: with none placed the slow-view is empty and every velocity is
+// untouched, so a world without a mire moves exactly as before — bit-identical.
+struct MireZone {
+  float radius = 0.0f;
+  float slow_factor = 0.4f;  // velocity multiplier inside — 0.4 = crawl to ~40% speed. A knob.
+};
+
 // A fixed food plot — a berry patch / garden a hungry character GRAZES to refill hunger (the
 // `graze` system). Unlike the water pond it is FINITE: `stock` falls as colonists eat and REGROWS
 // over time toward `max_stock`, so a picked-over patch must recover — the seed of the design's food

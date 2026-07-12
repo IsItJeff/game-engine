@@ -1054,6 +1054,49 @@ void chase_prey(entt::registry& reg) {
   }
 }
 
+void slow_in_mire(entt::registry& reg) {
+  // Bog down anyone standing in a MIRE. For every AGENT-mover (Transform + Velocity, minus ambient
+  // Hazard motes — see below), if its position is inside any MireZone, scale this tick's velocity
+  // by that mire's slow_factor — so it crawls across the mud this frame. It slows PLAYER, NPC, and
+  // CREATURE alike — mud doesn't care who you are (nice parity, and it makes a mire tactical from
+  // both sides: kite a brute through it, or get caught fleeing across it).
+  //
+  // ORDERING IS LOAD-BEARING: this MUST run AFTER every velocity-setter (apply_command's
+  // MovePlayer, steer_npcs, npc_guard, chase_prey) and BEFORE integrate_motion — it scales the
+  // FINAL velocity of the tick, the one integrate_motion is about to apply. Those systems re-DECIDE
+  // (overwrite) velocity every tick from scratch, so the slow is applied fresh each frame from a
+  // clean base: step out of the mud and you're back to full speed next tick, no lingering drag to
+  // undo. It composes MULTIPLICATIVELY with the other velocity scales already baked in (the
+  // exhaustion crawl, the equip heft) — a tired, armoured colonist in a bog is slower still,
+  // correct.
+  //
+  // WHY exclude<Hazard>: that "re-decided fresh each tick" invariant is what makes multiplying in
+  // place safe. Ambient MOTES (the Hazard drifters) are the ONE mover nothing re-drives — their
+  // velocity is set ONCE at spawn and never rewritten (player/steer/chase/guard all skip them).
+  // Slow them in place and the ×slow_factor would COMPOUND every tick to a dead stop they never
+  // recover from — motes piling up frozen in the mud. So the mire is AGENT terrain (things that
+  // re-choose their heading each tick); a mote just drifts through. Excluding Hazard is also why
+  // the invariant above holds universally for what's left.
+  //
+  // If two mires overlap, the STICKIEST (smallest slow_factor) wins — one multiply, and picking the
+  // min is order-independent, so overlapping scenery stays deterministic. No MireZone in the scene
+  // -> the inner view is empty -> factor stays 1.0 -> no multiply -> bit-identical. No RNG.
+  auto mires = reg.view<MireZone, Transform>();
+  auto movers = reg.view<Transform, Velocity>(entt::exclude<Hazard>);
+  for (const entt::entity e : movers) {
+    const Vec2 pos = movers.get<Transform>(e).position;
+    float factor = 1.0f;  // 1.0 = clear ground; the deepest mud it's standing in drags it down most
+    for (const entt::entity z : mires) {
+      const MireZone& mire = mires.get<MireZone>(z);
+      if (glm::distance(pos, mires.get<Transform>(z).position) <= mire.radius &&
+          mire.slow_factor < factor) {
+        factor = mire.slow_factor;
+      }
+    }
+    if (factor < 1.0f) movers.get<Velocity>(e).value *= factor;
+  }
+}
+
 void integrate_motion(entt::registry& reg, float dt) {
   // The classic update: new position = old position + velocity * time. Runs over
   // every entity that has both a Transform and a Velocity, and no others — that

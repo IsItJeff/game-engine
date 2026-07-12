@@ -314,6 +314,66 @@ TEST_CASE("an exhausted colonist crawls too: NPC steer speed drops at 0 stamina"
   REQUIRE(spent < rested);  // ...but slower when exhausted
 }
 
+TEST_CASE("a mire drags on anyone crossing it: velocity scales inside but not outside", "[sim]") {
+  // The mire's core: slow_in_mire scales this tick's velocity by the mire's slow_factor for a mover
+  // STANDING in it, and leaves a mover on firm ground untouched (the bit-identity gate — no mire in
+  // reach, no drag). A creature entity (just Transform + Velocity here) proves the parity: mud
+  // slows whoever crosses it, player or NPC or beast alike.
+  const auto vx_after = [](bool inside) {
+    entt::registry reg;
+    const entt::entity mire = reg.create();
+    reg.emplace<eng::sim::Transform>(mire, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::MireZone>(mire, eng::sim::MireZone{100.0f, 0.4f});
+    const entt::entity mover = reg.create();
+    reg.emplace<eng::sim::Transform>(mover, inside ? eng::Vec2{20.0f, 0.0f}  // well within radius
+                                                   : eng::Vec2{500.0f, 0.0f});  // far clear of it
+    reg.emplace<eng::sim::Velocity>(mover, eng::Vec2{100.0f, 0.0f});
+    eng::sim::slow_in_mire(reg);
+    return reg.get<eng::sim::Velocity>(mover).value.x;
+  };
+  REQUIRE(vx_after(true) == Approx(40.0f));    // inside -> 100 * 0.4 = a crawl
+  REQUIRE(vx_after(false) == Approx(100.0f));  // outside -> untouched (bit-identical)
+}
+
+TEST_CASE("the stickiest mud wins: overlapping mires apply the smallest factor once", "[sim]") {
+  // Overlapping mires don't STACK (that would compound to 0.5*0.3 = 0.15) — the deepest mud (the
+  // smallest slow_factor) wins and is applied exactly ONCE, so the slow is order-independent and
+  // bounded. A mover sitting under both a 0.5 and a 0.3 mire crawls at 0.3, not 0.15.
+  entt::registry reg;
+  const entt::entity shallow = reg.create();
+  reg.emplace<eng::sim::Transform>(shallow, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::MireZone>(shallow, eng::sim::MireZone{100.0f, 0.5f});
+  const entt::entity deep = reg.create();
+  reg.emplace<eng::sim::Transform>(deep, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::MireZone>(deep, eng::sim::MireZone{100.0f, 0.3f});
+  const entt::entity mover = reg.create();
+  reg.emplace<eng::sim::Transform>(mover, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(mover, eng::Vec2{100.0f, 0.0f});
+
+  eng::sim::slow_in_mire(reg);
+
+  REQUIRE(reg.get<eng::sim::Velocity>(mover).value.x == Approx(30.0f));  // 100 * 0.3, applied once
+}
+
+TEST_CASE("a drifting mote sails through the mire: ambient hazards are not bogged", "[sim]") {
+  // The mire is AGENT terrain. An ambient Hazard mote is the one mover nothing re-drives each tick
+  // (its velocity is set once at spawn), so slowing it IN PLACE would compound to a permanent stop.
+  // slow_in_mire excludes Hazard for exactly that reason — a mote drifts through the mud untouched.
+  // This pins that choice: remove the exclude and a mote inside a mire would (wrongly) be slowed.
+  entt::registry reg;
+  const entt::entity mire = reg.create();
+  reg.emplace<eng::sim::Transform>(mire, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::MireZone>(mire, eng::sim::MireZone{100.0f, 0.4f});
+  const entt::entity mote = reg.create();
+  reg.emplace<eng::sim::Transform>(mote, eng::Vec2{20.0f, 0.0f});  // squarely inside the mire
+  reg.emplace<eng::sim::Velocity>(mote, eng::Vec2{100.0f, 0.0f});
+  reg.emplace<eng::sim::Hazard>(mote);  // ...but it's an ambient mote, not an agent
+
+  eng::sim::slow_in_mire(reg);
+
+  REQUIRE(reg.get<eng::sim::Velocity>(mote).value.x == Approx(100.0f));  // undragged: drifts on
+}
+
 TEST_CASE("hunger drains over time and never self-recovers", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();
