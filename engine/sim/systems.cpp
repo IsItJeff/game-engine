@@ -2875,6 +2875,7 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
         arm.defence_bonus * arm.quality;  // finer plate softens more; bane stays full
     eq.stamina_regen_penalty = arm.stamina_regen_penalty;
     eq.armour_durability = arm.durability;  // fresh plate starts with its full life; blows wear it
+    eq.armour_thorns = arm.thorns_per_hit;  // a warded plate folds its spikes in (raw, like venom)
   }
   return nearest;
 }
@@ -3079,6 +3080,28 @@ void spawn_keen_steel(entt::registry& reg, Vec2 pos, float quality) {
   // move_penalty keeps its default 0.25 (full heft, bane untouched), and quality scales the reduced
   // +Strength boon exactly like any fine steel.
   w.quality = quality;
+}
+
+// A plate that rolled WARDED (spiked) — armour's FIRST flavourful trait, the defensive twin of
+// venomous/keen steel. It trades a notch of raw defence (kWardedDefence, below plain plate's 6) for
+// THORNS: every creature blow it absorbs reflects kWardedThorns back onto the attacker
+// (resolve_creature_contacts), so a warded tank punishes a swarm for hitting it — a distinct payoff
+// (chip-back vs a blade's proc) feeding a stand-and-tank build, never pure-upside (the spikes are
+// paid for in -defence, atop plate's unchanged stamina-regen bane). Reuses the whole shipped armour
+// path: the equip fold copies thorns_per_hit into Equipped.armour_thorns, resolve_creature_contacts
+// reflects it — NOTHING new in equip. A distinct cold spiked-iron tint so it reads apart from plain
+// bronze plate.
+void spawn_warded_armour(entt::registry& reg, Vec2 pos, float quality) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.5f, 0.55f, 0.6f}, 6.0f);  // cold spiked-iron grey (its own tint)
+  Armour& a = reg.emplace<Armour>(e);
+  a.defence_bonus = kWardedDefence;  // plain plate's 6 down two — the paired -defence trade
+  a.thorns_per_hit = kWardedThorns;  // ...bought with spikes: chip back per blow soaked (the boon)
+  // stamina_regen_penalty keeps its default (full bane), and quality scales the reduced defence
+  // boon exactly like any fine plate.
+  a.quality = quality;
 }
 
 void decay_standing(entt::registry& reg) {
@@ -3797,12 +3820,27 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // defence, so the breaking blow was still softened. Equipped isn't in the prey view, so this
       // is view-safe like the Poisoned emplace above.
       if (Equipped* pg = reg.try_get<Equipped>(p); pg != nullptr && pg->armour_durability > 0.0f) {
+        // WARDED (thorns): a spiked plate REFLECTS a flat chip back onto the creature that just
+        // struck it — armour's first flavourful trait, the defensive twin of a venom blade's proc.
+        // It routes through the creature's OWN Stats (like the guard's riposte), so a thorns hit
+        // that lands the last blow reaps it via handle_deaths (loot still drops); it credits NO
+        // Valor (passive — the beast breaks itself on your spikes, not a blow you threw). A plain
+        // plate (armour_thorns 0, every plate spawned today) reflects nothing, so an unwarded world
+        // is bit-identical. Reuses the `pg` fetched for wear and the creature `c` in scope; no RNG.
+        if (pg->armour_thorns > 0.0f) {
+          if (Stats* cs = reg.try_get<Stats>(c); cs != nullptr) {
+            cs->health.current -= pg->armour_thorns;
+            if (cs->health.current < 0.0f) cs->health.current = 0.0f;
+            stamp_flash(reg, c);  // the pricked creature blinks too, so the thorns read
+          }
+        }
         pg->armour_durability -= 1.0f;
         if (pg->armour_durability <=
             0.0f) {  // plate shattered — clear the armour slot, keep a weapon
           pg->defence_bonus = 0.0f;
           pg->stamina_regen_penalty = 0.0f;
           pg->armour_durability = 0.0f;
+          pg->armour_thorns = 0.0f;  // the spikes go with the shattered plate
           remove_equipped_if_empty(reg, p, *pg);
         }
       }

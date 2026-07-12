@@ -460,6 +460,10 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // nimbler hits that envenom the foe. A brute's steel drop is the raw-power alternative, and a
   // slain spitter drops another of these, so the poison build has a renewable source too.
   spawn_venom_weapon(reg, Vec2{center.x - 120.0f, center.y + 60.0f});
+  // A WARDED plate (spiked-iron dot) north of centre — armour's trait counterpart to the venom
+  // blade: E it for a stand-and-tank build that soaks a little less but chips back every creature
+  // that hits you. Placed clear of the mire (west) and cold zone (east) so it's a clean third pick.
+  spawn_warded_armour(reg, Vec2{center.x, center.y - 160.0f});
   return player;
 }
 

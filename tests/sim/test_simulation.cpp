@@ -6410,6 +6410,60 @@ TEST_CASE("worn armour softens a creature's blow", "[sim]") {
   REQUIRE(arm_dmg > 0.0f);             // ...but never negates (mitigate's floor still lands a hit)
 }
 
+TEST_CASE("a warded plate is a named armour trait: thorns bought with a notch of defence",
+          "[sim]") {
+  // Armour's FIRST flavourful trait, the defensive twin of venomous/keen steel. Equipping a warded
+  // plate folds its thorns into the wearer AND soaks LESS than a plain plate — the paired downside
+  // that keeps it from being pure-upside.
+  const auto equip = [](bool warded) {
+    entt::registry reg;
+    if (warded)
+      eng::sim::spawn_warded_armour(reg, eng::Vec2{0.0f, 0.0f});
+    else
+      eng::sim::spawn_armour(reg, eng::Vec2{0.0f, 0.0f});
+    const entt::entity wearer = reg.create();
+    reg.emplace<eng::sim::Transform>(wearer, eng::Vec2{0.0f, 0.0f});  // on the plate -> in reach
+    eng::sim::equip_nearest_gear(reg, wearer);
+    return reg.get<eng::sim::Equipped>(wearer);  // a VALUE copy — no dangling into local storage
+  };
+  const eng::sim::Equipped warded = equip(true);
+  const eng::sim::Equipped plain = equip(false);
+  REQUIRE(warded.armour_thorns == Approx(eng::sim::kWardedThorns));  // its spikes fold in...
+  REQUIRE(plain.armour_thorns == Approx(0.0f));                      // ...a plain plate has none
+  REQUIRE(warded.defence_bonus < plain.defence_bonus);               // ...bought with less defence
+}
+
+TEST_CASE("a warded plate chips a creature that strikes it: the thorns reflect", "[sim]") {
+  // A warded plate REFLECTS a flat chip onto any creature whose blow it absorbs (the defensive twin
+  // of a venom blade's proc). A plain-armour wearer reflects nothing — the bit-identity gate. The
+  // wearer isn't Blocking, so no riposte is in play; the thorns are the ONLY thing that harms the
+  // creature here.
+  const auto creature_hp_lost = [](float thorns) {
+    entt::registry reg;
+    const entt::entity wearer = reg.create();
+    reg.emplace<eng::sim::Transform>(wearer, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(wearer);       // 100 HP, survives the softened blow
+    reg.emplace<eng::sim::Attributes>(wearer);  // DEX 1 -> never dodges, so the blow always lands
+    eng::sim::Equipped eq{};
+    eq.defence_bonus = 6.0f;
+    eq.stamina_regen_penalty = 0.30f;
+    eq.armour_durability = 5.0f;  // plate intact, so it absorbs (and reflects) this blow
+    eq.armour_thorns = thorns;
+    reg.emplace<eng::sim::Equipped>(wearer, eq);
+    const entt::entity creature = reg.create();
+    reg.emplace<eng::sim::Transform>(creature, eng::Vec2{0.0f, 0.0f});  // in reach -> it swings
+    reg.emplace<eng::sim::Enemy>(creature);
+    reg.emplace<eng::sim::Stats>(creature);  // full HP -> the thorns chip it (and no enrage)
+    const float before = reg.get<eng::sim::Stats>(creature).health.current;
+    std::mt19937 rng{1234};
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return before - reg.get<eng::sim::Stats>(creature).health.current;
+  };
+  REQUIRE(creature_hp_lost(eng::sim::kWardedThorns) ==
+          Approx(eng::sim::kWardedThorns));         // reflected
+  REQUIRE(creature_hp_lost(0.0f) == Approx(0.0f));  // a plain plate chips the attacker for nothing
+}
+
 TEST_CASE("armour wears as it soaks blows and shatters: the plate's bane bites both ways",
           "[sim]") {
   // The defensive twin of weapon durability — a creature blow the plate softens wears it by one,
