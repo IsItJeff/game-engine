@@ -593,8 +593,10 @@ void World::apply_command(const Command& cmd) {
         if (players.get<PlayerControlled>(p).player != cmd.player) continue;
         if (registry_.all_of<Downed>(p)) continue;  // helpless — can't drop
         Equipped& eq = players.get<Equipped>(p);
-        if (eq.strength_bonus == 0 && eq.move_penalty == 0.0f && eq.weapon_venom == 0.0f)
-          continue;  // no weapon to shed
+        if (eq.strength_bonus == 0 && eq.move_penalty == 0.0f && eq.weapon_venom == 0.0f &&
+            eq.crit_bonus == 0.0f)
+          continue;  // no weapon to shed (crit_bonus included so a keen slot always counts as
+                     // armed)
         droppers.push_back(p);
       }
       for (const entt::entity p : droppers) {
@@ -605,7 +607,8 @@ void World::apply_command(const Command& cmd) {
         Equipped& eq = registry_.get<Equipped>(p);
         eq.strength_bonus = 0;  // clear ONLY the weapon slot; the heft is shed...
         eq.move_penalty = 0.0f;
-        eq.weapon_venom = 0.0f;  // ...and the venom with it
+        eq.weapon_venom = 0.0f;  // ...and the venom with it...
+        eq.crit_bonus = 0.0f;    // ...and a keen blade's crit edge too (drop = undo equip)
         // ...and if nothing's left worn (no armour either), drop the now-empty cache entirely
         // so the "wielding" HUD clears and MovePlayer/perform_attack see a bare character.
         if (eq.defence_bonus == 0.0f && eq.stamina_regen_penalty == 0.0f) {

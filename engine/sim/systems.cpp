@@ -1617,7 +1617,7 @@ namespace {
 // logic (world.cpp) — shared here by the two shatters so they can never drift.
 void remove_equipped_if_empty(entt::registry& reg, entt::entity e, const Equipped& eq) {
   if (eq.strength_bonus == 0 && eq.move_penalty == 0.0f && eq.weapon_venom == 0.0f &&
-      eq.weapon_durability == 0.0f && eq.defence_bonus == 0.0f &&
+      eq.crit_bonus == 0.0f && eq.weapon_durability == 0.0f && eq.defence_bonus == 0.0f &&
       eq.stamina_regen_penalty == 0.0f && eq.armour_durability == 0.0f) {
     reg.remove<Equipped>(e);
   }
@@ -1873,7 +1873,15 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // is earned (by scavenging loot — see collect_pickups). Creatures have LCK 1, so they
   // never crit, exactly as they never dodge or train — a fixed floor, not a trained stat.
   constexpr float kCritMultiplier = 2.0f;  // a crit doubles the blow (ponytail: a knob)
-  const float crit = crit_chance(attrs->luck.level);
+  // A KEEN blade lifts the crit CHANCE: its crit_bonus adds to the Luck-driven crit, so a keen
+  // wielder crits more often — the second named weapon trait's proc. A plain/unarmed attacker has
+  // gear_crit 0, so `crit` is exactly crit_chance(luck) and every existing fight is bit-identical
+  // (nothing draws that didn't before). Capped at kCritChanceCeiling so even a keen blade in a
+  // lucky hand can't crit every swing — the doubled blow stays a spike, not the norm.
+  constexpr float kCritChanceCeiling = 0.75f;  // Luck + keen can lift crit, but never past 3/4
+  const float gear_crit = gear != nullptr ? gear->crit_bonus : 0.0f;
+  float crit = crit_chance(attrs->luck.level) + gear_crit;
+  if (crit > kCritChanceCeiling) crit = kCritChanceCeiling;
   const float applied =
       (crit > 0.0f && unit(rng) < crit) ? base_damage * kCritMultiplier : base_damage;
 
@@ -1985,6 +1993,8 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       gear->strength_bonus = 0;
       gear->move_penalty = 0.0f;
       gear->weapon_venom = 0.0f;
+      gear->crit_bonus =
+          0.0f;  // a shattered keen blade loses its crit edge with the rest of its slot
       gear->weapon_durability = 0.0f;
       // ...and if nothing else is worn, REMOVE the now-empty cache so "bare" reads as gear ==
       // nullptr everywhere (else a shattered NPC, gated on Equipped presence, never re-arms).
@@ -2264,6 +2274,7 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
     eq.strength_bonus = static_cast<int>(static_cast<float>(wpn.strength_bonus) * wpn.quality);
     eq.move_penalty = wpn.move_penalty;
     eq.weapon_venom = wpn.venom_per_second;  // a venom blade folds its proc in with its other stats
+    eq.crit_bonus = wpn.crit_bonus;          // a keen blade folds its crit chance in the same way
     eq.weapon_durability = wpn.durability;  // a fresh blade starts with its full life; hits wear it
   } else {
     const Armour& arm = armours.get<Armour>(nearest);
@@ -2379,6 +2390,27 @@ void spawn_venomous_steel(entt::registry& reg, Vec2 pos, float quality) {
       kVenomousVenomPerSecond;  // ...bought with a modest envenoming proc (the boon)
   // move_penalty keeps its default 0.25 (steel's full heft — the bane is untouched, quality lifts
   // only the upside), and quality scales the reduced +Strength boon exactly like any fine steel.
+  w.quality = quality;
+}
+
+// A steel blade that rolled KEEN (the SECOND named weapon trait). The crit sibling of venomous
+// steel: same full 0.25 heft, same one-notch Strength trade (kKeenStrength), but the boon is a CRIT
+// chance bonus (kKeenCritBonus) instead of venom. perform_attack folds crit_bonus into the Luck
+// crit, so a keen blade lands the doubled blow more often — a distinct proc (crit vs poison)
+// feeding a different (Luck) build, never pure-upside (the +crit is paid for in -Strength atop
+// steel's heft). A distinct pale-gold "honed edge" dot so it reads apart from plain steel, the
+// venom fang and venomous steel.
+void spawn_keen_steel(entt::registry& reg, Vec2 pos, float quality) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.85f, 0.82f, 0.55f},
+                         6.0f);  // pale-gold honed edge (its own tint)
+  Weapon& w = reg.emplace<Weapon>(e);
+  w.strength_bonus = kKeenStrength;  // steel's +4 down one notch — the paired -STR trade
+  w.crit_bonus = kKeenCritBonus;     // ...bought with a sharper edge: more crit (the boon)
+  // move_penalty keeps its default 0.25 (full heft, bane untouched), and quality scales the reduced
+  // +Strength boon exactly like any fine steel.
   w.quality = quality;
 }
 
@@ -2724,25 +2756,35 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
   // replays identically. Orb + venom drops stay baseline 1.0 (no draw). ponytail: one band for both
   // fine kinds; a per-archetype band is the refinement if a sentinel should out-roll a brute.
   //
-  // A fine STEEL drop also rolls the VENOMOUS trait. That decision is a single RAW drop_rng_ draw
-  // taken BEFORE the quality draw (see the inline note below for why order matters) — a portable
-  // mt19937 uint compare, NOT a uniform_real, so which drops come out venomous is identical on
-  // every stdlib, unlike the quality band. ~15% of fine steel becomes a heavy poison blade
-  // (spawn_venomous_steel: +venom, one notch less Strength, the same full heft). It reuses the
-  // entire shipped venom path, so equip/combat are untouched. Only STEEL rolls it — the fang is
-  // already venomous and the orb/armour are other kinds.
+  // A fine STEEL drop also rolls a named TRAIT. That decision is a single RAW drop_rng_ draw taken
+  // BEFORE the quality draw (see the inline note below for why order matters) — a portable mt19937
+  // uint compare, NOT a uniform_real, so which drops come out venomous/keen is identical on every
+  // stdlib, unlike the quality band. ~15% become a heavy poison blade (spawn_venomous_steel:
+  // +venom, -1 Strength) and another ~15% a razor-keen blade (spawn_keen_steel: +crit, -1
+  // Strength); the rest are plain. Both reuse shipped mechanics (venom -> Poisoned; the Luck crit),
+  // so equip/combat need almost nothing new. Only STEEL rolls a trait — the fang is already
+  // venomous, orb/armour are other kinds.
   std::uniform_real_distribution<float> fine_quality{kFineQualityMin, kFineQualityMax};
   for (const entt::entity e : dead) reg.destroy(e);
   for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);  // swarmer sustain
   for (const Vec2& pos : weapon_drops) {
-    // Draw the VENOMOUS decision FIRST, as a raw mt19937 uint compare: raw engine output is bit-
-    // PORTABLE across stdlibs, so which drops come out venomous is identical on every platform (the
+    // Roll the TRAIT first, as a raw mt19937 uint compare: raw engine output is bit-PORTABLE across
+    // stdlibs, so which drops come out venomous/keen is identical on every platform (the
     // uniform_real quality draw that follows is NOT portable — it's only ever band-tested). Drawing
-    // it first also lets a fresh-seeded test pin the variant deterministically.
-    const bool venomous = rng() < kVenomousDropThreshold;
+    // it first also lets a fresh-seeded test pin the variant deterministically. The two traits are
+    // MUTUALLY EXCLUSIVE — a drop is plain OR venomous OR keen, never both — so no two traits stack
+    // on one item and no traits[] list is needed: one draw splits the range into a venomous band, a
+    // keen band just past it, then plain (the ~70% remainder).
+    // `auto`, NOT uint32_t: std::mt19937::result_type is uint_fast32_t, which is 64-bit on some
+    // stdlibs (libstdc++) — assigning it to a uint32_t narrows and trips -Wshorten-64-to-32
+    // -Werror. The VALUE is always in [0, 2^32), so the threshold compares below are identical on
+    // every platform regardless of the storage width.
+    const auto roll = rng();
     const float q = fine_quality(rng);  // then the rolled quality (band-tested, not exact)
-    if (venomous)
-      spawn_venomous_steel(reg, pos, q);  // rare venomous variant (heavy poison blade)
+    if (roll < kVenomousDropThreshold)
+      spawn_venomous_steel(reg, pos, q);  // heavy poison blade (-STR, +venom)
+    else if (roll < kVenomousDropThreshold + kKeenDropThreshold)
+      spawn_keen_steel(reg, pos, q);  // razor blade (-STR, +crit)
     else
       spawn_weapon(reg, pos, q);  // plain steel (today's path)
   }

@@ -222,6 +222,21 @@ inline constexpr int kVenomousStrength = 3;  // steel's +4 knocked down one notc
 inline constexpr float kVenomousVenomPerSecond =
     4.0f;  // a modest chip on a heavy steel base (a knob)
 
+// The SECOND named weapon trait: a fine steel drop can instead roll KEEN — a razor blade that lands
+// the doubled crit more often (perform_attack adds this to the Luck crit chance), bought with the
+// same one-notch Strength trade as venomous — a distinct PROC (crit vs poison), a different build.
+// This is the point where a trait needs a FIELD (crit is not expressible through an existing Weapon
+// field, unlike venom), so Weapon/Equipped each gain a `crit_bonus` (appended LAST, default 0 ->
+// bit-identical). Still NO traits[] list: the variants are MUTUALLY EXCLUSIVE (a drop is plain OR
+// venomous OR keen), so no two traits stack on one item — a list only earns its place when they
+// must. Rolled off the same dedicated drop stream as venomous, the decision a PORTABLE raw draw.
+// Knobs.
+inline constexpr std::uint32_t
+    kKeenDropThreshold =  // ~15% too; sits just past the venomous band in
+    static_cast<std::uint32_t>(0.15 * 4294967296.0);  // the one raw draw (see handle_deaths)
+inline constexpr int kKeenStrength = 3;  // steel's +4 down one notch — the paired -STR trade
+inline constexpr float kKeenCritBonus = 0.15f;  // +15% crit chance while wielded (a knob)
+
 // React to death. A player at 0 health goes DOWNED — helpless where they fell for a
 // timer (`dt` counts it down); a living ally within reach revives them in place, else on
 // expiry they respawn at `respawn_point`. An NPC or creature at 0 health is destroyed —
@@ -298,6 +313,13 @@ void spawn_venom_weapon(entt::registry& reg, Vec2 pos);
 // The canonical grounded venomous-steel entity so a future player-Drop stays parity-clean. Draws no
 // RNG (the caller rolled).
 void spawn_venomous_steel(entt::registry& reg, Vec2 pos, float quality = 1.0f);
+
+// Spawn a KEEN STEEL blade — a fine steel weapon that rolled the keen trait (handle_deaths). Like
+// venomous steel it keeps steel's full heft and trades one notch of Strength (+3), but the boon is
+// CRIT (kKeenCritBonus) rather than venom — a razor edge that lands the doubled blow more often,
+// feeding a Luck/crit build. The canonical grounded keen-steel entity so a future player-Drop stays
+// parity-clean. Draws no RNG (the caller rolled).
+void spawn_keen_steel(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 
 // Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
 // player overlaps restores its `heal` health (capped) AND permanently raises max HP by

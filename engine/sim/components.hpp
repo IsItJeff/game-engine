@@ -566,6 +566,13 @@ struct Weapon {
   // is "how good the item is", mastery is "how well you wield it" — two independent axes. Last for
   // positional-init safety. (Rolled/per-source quality is a follow-up; this PR is the seam.)
   float quality = 1.0f;
+  // KEEN — the crit trait (the second named weapon trait; the design's "gear grants a +aspect"). If
+  // > 0 the blade adds this much CRIT CHANCE on top of the wielder's Luck-driven crit
+  // (perform_attack folds it in), so a keen blade lands the doubled blow more often — a distinct
+  // proc from the venom blade, feeding a Luck/crit build. Bought with a notch of raw Strength
+  // (spawn_keen_steel), so it is never pure-upside. 0 = a plain blade, bit-identical for anyone not
+  // wielding a keen one. Last for positional-init safety.
+  float crit_bonus = 0.0f;
 };
 
 // A dropped piece of ARMOUR — the first defensive item, the offense/defence counterpart of
@@ -614,6 +621,10 @@ struct Equipped {
   // shattered and cleared its slot). Last field — same positional-init and wear-free-fixture
   // guarantees as weapon_durability, so the armour-combat tests stay bit-identical.
   float armour_durability = 0.0f;
+  // The wielded blade's KEEN crit bonus, copied from Weapon::crit_bonus on equip and added to the
+  // Luck-driven crit chance in perform_attack. 0 = a plain blade (bit-identical). Last field, same
+  // positional-init and zero-fill guarantee as the durability fields above.
+  float crit_bonus = 0.0f;
 };
 
 // --- Stats system ---
