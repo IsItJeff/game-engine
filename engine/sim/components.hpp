@@ -218,6 +218,16 @@ struct Downed {
   float timer = 5.0f;  // seconds of helplessness before an unrescued respawn (a knob)
 };
 
+// A colonist ROUTED by grief: it just watched a bonded friend fall (handle_deaths emplaces this),
+// and for `remaining` seconds it PANICS — steer_npcs makes it sense danger from much farther, flee
+// even the CREATURES it would normally stand against, and bolt faster. The ACUTE morale beat on top
+// of grief's slow, permanent bravery drift — a friend's death shakes you for good AND panics you
+// now. tick_panic counts it down and removes it. No marker (the pre-bond world, and any survivor
+// who has not just lost a friend) -> steer_npcs is unchanged, so it is bit-identical.
+struct Panicked {
+  float remaining = 0.0f;  // seconds of rout left; tick_panic decrements, reaps at 0
+};
+
 // Presentation-only: how the debug renderer should draw this entity. The
 // simulation never reads this — it exists so the client has something to show.
 // Colours are 0..1 RGB.

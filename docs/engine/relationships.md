@@ -168,6 +168,15 @@ a price the day it breaks: **permadeath marks those left behind**, not just an e
 mourner flees a hazard sooner). Only a real friend-bond grieves — a mere acquaintance, or a dead
 rival, is no loss — the gate that keeps the pre-bond world bit-identical.
 
+Grief has an **acute** twin. Besides the permanent nerve-slip, the loss **panics** the survivor
+*now*: `handle_deaths` emplaces a `Panicked` marker for `kPanicDuration` (3 s), and while it lasts
+`steer_npcs` routs the colonist — it senses danger from much farther (a widened flee radius), **bolts
+faster**, and flees even the **creatures** it would normally stand and fight, until `tick_panic`
+counts the rout down and its nerve returns. So a friend's death both **shakes you for good** (the
+drift) and **breaks you for a moment** (the panic) — a mourner may drop its guard and run from the
+very fight that took its friend. No `Panicked` marker (anyone not freshly bereaved) → `steer_npcs` is
+unchanged, so it stays bit-identical.
+
 ## The tradeoffs
 
 - **Four events, a few readers.** No personality-match seeding (that's a later ring) and no

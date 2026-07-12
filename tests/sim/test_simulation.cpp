@@ -3059,6 +3059,42 @@ TEST_CASE("a bonded survivor grieves a fallen friend: permadeath shakes the livi
   REQUIRE(reg.get<eng::sim::Personality>(mourner).compassion == 20);
   // ...and the mere acquaintance did NOT grieve — its nerve holds at 20 (the bit-identity gate).
   REQUIRE(reg.get<eng::sim::Personality>(bystander).bravery == 20);
+  // ...and beyond the permanent nerve slip, the loss ROUTED the bonded mourner NOW — an acute Panic
+  // (the bystander, no real bond, keeps its composure).
+  REQUIRE(reg.all_of<eng::sim::Panicked>(mourner));
+  REQUIRE_FALSE(reg.all_of<eng::sim::Panicked>(bystander));
+}
+
+TEST_CASE("a panicked colonist flees a creature it would normally stand against", "[sim]") {
+  // The acute panic's teeth: routed, a colonist bolts even from the CREATURES it usually stands and
+  // fights (steer_npcs doesn't flee creatures otherwise). Same NPC + creature, only the marker
+  // differs.
+  const auto flees = [](bool panicked) {
+    entt::registry reg;
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{100.0f, 100.0f});
+    reg.emplace<eng::sim::Velocity>(npc);  // starts still
+    if (panicked) reg.emplace<eng::sim::Panicked>(npc, eng::sim::Panicked{3.0f});
+    const entt::entity creature = reg.create();
+    reg.emplace<eng::sim::Enemy>(creature);
+    reg.emplace<eng::sim::Transform>(creature, eng::Vec2{130.0f, 100.0f});  // right beside it
+    eng::sim::steer_npcs(reg);
+    return glm::length(reg.get<eng::sim::Velocity>(npc).value) > 0.0f;  // did it bolt?
+  };
+  REQUIRE_FALSE(flees(false));  // normally a colonist holds its ground against a creature...
+  REQUIRE(flees(true));         // ...but a panicked one flees it
+}
+
+TEST_CASE("panic wears off: tick_panic counts the rout down and clears it", "[sim]") {
+  // The panic is a brief acute state, not permanent — tick_panic ebbs it and the colonist recovers.
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Panicked>(npc, eng::sim::Panicked{0.5f});  // half a second of rout left
+  eng::sim::tick_panic(reg, 0.3f);
+  REQUIRE(reg.all_of<eng::sim::Panicked>(npc));  // 0.2s left -> still routed...
+  eng::sim::tick_panic(reg, 0.3f);
+  REQUIRE_FALSE(reg.all_of<eng::sim::Panicked>(npc));  // ...past 0.5s total -> recovered
 }
 
 TEST_CASE("an NPC steers away from a nearby hazard", "[sim]") {

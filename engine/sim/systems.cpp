@@ -115,6 +115,10 @@ constexpr int kDeedDriftStep = 2;
 // one of your own fall shakes you. Same small magnitude, so one lost friend costs about one brave
 // deed's worth of nerve. A tuning knob.
 constexpr int kGriefDrift = -kDeedDriftStep;
+// ...and its ACUTE twin: for this many seconds after a bonded friend falls, the survivor PANICS
+// (Panicked, read by steer_npcs, ticked down by tick_panic) — a short rout on top of the permanent
+// nerve slip above. A tuning knob.
+constexpr float kPanicDuration = 3.0f;
 
 // Nudge a bounded personality axis by a signed step, clamped to [-100, 100]. The single write
 // behind BOTH a deed's drift (record_deed) and a bereavement's grief (handle_deaths), so the two
@@ -330,7 +334,20 @@ void steer_npcs(entt::registry& reg) {
       }
       if (steadied > kSteadiedCap) steadied = kSteadiedCap;
     }
-    float nearest = kSenseRadius * (1.0f - bravery / 200.0f) * awareness * (1.0f - steadied);
+    // PANIC: a colonist that just watched a bonded friend fall (Panicked, emplaced by handle_deaths
+    // and counted down by tick_panic) is ROUTED for a few seconds — it senses danger from much
+    // farther (kPanicSenseBoost widens the flee radius) and BOLTS faster (kPanicSpeedBoost),
+    // overriding its usual nerve; it will even flee the CREATURES below, which it normally stands
+    // against. The ACUTE mirror of grief's slow, permanent bravery drift. No Panicked marker
+    // (anyone not freshly bereaved, every existing steer test) -> both factors 1.0 and no
+    // creature-flee -> bit-identical.
+    constexpr float kPanicSenseBoost = 1.8f;  // routed: flees threats from 80% farther...
+    constexpr float kPanicSpeedBoost = 1.4f;  // ...and bolts 40% faster
+    const bool panicked = reg.all_of<Panicked>(n);
+    const float panic_sense = panicked ? kPanicSenseBoost : 1.0f;
+    const float panic_speed = panicked ? kPanicSpeedBoost : 1.0f;
+    float nearest =
+        kSenseRadius * (1.0f - bravery / 200.0f) * awareness * (1.0f - steadied) * panic_sense;
     Vec2 threat{0.0f, 0.0f};
     bool sees_threat = false;
     for (const entt::entity h : hazards) {
@@ -367,11 +384,30 @@ void steer_npcs(entt::registry& reg) {
       }
     }
 
-    // Fear beats everything: flee straight away from a threat, ignoring ally and food alike.
+    // A PANICKED colonist also flees the CREATURES themselves — normally NPCs stand their ground
+    // and get chased (a creature is not a flee threat), but a rout bolts from the very monsters
+    // that felled its friend. Only while Panicked, so the ordinary fight is untouched
+    // (bit-identical). Reuses the `creatures` view the DEFEND rung already fetched, and the
+    // panic-widened `nearest`.
+    if (panicked) {
+      for (const entt::entity c : creatures) {
+        const Vec2 c_pos = creatures.get<Transform>(c).position;
+        const float d = glm::distance(pos, c_pos);
+        if (d < nearest) {
+          nearest = d;
+          threat = c_pos;
+          sees_threat = true;
+        }
+      }
+    }
+
+    // Fear beats everything: flee straight away from a threat, ignoring ally and food alike. A
+    // panic bolts faster (panic_speed).
     if (sees_threat) {
       const Vec2 away = pos - threat;
       const float len = glm::length(away);
-      if (len > 0.0f) npcs.get<Velocity>(n).value = (away / len) * kFleeSpeed * move_scale;
+      if (len > 0.0f)
+        npcs.get<Velocity>(n).value = (away / len) * kFleeSpeed * move_scale * panic_speed;
       continue;
     }
 
@@ -3116,8 +3152,16 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
     for (const Relation& edge : mourners.get<Relationships>(m).edges) {
       if (edge.affinity < kBondFriendAt || !reg.valid(edge.other)) continue;  // not a real friend
       const Stats* es = reg.try_get<Stats>(edge.other);
-      if (es != nullptr && es->health.current <= 0.0f && reg.all_of<Npc>(edge.other))
-        drift_axis(mourners.get<Personality>(m).bravery, kGriefDrift);  // each lost friend a blow
+      if (es != nullptr && es->health.current <= 0.0f && reg.all_of<Npc>(edge.other)) {
+        drift_axis(mourners.get<Personality>(m).bravery,
+                   kGriefDrift);  // each lost friend a blow...
+        // ...and an acute ROUT right now: the survivor panics for kPanicDuration seconds
+        // (steer_npcs flees harder + flees creatures, tick_panic counts it down).
+        // emplace_or_replace so losing a SECOND friend the same tick just refreshes the timer.
+        // Panicked is not in the `mourners` view (Personality+Relationships), so emplacing it
+        // mid-iteration is safe.
+        reg.emplace_or_replace<Panicked>(m, Panicked{kPanicDuration});
+      }
     }
   }
   // FINER loot from a TOUGHER kill: a brute's dropped steel and a sentinel's plate come out ABOVE
@@ -3513,6 +3557,22 @@ void tick_poison(entt::registry& reg, float dt) {
     if (venom.remaining <= 0.0f) cured.push_back(e);
   }
   for (const entt::entity e : cured) reg.remove<Poisoned>(e);
+}
+
+void tick_panic(entt::registry& reg, float dt) {
+  // Count down each routed colonist's PANIC and let it pass — the acute grief reaction wears off
+  // after a few seconds and the colonist recovers its nerve (steer_npcs stops boosting its flee).
+  // The timer twin of tick_poison: collect-then-remove so a reaped marker never invalidates the
+  // view mid-walk. No Panicked anywhere (every world without a fresh bereavement) -> the view is
+  // empty -> a no-op, bit-identical. Draws no RNG.
+  std::vector<entt::entity> recovered;
+  auto routed = reg.view<Panicked>();
+  for (const entt::entity e : routed) {
+    Panicked& p = routed.get<Panicked>(e);
+    p.remaining -= dt;
+    if (p.remaining <= 0.0f) recovered.push_back(e);
+  }
+  for (const entt::entity e : recovered) reg.remove<Panicked>(e);
 }
 
 void decay_flashes(entt::registry& reg, float dt) {
