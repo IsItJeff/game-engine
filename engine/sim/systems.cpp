@@ -1797,10 +1797,24 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
         // A cruel strike that KILLS escalates to VIOLENCE — the second villain deed, the death on
         // top of the harm. Only when the blow felled the colonist, so a non-lethal cruel strike
         // stays Cruelty-only and a world with no lethal cruelty is bit-identical. Sinks standing
-        // HARDER (Violence ×4 on top of Cruelty ×6) and lands the last reachable unfed ledger
-        // dimension. Same mid-iteration safety as the Cruelty deed above (record_deed touches no
-        // iterated view).
-        if (lethal) record_deed(reg, attacker, Deed::Violence, kViolenceKill);
+        // HARDER (Violence ×4 on top of Cruelty ×6). Same mid-iteration safety as the Cruelty deed
+        // above (record_deed touches no iterated view).
+        //
+        // But only UNJUST violence counts — the design's "violence counts only vs standing >= 0
+        // victims: killing bandits barely dents you". Felling an INNOCENT (a colonist at
+        // neutral-or- better standing) is the villain deed; felling one who has ALREADY gone bad —
+        // a below-zero standing earned through their OWN cruelty — is rough justice and adds no
+        // Violence. The Cruelty of the blow still lands either way (the strike WAS cruel); only the
+        // escalation is spared. `standing()` is a pure query over the victim's ledger; NO ledger ->
+        // standing 0 -> counts, which is every colonist in a normal colony, so the common case is
+        // bit-identical. ponytail: a victim only reaches below-zero standing once NPC-villain AI
+        // (or a villainous co-op player) exists, so this is dormant wiring today — but it keeps the
+        // Violence math faithful to the ledger the moment a wronged victim can be a wrongdoer
+        // themselves.
+        const BehaviorLedger* victim_led = reg.try_get<BehaviorLedger>(victim);
+        const bool victim_was_innocent = victim_led == nullptr || standing(*victim_led) >= 0;
+        if (lethal && victim_was_innocent)
+          record_deed(reg, attacker, Deed::Violence, kViolenceKill);
         // The betrayal is also PERSONAL: the struck colonist forms a GRUDGE toward the striker (a
         // negative affinity edge, the mirror of a rescue's bond). A resented player won't be
         // rescued by this colonist later — a targeted consequence that lands before global
