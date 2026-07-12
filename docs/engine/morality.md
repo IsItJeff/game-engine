@@ -133,9 +133,16 @@ twice (flee radius + rescue commitment), so a colonist that keeps fighting warms
 yellow and starts holding its ground — a character arc read from its deeds alone.
 
 Two guard-rails carry it. It uses `try_get`, **never** `get_or_emplace`: an actor with no
-`Personality` (the player, every creature) accrues the deed on its ledger but *stays*
-Personality-free, so the bit-identical absent-Personality world is preserved. And only the
-four wired deeds drift — the last two (Violence, Honesty) wire themselves the day their deeds land.
+`Personality` (every creature) accrues the deed on its ledger but *stays* Personality-free, so the
+bit-identical absent-Personality world is preserved. The **player** now carries a **neutral**
+`Personality` (the design's *"players start neutral, drift from deeds"*), so its own deeds reshape it
+too — a Valor kill warms it, a Cruelty strike hardens it. That stays sim-bit-identical because no sim
+system **reads** the *player's* Personality: `steer_npcs` (the only reader of a bravery axis) iterates
+the `Npc` view, and the player isn't an `Npc`. Its Personality *is* written — here, and by **grief**
+once the player has bonded (grief is a `<Personality, Relationships>` view a rescued player joins) —
+but those writes are sim-inert, so the drift is a **render-only** character arc: the player's blue dot
+warms with its deeds, nothing more. And only the four wired deeds drift — the last two (Violence,
+Honesty) wire themselves the day their deeds land.
 
 Drift isn't only earned by *your own* deeds — it can be dealt by **loss**. When a colonist
 you were truly bonded to (**Friend** or above, see [relationships](relationships.md)) is

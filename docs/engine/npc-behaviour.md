@@ -123,7 +123,9 @@ carries the design's first **P7** axis — **`bravery`** (an `int8` in `[-100, +
 **coward** (−100) senses a hazard from 1.5× as far and **bolts early**; a **brave** colonist
 (+100) shrinks its radius to half and **holds** until the hazard is nearly on top of it.
 Neutral `0` — or no `Personality` at all — is the base radius exactly, so this is bit-identical
-for anyone without a leaning (the player has none, and stays neutral). **Wisdom** widens that same
+for anyone without a leaning. (The player carries a *neutral* `Personality` now, but it isn't an
+`Npc`, so `steer_npcs` never reads it — this flee logic is untouched by the player either way.)
+**Wisdom** widens that same
 radius by a second, independent factor (`× (1 + (WIS−1)·0.05)`, capped at 2×, like the dodge/crit
 clamps) — bravery is your *nerve* (how close
 you let danger get), Wisdom is your *perception* (how far you see it coming), so a **wise coward** is

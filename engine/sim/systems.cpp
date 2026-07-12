@@ -2478,12 +2478,15 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
   // fallen softens you (Charity -> compassion), and its MIRROR, striking the helpless, hardens you
   // right back (Cruelty -> compassion DOWN). And because bravery is both the TINTED axis and the
   // one steer_npcs reads twice, a fighter visibly warms and holds its ground — a character arc from
-  // deeds alone. `try_get`, NEVER get_or_emplace: an entity with no Personality (the player, every
-  // creature) must STAY Personality-free, or the bit-identical absent-Personality world breaks.
-  // Four deeds drift now; the last two (Violence, Honesty) wire themselves the day they need to.
-  // Pure integer math (no RNG), clamped in int before the int8 cast so a long career can't
-  // overflow. Most deeds LIFT their axis; a VILLAIN deed lowers it (a negative step), so the
-  // ledger's hero/villain split shows up in the personality too.
+  // deeds alone. `try_get`, NEVER get_or_emplace: an entity with no Personality (every creature,
+  // and any bare test entity) drifts nothing and STAYS Personality-free, so the absent-Personality
+  // world is preserved. The PLAYER now carries a neutral Personality (build_scene), so its own
+  // deeds reshape it here too — and because no sim system reads the player's Personality, that
+  // stays a render-only character arc, not a mechanics change. Four deeds drift now; the last two
+  // (Violence, Honesty) wire themselves the day they need to. Pure integer math (no RNG), clamped
+  // in int before the int8 cast so a long career can't overflow. Most deeds LIFT their axis; a
+  // VILLAIN deed lowers it (a negative step), so the ledger's hero/villain split shows up in the
+  // personality too.
   if (Personality* p = reg.try_get<Personality>(actor)) {
     std::int8_t* axis = nullptr;
     int step = kDeedDriftStep;  // the default: a deed strengthens its leaning

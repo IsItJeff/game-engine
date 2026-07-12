@@ -82,9 +82,11 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
       rgb *= eng::sim::quality_sheen(arm->quality);
     }
 
-    // Personality tint: colour a colonist by its BRAVERY (warm = brave, cool = coward) so the
-    // build_scene spread reads on screen. Only NPCs carry Personality (the player and creatures
-    // don't), so the try_get guard alone scopes it — no special-casing needed.
+    // Personality tint: colour a character by its BRAVERY (warm = brave, cool = coward) so the
+    // build_scene spread reads on screen — and so does the PLAYER's own arc, now that it carries a
+    // Personality its deeds drift (a battle-hardened player's blue dot warms; creatures still carry
+    // none). Neutral bravery 0 is the identity, so a fresh player renders unchanged until a deed
+    // moves it. The try_get guard alone scopes it — no special-casing needed.
     if (const auto* pers = world.registry().try_get<eng::sim::Personality>(e)) {
       rgb *= eng::sim::personality_tint(pers->bravery);
     }
