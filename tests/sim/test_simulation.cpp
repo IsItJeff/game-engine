@@ -4932,8 +4932,11 @@ TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
   const entt::entity dropped_armour = *reg.view<eng::sim::Armour>().begin();
   REQUIRE(reg.get<eng::sim::Transform>(dropped_armour).position.x == Approx(sentinel_pos.x));
   REQUIRE(reg.get<eng::sim::Transform>(dropped_armour).position.y == Approx(sentinel_pos.y));
-  // ...and exactly ONE of the two weapons is envenomed (the spitter's fang, at its dps) — the
-  // brute's steel is plain — lying where the spitter fell.
+  // ...and exactly ONE of the two weapons is envenomed (the spitter's fang, at its 6.0 dps) — the
+  // brute's steel is plain — lying where the spitter fell. (A brute's steel can RARELY roll the
+  // venomous trait, at a distinct 4.0 dps; this fixed drop_rng_ seed rolls it PLAIN — a PORTABLE
+  // raw draw, so it's plain on every platform — keeping this archetype-loot check about DROP KIND,
+  // not the rare variant, which has its own tests below.)
   entt::entity fang = entt::null;
   int venom_count = 0;
   for (const entt::entity w : reg.view<eng::sim::Weapon>()) {
@@ -4984,7 +4987,9 @@ TEST_CASE("a brute's dropped steel is rolled fine: strength 4-5 and the bane unc
   // back to the baseline +4 (the int-truncation ceiling; armour's float defence shows every roll).
   // Either way the item is a finer ITEM (quality > 1.0) and never WORSE than a default blade, and
   // the bane rides along unchanged (quality lifts only the upside): move_penalty stays the full
-  // 0.25. Asserted as a range for the same cross-stdlib reason as the sentinel test.
+  // 0.25. Asserted as a range for the same cross-stdlib reason as the sentinel test. (This seed
+  // rolls the steel PLAIN — a PORTABLE raw draw, plain on every platform — so strength >= 4 holds;
+  // a venomous roll would be +3, and the rare venomous variant has its own tests below.)
   entt::registry reg;
   const eng::Vec2 pos{70.0f, 70.0f};
   const entt::entity brute = reg.create();
@@ -5032,6 +5037,71 @@ TEST_CASE("a fine drop's quality is rolled within its band and varies from kill 
 
   std::mt19937 rng_again{777};
   REQUIRE(drop_quality(rng_again) == q1);  // deterministic: the same seed replays the same roll
+}
+
+TEST_CASE("venomous steel is a named trait: venom bought with a notch of Strength the heft intact",
+          "[sim]") {
+  // The FIRST named equipment trait, tested at its canonical spawn (no roll). Venomous steel keeps
+  // steel's full 0.25 heft bane but trades one notch of raw Strength (kVenomousStrength = 3, under
+  // the default +4) for a venom proc — a paired +/-, NEVER pure-upside — and it folds through the
+  // SHIPPED venom path untouched: equip it and the Equipped cache carries the venom AND the
+  // quality-scaled reduced Strength. Distinct from the spitter's light fang (which drops BOTH its
+  // Strength and its heft for MORE venom + mobility).
+  entt::registry reg;
+  const eng::Vec2 pos{40.0f, 40.0f};
+  eng::sim::spawn_venomous_steel(reg, pos, 2.0f);  // quality 2.0 to prove the boon still scales
+  const eng::sim::Weapon& w = reg.get<eng::sim::Weapon>(*reg.view<eng::sim::Weapon>().begin());
+  REQUIRE(w.venom_per_second == Approx(eng::sim::kVenomousVenomPerSecond));  // the +aspect boon...
+  REQUIRE(w.venom_per_second > 0.0f);
+  REQUIRE(w.strength_bonus ==
+          eng::sim::kVenomousStrength);      // ...bought with the paired -STR trade...
+  REQUIRE(w.strength_bonus < 4);             // ...strictly under a default +4 blade...
+  REQUIRE(w.move_penalty == Approx(0.25f));  // ...and steel's FULL heft stays (the bane is intact)
+
+  const entt::entity wearer = reg.create();
+  reg.emplace<eng::sim::Transform>(wearer, pos);
+  const entt::entity grabbed = eng::sim::equip_nearest_gear(reg, wearer);
+  REQUIRE(reg.valid(grabbed));
+  const eng::sim::Equipped& eq = reg.get<eng::sim::Equipped>(wearer);
+  REQUIRE(eq.weapon_venom == Approx(eng::sim::kVenomousVenomPerSecond));  // venom folds through...
+  REQUIRE(eq.strength_bonus == static_cast<int>(eng::sim::kVenomousStrength *
+                                                2.0f));  // ...boon scaled by quality int(3*2)=6
+  REQUIRE(eq.move_penalty == Approx(0.25f));             // ...heft intact
+}
+
+TEST_CASE("a brute's fine steel sometimes rolls venomous always with its paired downside",
+          "[sim]") {
+  // Prove the drop loop ROLLS the trait: over many brute kills, SOME steel comes out venomous and
+  // some plain; every venomous one carries the paired trade (venom AND reduced Strength), every
+  // plain one is clean (+4, no venom), and all qualities stay in band. The venomous decision is a
+  // PORTABLE raw mt19937 draw (a fresh seed per kill, so each is the first raw output — identical
+  // on every stdlib), so the mix is deterministic cross-platform; the quality is band-tested, never
+  // an exact float. Rarity (~15%) means plain dominates.
+  int venomous = 0;
+  int plain = 0;
+  for (int i = 0; i < 200; ++i) {
+    std::mt19937 rng{static_cast<std::uint32_t>(1000 + i)};  // fresh PORTABLE seed per kill
+    entt::registry reg;
+    const entt::entity brute = reg.create();
+    reg.emplace<eng::sim::Transform>(brute, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(brute, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // dead
+    reg.emplace<eng::sim::Enemy>(brute).drop = eng::sim::DropKind::Weapon;
+    eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f, rng);
+    const eng::sim::Weapon& w = reg.get<eng::sim::Weapon>(*reg.view<eng::sim::Weapon>().begin());
+    REQUIRE(w.quality >= eng::sim::kFineQualityMin);
+    REQUIRE(w.quality < eng::sim::kFineQualityMax);  // every drop, venomous or plain, is in-band
+    if (w.venom_per_second > 0.0f) {
+      ++venomous;
+      REQUIRE(w.strength_bonus == eng::sim::kVenomousStrength);  // venomous -> the paired -STR...
+      REQUIRE(w.strength_bonus < 4);                             // ...never pure-upside
+    } else {
+      ++plain;
+      REQUIRE(w.strength_bonus == 4);  // plain steel keeps the full +4
+    }
+  }
+  REQUIRE(venomous > 0);      // the trait DOES roll...
+  REQUIRE(plain > 0);         // ...both outcomes appear...
+  REQUIRE(venomous < plain);  // ...but it stays RARE (~15%), so plain steel dominates
 }
 
 TEST_CASE("the Equip command wields the nearest weapon in reach", "[sim]") {

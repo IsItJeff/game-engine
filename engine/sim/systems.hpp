@@ -205,6 +205,23 @@ void advance_progression(entt::registry& reg);
 inline constexpr float kFineQualityMin = 1.1f;
 inline constexpr float kFineQualityMax = 1.4f;
 
+// A fine steel weapon drop can rarely roll a VENOMOUS variant — the first named equipment TRAIT: a
+// heavy steel blade that keeps its full heft bane but trades one notch of raw Strength for hits
+// that ENVENOM (reusing the whole already-wired venom -> Poisoned path). A NAMED intra-item trade
+// (poison build vs raw power) — the qualitative variety the flat boon/bane pairs lacked — with NO
+// new struct field and NO traits[] list (both premature: the Equipped comment already documents the
+// anti-list stance, and a list earns its place only when two named traits must stack on one item).
+// The variant decision is ONE raw mt19937 draw off the dedicated drop stream — PORTABLE across
+// stdlibs (unlike the uniform_real quality draw), so ~15% of fine steel drops come out venomous,
+// identically everywhere. ponytail: flat 15% for a brute's steel; a per-archetype chance is the
+// refinement if a spitter-kill steel should differ. The strength/venom/chance numbers are
+// calibration knobs.
+inline constexpr std::uint32_t kVenomousDropThreshold =  // ~15% of mt19937's full 2^32 output range
+    static_cast<std::uint32_t>(0.15 * 4294967296.0);
+inline constexpr int kVenomousStrength = 3;  // steel's +4 knocked down one notch (the paired -STR)
+inline constexpr float kVenomousVenomPerSecond =
+    4.0f;  // a modest chip on a heavy steel base (a knob)
+
 // React to death. A player at 0 health goes DOWNED — helpless where they fell for a
 // timer (`dt` counts it down); a living ally within reach revives them in place, else on
 // expiry they respawn at `respawn_point`. An NPC or creature at 0 health is destroyed —
@@ -273,6 +290,14 @@ void spawn_armour(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 // slain spitter's drop (handle_deaths) and the opening scene (build_scene), so both look and behave
 // identically — the same no-drift discipline as spawn_weapon. Draws no RNG.
 void spawn_venom_weapon(entt::registry& reg, Vec2 pos);
+
+// Spawn a VENOMOUS STEEL blade — a fine steel weapon that rolled the venomous trait
+// (handle_deaths). Distinct from spawn_venom_weapon's light fang: this keeps steel's FULL heft
+// (move_penalty 0.25) and trades only ONE notch of Strength (+3 not +4) for a modest venom, so it's
+// a HEAVY poison build, not a nimble one. `quality` scales its (reduced) boon like any fine steel.
+// The canonical grounded venomous-steel entity so a future player-Drop stays parity-clean. Draws no
+// RNG (the caller rolled).
+void spawn_venomous_steel(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 
 // Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
 // player overlaps restores its `heal` health (capped) AND permanently raises max HP by
