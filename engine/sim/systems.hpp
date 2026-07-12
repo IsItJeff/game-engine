@@ -175,8 +175,9 @@ void perform_throw(entt::registry& reg, entt::entity attacker);
 // hostile in range for an RNG-free chip, but gated on the LEARNED Spellcasting skill (magic is
 // taught, not innate) and spending MANA (mp), not stamina. INTELLECT scales its damage; casting
 // trains Spellcasting -> INT. A no-op if the caster hasn't learned it, nothing's in range, or the
-// mana bar is empty. Player-driven only; reuses the throw's Projectile primitive
-// (advance_projectiles delivers it). Draws no rng.
+// mana bar is empty. Actor-agnostic: the player casts it via the Cast command, an NPC via npc_cast
+// (the player==NPC parity). Reuses the throw's Projectile primitive (advance_projectiles delivers
+// it). Draws no rng.
 void magic_bolt(entt::registry& reg, entt::entity caster);
 
 // NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),
@@ -186,6 +187,14 @@ void magic_bolt(entt::registry& reg, entt::entity caster);
 // to perform_attack). MUST run after integrate_motion (positions current) and before
 // resolve_contacts (so a struck mote can't also land its hit).
 void npc_attack(entt::registry& reg, std::mt19937& rng);
+
+// NPCs cast: every Npc that has LEARNED Spellcasting and has a FULL mana bar flings a bolt at the
+// nearest hostile in range (via the shared magic_bolt), so a colonist mage casts exactly as the
+// player does — the caster twin of npc_attack, closing the player==NPC parity for magic. The
+// full-bar gate throttles it to a considered bolt then a recharge (no per-tick spam), and
+// magic_bolt no-ops with no target or no mana. MUST run after integrate_motion (positions current)
+// and before advance_projectiles (so a fresh bolt flies the same tick). Draws no RNG.
+void npc_cast(entt::registry& reg);
 
 // Wear the nearest dropped GEAR within reach of `wearer` — a Weapon or a piece of Armour,
 // whichever is closer — folding its mods into the matching SLOT of an Equipped cache and
@@ -356,10 +365,12 @@ void spawn_keen_steel(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 // uncollected (so drops from far-off kills don't pile up forever). Collect-then-destroy.
 void collect_pickups(entt::registry& reg, float dt);
 
-// Learn magic by READING: a player standing on a Spellbook gains the Spellcasting skill and the
-// tome is consumed — the design's "magic is learned, not innate" made a found-and-read loop.
-// Player-only for now; skips a caster who already knows the spell (the book is spent only on a real
-// lesson). Collect-then-destroy, like collect_pickups.
+// Learn magic by READING: ANY person (player OR NPC) standing on a Spellbook gains the Spellcasting
+// skill and the tome is consumed — the design's "magic is learned, not innate" made a
+// found-and-read loop, and the player==NPC parity (a colonist that finds a tome becomes a mage too,
+// which npc_cast then lets cast). Creatures carry no Skills so they never learn; Downed bodies are
+// excluded. Skips a reader who already knows the spell (a book is spent only on a real lesson).
+// Collect-then-destroy.
 void study_spellbooks(entt::registry& reg);
 
 }  // namespace eng::sim

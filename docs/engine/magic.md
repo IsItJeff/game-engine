@@ -39,9 +39,10 @@ whole "magic is taught, not innate" rule: a colonist who never learned it does n
 mana. And you **earn** it — the player starts *without* Spellcasting and learns it by **reading a
 `Spellbook`** (`study_spellbooks`): walk onto the arcane-violet tome `build_scene` places off to one
 side, and you gain the skill (the book is then consumed). So learning magic is a small quest — go
-find the tome — not a freebie at spawn. `study_spellbooks` is player-only for now and skips a caster
-who already knows the spell (a book is spent only on a real lesson); teaching it to NPCs, and learning
-*more* spells from further books or a mentor, are the next slices of the trunk.
+find the tome — not a freebie at spawn. `study_spellbooks` teaches **any person** — the player *and*
+an NPC (a colonist who finds a tome becomes a mage too, the player==NPC parity) — and skips a reader
+who already knows the spell (a book is spent only on a real lesson). Learning *more* spells from
+further books or a mentor is the next slice of the trunk.
 
 ### The first spell — `magic_bolt`
 
@@ -58,14 +59,17 @@ yellow bolt). What sets it apart:
   its bolts by casting them, the learn-by-doing loop that a throw uses for `Throwing → Dexterity`.
   See [progression](progression.md).
 
-Enemies only (a bolt never targets a colonist — villainy stays a deliberate melee choice), and
-player-only for now (there is no NPC caster yet). The kill credit and Valor flow through
-`advance_projectiles` exactly as a throw's do.
+Enemies only (a bolt never targets a colonist — villainy stays a deliberate melee choice). And it is
+**not player-only**: `npc_cast` has any NPC that has learned Spellcasting fling the *same* bolt at a
+hostile in range, on a full mana bar (a throttle to a considered shot, then a recharge — no per-tick
+spam). So a **colonist mage fights beside you** — the player==NPC parity the design wants. The kill
+credit and Valor flow through `advance_projectiles` exactly as a throw's do.
 
 ## What's next
 
-This is a seam, not the whole trunk. **Learning** now exists — a `Spellbook` you read — so growing
-from here: **more spells** (a heal, an area blast, each its own book), an **NPC caster** (and NPCs
-*learning* from tomes or a mentor, the parity the design wants), the **Focus / Attunement** skills
-that govern the mana pool's capacity and regen, and the **tech** branch (an Energy battery on gear,
+This is a seam, not the whole trunk. **Learning** and **NPC casters** now exist (a `Spellbook` you
+read, and a colonist mage that casts beside you). Growing from here: **more spells** (a heal, an area
+blast, each its own book), NPCs *seeking out* tomes or a **mentor** to teach them, the **Focus /
+Attunement** skills that govern the mana pool's capacity and regen, and the **tech** branch (an Energy
+battery on gear,
 the design's twin trunk). Each is a small add on this foundation.

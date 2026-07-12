@@ -382,9 +382,16 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
     // dial. Pure index expressions, NO rng draw, so the seeded streams stay bit-aligned. This
     // hand-authored spread is the OPENING showcase; ongoing reinforcements instead roll an
     // archetype + jitter.
-    make_npc(reg, pos, Vec2{vel(rng), vel(rng)}, (i * 2 - 3) * 30, (3 - i * 2) * 30,
-             ((i % 2) * 2 - 1) * 75, ((i / 2) * 2 - 1) * 80, ((1 - i / 2) * 2 - 1) * 80,
-             ((1 - i % 2) * 2 - 1) * 70);
+    const entt::entity npc =
+        make_npc(reg, pos, Vec2{vel(rng), vel(rng)}, (i * 2 - 3) * 30, (3 - i * 2) * 30,
+                 ((i % 2) * 2 - 1) * 75, ((i / 2) * 2 - 1) * 80, ((1 - i / 2) * 2 - 1) * 80,
+                 ((1 - i % 2) * 2 - 1) * 70);
+    // The FIRST opener colonist is a MAGE — it starts having LEARNED Spellcasting, so npc_cast has
+    // it fling a bolt at any creature that closes: a caster fighting BESIDE you from the opening
+    // frame, the player==NPC parity made visible. The others start unlearned and can pick up magic
+    // the same way you do — by reading the spellbook (study_spellbooks). No RNG draw, so the
+    // streams stay bit-aligned.
+    if (i == 0) reg.get<Skills>(npc).train(SkillId::Spellcasting);
   }
 
   // A few hostile creatures at the edges that hunt the nearest person (you or an NPC) — one of each
@@ -449,7 +456,8 @@ void World::step() {
   resolve_creature_contacts(registry_, dt, rng_);  // creatures swing; player may dodge (DEX)
   tick_poison(registry_, dt);                      // venom from a swarmer's bite chips health...
   creature_spit(registry_, dt);                    // ranged creatures launch a spit at a person...
-  advance_projectiles(registry_, dt);              // ...and thrown/spat shots fly home and land
+  npc_cast(registry_);                             // ...colonist mages fling a bolt at a hostile...
+  advance_projectiles(registry_, dt);  // ...and thrown/spat/cast shots fly home and land
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt,
                 drop_rng_);        // ...then 0-HP reaped (drop_rng_ rolls any fine loot quality)
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
