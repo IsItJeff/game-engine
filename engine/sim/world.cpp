@@ -327,6 +327,17 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   reg.emplace<Skills>(player);  // trains with activity; feeds Attributes (see advance_progression)
   reg.emplace<Attributes>(player);
   reg.emplace<CharacterLevel>(player);
+  // A NEUTRAL personality (all axes 0), the design's "players start neutral, drift from deeds": the
+  // player's own deeds now reshape it through the SAME record_deed drift that reshapes an NPC — a
+  // Valor kill hardens bravery, a Cruelty strike lowers compassion — so the human earns a visible
+  // character arc, not just the NPCs. This is sim-bit-identical because no sim system READS the
+  // player's Personality: steer_npcs (the only reader of a bravery axis) iterates the Npc view, and
+  // the player isn't an Npc. Its Personality IS written — by the drift here, and by grief once the
+  // player has bonded (the grief loop is a <Personality, Relationships> view, which a rescued
+  // player joins) — but those writes are sim-INERT (nothing reads them), so they land only as the
+  // renderer's tint. Neutral 0 is the identity in personality_tint too, so a fresh player renders
+  // unchanged.
+  reg.emplace<Personality>(player, Personality{});
 
   // Deterministic directions from the seeded PRNG so every run starts identically.
   std::uniform_real_distribution<float> vel(-80.0f, 80.0f);

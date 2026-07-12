@@ -1757,9 +1757,11 @@ TEST_CASE("a deed drifts the actor's matching personality axis, bounded and clam
 
 TEST_CASE("a deed on an entity with no Personality drifts nothing (stays Personality-free)",
           "[sim]") {
-  // Drift is try_get, never emplace: an actor without a Personality — the player, every creature —
-  // must accrue the deed on its ledger yet NOT sprout a Personality, or the bit-identical
-  // absent-Personality world would break.
+  // Drift is try_get, never emplace: an actor without a Personality — every creature, and any bare
+  // entity like this one — must accrue the deed on its ledger yet NOT sprout a Personality, or the
+  // bit-identical absent-Personality world would break. (The player DOES carry a neutral
+  // Personality now — build_scene gives it one — so it drifts; see the player-personality test
+  // below.)
   entt::registry reg;
   const entt::entity e = reg.create();  // no Personality
 
@@ -1769,6 +1771,29 @@ TEST_CASE("a deed on an entity with no Personality drifts nothing (stays Persona
           nullptr);  // the deed still landed on the ledger...
   REQUIRE(eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(e)) == 5);
   REQUIRE(reg.try_get<eng::sim::Personality>(e) == nullptr);  // ...but no Personality was conjured
+}
+
+TEST_CASE("the player spawns with a neutral Personality that its own deeds reshape", "[sim]") {
+  // The design's "players start neutral, drift from deeds". The player now carries a Personality
+  // (it used to be Personality-free), starting at all-zero neutral, so the SAME record_deed drift
+  // that reshapes an NPC finally reshapes the HUMAN — a Valor kill hardens bravery, a Cruelty
+  // strike lowers compassion. It's sim-bit-identical because no sim system READS the player's
+  // Personality: steer_npcs (the only bravery reader) is an Npc-view the player isn't in. The
+  // player's Personality IS written (here, and by grief once bonded), but sim-inertly — only the
+  // renderer tints by it — so this is a visible character arc, not a mechanics change.
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  const eng::sim::Personality* p0 = world.registry().try_get<eng::sim::Personality>(player);
+  REQUIRE(p0 != nullptr);     // the player HAS a Personality now...
+  REQUIRE(p0->bravery == 0);  // ...and it starts NEUTRAL (a blank slate the deeds will write)...
+  REQUIRE(p0->compassion == 0);
+
+  // A hero deed hardens bravery UP; a villain deed drifts compassion DOWN — the human on the same
+  // drift path as any NPC.
+  eng::sim::record_deed(world.registry(), player, eng::sim::Deed::Valor, 1);
+  REQUIRE(world.registry().get<eng::sim::Personality>(player).bravery > 0);
+  eng::sim::record_deed(world.registry(), player, eng::sim::Deed::Cruelty, 1);
+  REQUIRE(world.registry().get<eng::sim::Personality>(player).compassion < 0);
 }
 
 TEST_CASE("rescuing a downed ally records a Charity deed on the rescuer", "[sim]") {
