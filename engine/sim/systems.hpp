@@ -171,6 +171,14 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
 // no rng, so unlike perform_attack it takes none.
 void perform_throw(entt::registry& reg, entt::entity attacker);
 
+// The player's first SPELL — the MAGIC mirror of perform_throw: a homing bolt at the nearest
+// hostile in range for an RNG-free chip, but gated on the LEARNED Spellcasting skill (magic is
+// taught, not innate) and spending MANA (mp), not stamina. INTELLECT scales its damage; casting
+// trains Spellcasting -> INT. A no-op if the caster hasn't learned it, nothing's in range, or the
+// mana bar is empty. Player-driven only; reuses the throw's Projectile primitive
+// (advance_projectiles delivers it). Draws no rng.
+void magic_bolt(entt::registry& reg, entt::entity caster);
+
 // NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),
 // training Striking -> Strength just as the player does — so NPCs build Strength too,
 // not only Endurance. Complements steer_npcs (flee): a threat that closes to reach

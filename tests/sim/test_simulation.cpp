@@ -3169,6 +3169,113 @@ TEST_CASE("a thrown attack chips a distant creature and spends stamina", "[sim]"
           eng::Fixed{});  // trained Throwing -> DEX
 }
 
+TEST_CASE("a learned mage casts a bolt that chips a creature spends mana and trains Spellcasting",
+          "[sim]") {
+  // The first SPELL: the magic mirror of a throw. A caster who has LEARNED Spellcasting flings a
+  // homing bolt at a distant creature, spending MANA (not stamina) and training Spellcasting ->
+  // Intellect (the magic attribute) — a mage sharpens by casting like a thrower by throwing.
+  entt::registry reg;
+  const entt::entity mage = reg.create();
+  reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(mage);
+  reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);  // LEARNED to cast
+  reg.emplace<eng::sim::Stats>(mage);
+  const float mana_before = reg.get<eng::sim::Stats>(mage).mp.current;
+
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});  // past melee, in bolt range
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::magic_bolt(reg, mage);
+  eng::sim::advance_projectiles(reg, 1.0f);  // fly the launched bolt home (one big step)
+
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current < 40.0f);     // the bolt connected...
+  REQUIRE(reg.get<eng::sim::Stats>(mage).mp.current < mana_before);  // ...and spent mana...
+  REQUIRE(reg.get<eng::sim::Attributes>(mage).intellect.xp >
+          eng::Fixed{});  // ...training Spellcasting -> Intellect
+}
+
+TEST_CASE("an unlearned caster cannot cast: magic is learned not innate", "[sim]") {
+  // The LEARNED gate — the design's "magic is taught, not innate". A colonist with a full mana bar
+  // but no Spellcasting skill flings nothing: no bolt, no mana spent. This is what keeps a world of
+  // non-mages bit-identical to before magic existed.
+  entt::registry reg;
+  const entt::entity novice = reg.create();
+  reg.emplace<eng::sim::Transform>(novice, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(novice);
+  reg.emplace<eng::sim::Skills>(novice);  // NO Spellcasting -> never learned to cast
+  reg.emplace<eng::sim::Stats>(novice);
+  const float mana_before = reg.get<eng::sim::Stats>(novice).mp.current;
+
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::magic_bolt(reg, novice);
+
+  REQUIRE(reg.view<eng::sim::Projectile>().size() == 0);  // nothing cast (unlearned)...
+  REQUIRE(reg.get<eng::sim::Stats>(novice).mp.current == Approx(mana_before));  // ...no mana spent
+}
+
+TEST_CASE("an empty mana bar fizzles a cast: a bolt needs mana in hand", "[sim]") {
+  // The mana gate, the magic echo of an exhausted thrower fizzling. A learned mage drained to 0
+  // mana casts nothing — no bolt launched.
+  entt::registry reg;
+  const entt::entity mage = reg.create();
+  reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(mage);
+  reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);
+  reg.emplace<eng::sim::Stats>(mage).mp.current = 0.0f;  // drained -> can't afford a cast
+
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::magic_bolt(reg, mage);
+  REQUIRE(reg.view<eng::sim::Projectile>().size() == 0);  // an empty bar casts nothing
+}
+
+TEST_CASE("casting sharpens the bolt: Intellect levels from xp and lifts a bolt's damage",
+          "[sim]") {
+  // The full learn-by-doing loop, end to end, AND a regression guard for the 7th attribute:
+  // Spellcasting xp -> advance_progression LEVELS Intellect -> magic_bolt reads the higher level ->
+  // a harder bolt. Intellect must be banked into levels alongside the other six attributes (it was
+  // initially missed, so xp piled up but the level — and thus the bolt — never moved).
+  const auto bolt_damage = [](bool level_up) {
+    entt::registry reg;
+    const entt::entity mage = reg.create();
+    reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(mage);  // advance_progression's view requires it
+    reg.emplace<eng::sim::Attributes>(mage);
+    reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);
+    reg.emplace<eng::sim::Stats>(mage);
+    reg.emplace<eng::sim::CharacterLevel>(mage);
+    if (level_up) {
+      // A big lump of Intellect xp, then let advance_progression bank it into levels (the step that
+      // was missing for Intellect). A stationary mage earns nothing else, so only this xp banks.
+      reg.get<eng::sim::Attributes>(mage).intellect.xp = eng::Fixed::from_int(5000);
+      eng::sim::advance_progression(
+          reg);  // banks the xp into levels (the step Intellect had missed)
+      REQUIRE(reg.get<eng::sim::Attributes>(mage).intellect.level > 1);  // it actually leveled up
+    }
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{300.0f, 300.0f, 0.0f});  // survives the bolt
+    reg.emplace<eng::sim::Attributes>(foe);
+    reg.emplace<eng::sim::Enemy>(foe);
+    eng::sim::magic_bolt(reg, mage);
+    eng::sim::advance_projectiles(reg, 1.0f);
+    return 300.0f - reg.get<eng::sim::Stats>(foe).health.current;
+  };
+  REQUIRE(bolt_damage(true) > bolt_damage(false));  // a leveled-up mage's bolt hits harder
+}
+
 TEST_CASE("a defter thrower's bolt flies faster: dexterity's Speed aspect", "[sim]") {
   // DEX's design "Speed" aspect: a defter thrower launches a FASTER projectile, so it reaches the
   // target sooner and is wasted less often when the target dies mid-flight (advance_projectiles

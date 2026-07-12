@@ -228,6 +228,9 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
                 static_cast<double>(fa.max));
     ImGui::ProgressBar(fa.current /
                        fa.max);  // falls while exerting (worst sprinting), mends at rest
+    const eng::sim::Vital& mp = stats->mp;
+    ImGui::Text("mana: %.0f / %.0f", static_cast<double>(mp.current), static_cast<double>(mp.max));
+    ImGui::ProgressBar(mp.current / mp.max);  // spent by casting (C: bolt), regenerates at rest
   }
 
   // Progression: the attribute the player has grown, and progress toward the next
@@ -363,7 +366,12 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "harder but costs far more stamina (fell a brute in fewer swings, at the price of winding "
       "you faster). F: THROW at the nearest creature far out of melee reach — a "
       "modest but reliable chip that SPENDS STAMINA (soften an approaching swarm, but you can't "
-      "kite forever); it trains Throwing -> Dexterity. Standing to trade blows slowly trains "
+      "kite forever); it trains Throwing -> Dexterity. C: CAST a magic bolt at the nearest "
+      "creature "
+      "in range — the ranged twin that spends MANA instead of stamina and scales with Intellect; "
+      "you "
+      "start knowing it, and casting trains Spellcasting -> Intellect. Standing to trade blows "
+      "slowly trains "
       "Dexterity too, "
       "so before long some hits are dodged outright. Swing J at a peaceful COLONIST with no "
       "enemy in reach and you'll cut them down instead — a CRUEL act that sinks your standing "
@@ -430,6 +438,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool drop_was_down = false;
   bool harvest_was_down = false;
   bool plant_was_down = false;
+  bool cast_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -521,6 +530,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::plant(eng::sim::kLocalPlayer)});
     }
     plant_was_down = plant_raw;
+
+    // C, edge-triggered, CASTS a magic bolt at the nearest hostile in range — the player's first
+    // spell. It spends MANA (not stamina) and only works because the player has LEARNED it
+    // (Spellcasting); an empty mana bar or no target fizzles. Same funnel: a Cast command.
+    const bool cast_raw = keys[SDL_SCANCODE_C];
+    if (cast_raw && !cast_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::cast(eng::sim::kLocalPlayer)});
+    }
+    cast_was_down = cast_raw;
 
     // K, HELD (not edge-triggered), raises a GUARD: incoming creature blows are softened but you
     // move slower. A held stance rather than a one-shot action, so it rides the per-tick MovePlayer
