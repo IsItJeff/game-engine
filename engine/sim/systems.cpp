@@ -2666,7 +2666,8 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
     s.stamina.current = s.stamina.max;
     s.hunger.current = s.hunger.max;
     s.water.current = s.water.max;
-    reg.remove<Poisoned>(e);  // no lingering lethal status through a revive
+    s.fatigue.current = s.fatigue.max;  // and rested — else an EXHAUSTION collapse drops you again
+    reg.remove<Poisoned>(e);            // no lingering lethal status through a revive
     v.value = Vec2{0.0f, 0.0f};
   };
 
@@ -2678,7 +2679,12 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
     Downed* down = reg.try_get<Downed>(e);
 
     if (down == nullptr) {
-      if (s.health.current > 0.0f) continue;  // alive and standing — nothing to do
+      // TWO ways to fall: HP to 0 (a mortal blow / starvation / venom) OR fatigue to 0 (EXHAUSTION
+      // — the third need's consequence, the design's "empty -> Downed"). Either drops you, and the
+      // SAME Downed window follows: an exhausted player crumples even at full health, rescued or
+      // respawned exactly like a wounded one (revive restores fatigue too, so you don't drop
+      // straight back down). Standing AND rested -> nothing to do.
+      if (s.health.current > 0.0f && s.fatigue.current > 0.0f) continue;
       // Just fell: crumple WHERE you are, helpless. NO heal, NO teleport — that free
       // escape-to-safety was the old anti-climax; now you have to survive the window.
       reg.emplace<Downed>(e);

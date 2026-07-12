@@ -28,7 +28,7 @@ spent by moving and recovers by resting; running it dry slows the player to a
 crawl. Hunger only ever falls (you refill it by *eating*, not resting) and starves you at
 empty; **water** is its twin — it falls too, you refill it by *drinking* at a pond, and empty it
 dehydrates you. **Fatigue** is the odd third need — it falls as you *exert* and *recovers* as you
-rest (nothing reads it yet; the empty-collapse consequence is the next slice). Death is respawn for
+rest — and empty it **collapses** you (`Downed`, ally-rescuable, even at full health). Death is respawn for
 the player and permadeath — destruction — for NPCs.
 
 ## Why it's built this way
@@ -264,12 +264,14 @@ So the sprint you already pay for in stamina (seconds) now also costs in fatigue
 can't run forever" pressure, on a slow background timescale. It clamps to `[0, max]` (a rester never
 overflows full).
 
-This slice is the **seam**: the bar exists, moves, and shows in the debug HUD, but nothing *reads* it
-yet — so it is bit-identical (a new `Vital` appended last, a new system that touches only the new
-field). The consequences layer on next: an **empty-fatigue collapse** (`Downed`, ally-rescuable —
-exhaustion drops you where you stand, the design's *"empty → Downed"*), the deeper **sit/sleep**
-recovery tiers, and a growth source (gear + a Survivalist skill) that *lengthens* the timer without
-removing it.
+And empty it **collapses** you — the design's *"empty → Downed"*. At 0 fatigue a player crumples
+where they stand, **even at full health**, into the exact same `Downed` window a mortal blow opens:
+`handle_deaths` reuses its whole rescue-or-respawn mechanic, and the revive that brings you back
+resets fatigue along with the other vitals, so you don't drop straight back down. Exhaustion is thus
+a *recoverable* fall (ally-rescuable, or a timed respawn), not a death — the great equalizer the
+design wants. This is player-only for now, mirroring the `Downed` mechanic (an NPC's fatigue just
+sits at 0); the deeper **sit/sleep** recovery tiers and a growth source (gear + a Survivalist skill)
+that *lengthens* the timer are the remaining slices.
 
 ### Food plots: a renewable source
 

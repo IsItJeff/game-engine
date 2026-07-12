@@ -345,6 +345,35 @@ TEST_CASE("fatigue falls while exerting and recovers at rest (the third need)", 
           Approx(100.0f));  // a rester at full CLAMPS, never overflows max
 }
 
+TEST_CASE("exhaustion collapses a player: empty fatigue puts you Downed, a revive restores it",
+          "[sim]") {
+  // The design's "empty fatigue -> Downed": a player worn to 0 fatigue COLLAPSES (Downed, helpless)
+  // even at FULL health, reusing the whole Downed mechanic. And a revive/respawn brings them back
+  // WHOLE — fatigue included — so they don't drop straight back down (the revive-resets-needs
+  // guarantee, extended to the third need). Unlike an HP death, health is untouched, proving it's
+  // exhaustion, not a mortal blow.
+  entt::registry reg;
+  const eng::Vec2 centre{640.0f, 360.0f};
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, centre);
+  reg.emplace<eng::sim::Velocity>(player);
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  auto& s = reg.emplace<eng::sim::Stats>(player);
+  s.fatigue.current = 0.0f;  // worn to exhaustion — but health stays full
+
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // ...collapses this tick
+  REQUIRE(reg.all_of<eng::sim::Downed>(player));       // exhaustion put them Downed...
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current >
+          0.0f);  // ...at FULL health, not a death
+
+  // No ally near: a fat dt expires the ~5s Downed timer -> respawn whole, fatigue restored.
+  eng::sim::handle_deaths(reg, centre, 6.0f);
+  REQUIRE_FALSE(reg.all_of<eng::sim::Downed>(player));  // back on their feet...
+  REQUIRE(
+      reg.get<eng::sim::Stats>(player).fatigue.current ==
+      Approx(reg.get<eng::sim::Stats>(player).fatigue.max));  // ...and RESTED, so no re-collapse
+}
+
 TEST_CASE("an empty stomach starves health", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();
