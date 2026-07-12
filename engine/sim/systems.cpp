@@ -1574,6 +1574,9 @@ const SkillDef& skill_def(SkillId id) {
   // allies watch, bond_witnesses). Main-only, no contributors — a pure social strand, off the
   // fighter tree.
   static const SkillDef kLeadership{AttrId::Charisma, {}};
+  // Teaching is Leadership's INSTRUCTIONAL twin — both build Charisma, one by public heroism, the
+  // other by passing a mastered skill to a nearby novice (teach). A pure social strand, main-only.
+  static const SkillDef kTeaching{AttrId::Charisma, {}};
   // Guarding is Toughness's ACTIVE twin: where Toughness builds Endurance by SURVIVING a hit,
   // Guarding builds it by TURNING one with a raised guard — the second VIT skill fed by defence,
   // both main-only. So a guard-tank grows genuinely tougher by tanking.
@@ -1623,6 +1626,8 @@ const SkillDef& skill_def(SkillId id) {
       return kSurvivalist;
     case SkillId::Spellcasting:
       return kSpellcasting;
+    case SkillId::Teaching:
+      return kTeaching;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -1653,6 +1658,69 @@ void grant_skill_xp(Skills& skills, Attributes& attrs, SkillId id, Fixed base,
 }
 
 }  // namespace
+
+void teach(entt::registry& reg) {
+  // MENTORSHIP: a colonist that has grown FAR ahead in a skill passes it to a nearby one who trails
+  // — the design's "a higher-skill character teaches a lower one (boost XP)". So skills SPREAD
+  // through the colony, not only from each person's own toil: a veteran's apprentice picks up the
+  // craft standing beside them. The mentor grows its own TEACHING skill -> Charisma (leading by
+  // instruction, the second CHA feeder beside Leadership). Gated on a skill-level GAP that CANNOT
+  // exist at spawn — every skill starts at level 1, so no one is anyone's mentor until training
+  // diverges over a long run; a fresh or short-run world teaches nothing -> bit-identical.
+  // Player==NPC clean: any person teaches or learns (creatures have no Skills so they never
+  // qualify; Downed bodies are excluded). grant_skill_xp mutates only component VALUES (xp/level, a
+  // learned-skill push), never the entity's component SET, so mutating a student/mentor mid-walk
+  // can't invalidate the folk view. O(folk x (their skills + folk)) — the grief loop's shape.
+  // ponytail: a per-skill high-water index if the colony ever gets crowded.
+  constexpr float kMentorReach = 40.0f;  // how close you stand to learn — a lesson, not a shout
+  constexpr int kMentorLevel = 3;  // a mentor must be at least this good to have craft to pass
+  constexpr int kMentorGap = 2;    // ...and the student at least this many levels behind it
+  const Fixed kLessonPerTick = Fixed::from_ratio(15, 60);  // XP a student gains beside a mentor
+  const Fixed kTeachingPerTick =
+      Fixed::from_ratio(10, 60);  // ...and the mentor's own Teaching gains
+
+  auto folk = reg.view<Skills, Attributes, Transform, CharacterLevel>(entt::exclude<Enemy, Downed>);
+  for (const entt::entity mentor : folk) {
+    // The mentor's BEST skill — the one it has most to pass on (which, and at what level). Teaching
+    // ITSELF is skipped: you earn Teaching by DOING it (mentoring), never by being taught it, so a
+    // career mentor teaches its best CRAFT, not "teaches teaching" (which would let a novice
+    // acquire the skill passively, contradicting its earned-by-instruction flavour).
+    SkillId best = SkillId::Conditioning;
+    int best_level = 0;
+    for (const auto& [id, skill] : folk.get<Skills>(mentor).owned) {
+      if (id != SkillId::Teaching && skill.level > best_level) {
+        best_level = skill.level;
+        best = id;
+      }
+    }
+    if (best_level < kMentorLevel) continue;  // too green to teach anyone
+
+    // The nearest person within reach who trails the mentor in that skill by the gap (an unlearned
+    // skill counts as level 1 — a total novice, the keenest to learn).
+    const Vec2 mpos = folk.get<Transform>(mentor).position;
+    entt::entity student = entt::null;
+    float nearest = kMentorReach;
+    for (const entt::entity s : folk) {
+      if (s == mentor) continue;
+      const float d = glm::distance(mpos, folk.get<Transform>(s).position);
+      if (d >= nearest) continue;
+      const Skill* has = folk.get<Skills>(s).find(best);
+      const int s_level = has != nullptr ? has->level : 1;
+      if (s_level > best_level - kMentorGap)
+        continue;  // not far enough behind to gain from a lesson
+      nearest = d;
+      student = s;
+    }
+    if (student == entt::null) continue;  // no one nearby worth teaching this tick
+
+    // The lesson: the student gains XP in the mentor's best skill (learning it at level 1 if new,
+    // via grant_skill_xp), and the mentor grows TEACHING -> Charisma for passing it on.
+    grant_skill_xp(folk.get<Skills>(student), folk.get<Attributes>(student), best, kLessonPerTick,
+                   &folk.get<CharacterLevel>(student));
+    grant_skill_xp(folk.get<Skills>(mentor), folk.get<Attributes>(mentor), SkillId::Teaching,
+                   kTeachingPerTick, &folk.get<CharacterLevel>(mentor));
+  }
+}
 
 void advance_progression(entt::registry& reg) {
   constexpr float kHealthPerEndurance = 10.0f;  // how much tougher each point makes you

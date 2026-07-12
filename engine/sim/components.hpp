@@ -845,6 +845,9 @@ enum class SkillId : std::uint16_t {
                  // checks for it), so magic is learned-not-innate. Main attribute Intellect (the
                  // design's magic domain); trained by casting, and its main-attr feeds the INT that
                  // scales a bolt. Added LAST so existing SkillId values keep their numbers.
+  Teaching,  // trained by MENTORING — passing a skill you've mastered to a nearby novice (teach).
+             // Main attribute Charisma (the design's CHA "Teaching" skill, its 2nd feeder beside
+             // Leadership): leading by instruction. Added LAST so existing SkillId values hold.
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a

@@ -4,7 +4,7 @@
 
 Characters grow by *doing*. A **skill** improves with the activity that trains it,
 skills roll up into broad **attributes**, and attributes shape what you feel in play.
-Thirteen strands are wired end to end so far, across all seven attributes:
+Fourteen strands are wired end to end so far, across all seven attributes:
 
 - staying active trains **Conditioning**, **surviving damage** trains **Toughness**,
   **resting to recover** spent stamina trains **Recovery**, **turning a blow with a raised
@@ -64,6 +64,13 @@ Thirteen strands are wired end to end so far, across all seven attributes:
   level sharpens a bolt's damage, the arcane mirror of Strength on a swing. Magic is *learned*: only a
   caster who carries the Spellcasting skill can cast at all (see [magic](magic.md)), so Intellect grows
   by casting the way Strength grows by striking — but from a power you earned the right to use.
+- **teaching a nearby novice** (`teach`) trains **Teaching**, the **second** feeder of **Charisma**
+  beside Leadership — *leading by instruction*. This one is different in kind: it's the first strand a
+  colonist grows from **another person**, not its own toil. A colonist far ahead in a skill passes it
+  to a much-lower one standing near — the student gains XP in that skill (learning it if new), the
+  mentor grows Teaching → Charisma. So a craft **spreads** through the colony beside its master, not
+  only by each hand's own doing. It needs a real skill **gap** to fire (a mentor at level ≥ 3, a
+  student well behind), which can't exist at spawn — so it emerges only after a colony has veterans.
 
 The player and NPCs run the identical machinery — progression *and* combat — so a
 long-lived NPC that has moved, been hurt, and fought grows genuinely tougher and
