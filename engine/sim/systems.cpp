@@ -1068,7 +1068,8 @@ void drain_hunger(entt::registry& reg, float dt) {
   // on purpose: hunger empties over MINUTES, not seconds, so it's a background pressure
   // and long-running tests don't accidentally starve their entities. Tuning knobs.
   constexpr float kDrainPerSecond = 0.3f;          // at rest
-  constexpr float kExertionDrainPerSecond = 0.3f;  // added while moving
+  constexpr float kExertionDrainPerSecond = 0.3f;  // added while moving (walking)
+  constexpr float kSprintNeedExertion = 0.3f;      // added AGAIN while sprinting (the top tier)
   // Health lost per second once hunger hits 0. It no longer needs to out-race the self-heal:
   // regenerate_vitals GATES healing off while starving (hunger <= 0), so starvation nets a
   // character's health strictly downward at any regen rate — a structural guarantee, not the
@@ -1090,6 +1091,11 @@ void drain_hunger(entt::registry& reg, float dt) {
         v != nullptr && glm::length(v->value) > 0.0f) {
       drain += kExertionDrainPerSecond;  // moving costs extra
     }
+    // ...and a SPRINT costs extra AGAIN — the exertion tier above walking (rest < walk < sprint),
+    // the need-twin of update_stamina's sprint burn, so a dash across the map arrives hungrier than
+    // a walk. Sprinting is a player-set stance (MovePlayer); no Sprinting stance -> the walk drain
+    // -> bit-identical. A sprinter is always moving, so this stacks on the move tier.
+    if (reg.all_of<Sprinting>(e)) drain += kSprintNeedExertion;
     s.hunger.current -= drain * dt;
     if (s.hunger.current < 0.0f) s.hunger.current = 0.0f;  // never below empty
 
@@ -1108,7 +1114,8 @@ void drain_water(entt::registry& reg, float dt) {
   // then-chips-health shape, independent knobs. Water is refilled at a WaterSource (drink), never
   // by resting, so like hunger its regen is 0 and this system only ever takes it away.
   constexpr float kDrainPerSecond = 0.3f;          // at rest
-  constexpr float kExertionDrainPerSecond = 0.3f;  // added while moving
+  constexpr float kExertionDrainPerSecond = 0.3f;  // added while moving (walking)
+  constexpr float kSprintNeedExertion = 0.3f;      // added AGAIN while sprinting (the top tier)
   constexpr float kDehydrationPerSecond = 12.0f;   // health lost per second once water hits 0
   // Same set as hunger: every person (Stats without Enemy), not creatures. regenerate_vitals gates
   // healing off while water is 0 (as it does for hunger), so dehydration nets health strictly down.
@@ -1120,6 +1127,10 @@ void drain_water(entt::registry& reg, float dt) {
         v != nullptr && glm::length(v->value) > 0.0f) {
       drain += kExertionDrainPerSecond;  // moving costs extra
     }
+    // ...and a SPRINT costs extra AGAIN (the tier above walking) — the twin of the hunger sprint
+    // drain, so exertion tiers rest < walk < sprint apply to thirst too. No Sprinting ->
+    // bit-identical.
+    if (reg.all_of<Sprinting>(e)) drain += kSprintNeedExertion;
     s.water.current -= drain * dt;
     if (s.water.current < 0.0f) s.water.current = 0.0f;  // never below empty
 
