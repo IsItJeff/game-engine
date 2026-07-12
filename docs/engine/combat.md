@@ -80,7 +80,11 @@ flowchart TD
   swing (≥ 7) but not a power one (< 18) the powered swing **fizzles** entirely, just as any swing
   does below its cost — so powering can leave you unable to strike when your bar is low. The multiplier
   rides `raw` alongside `berserk`/`need_eff`; an unmarked swing (every NPC, or a player not holding it)
-  → 1.0 / the base cost → bit-identical.
+  → 1.0 / the base cost → bit-identical. A power hit also **knocks the foe back** `kKnockback` (30
+  world units, along the attacker→target line) *after* the damage lands — the one thing in melee that
+  repositions a target, so a heavy blow makes room in a swarm or shunts a brute off a cornered ally.
+  Same `powered` gate, so an ordinary swing shoves nothing (bit-identical); a foe standing exactly on
+  you has no direction to push and stays put.
 
 ### The damage contest — Strength vs VIT
 

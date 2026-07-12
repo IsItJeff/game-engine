@@ -1762,6 +1762,11 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // faster (so it's a burst, not the pace). Knobs.
   constexpr float kPowerDamage = 1.75f;       // a powered swing's damage multiplier
   constexpr float kPowerStaminaCost = 18.0f;  // ...and its dearer stamina cost (vs the base 7)
+  // ...and it SHOVES the struck foe back this far (world units) — the heavy blow's reach into
+  // space. Less than a swing's base reach (45), so the foe is pushed to the edge of your range, not
+  // out of it: enough to make room in a swarm without ending the fight. The ONE thing in melee that
+  // repositions a target. Knob.
+  constexpr float kKnockback = 30.0f;
 
   // A swinger needs a position (to reach from) and the progression pair to train.
   const Transform* tf = reg.try_get<Transform>(attacker);
@@ -2035,6 +2040,21 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
     st->health.current -= dealt;
     if (st->health.current < 0.0f) st->health.current = 0.0f;
     stamp_flash(reg, target);  // the struck target blinks white
+    // KNOCKBACK: a POWER swing also SHOVES the foe back — the heavy blow's reach into space, the
+    // one thing in melee that repositions a target (make room in a swarm, or shunt a brute off a
+    // cornered ally). It reads the SAME `powered` flag that made the swing heavier, so ONLY a
+    // powered hit shoves; an ordinary swing (every existing fight) moves nothing -> bit-identical.
+    // Pure geometry, no RNG: push the target kKnockback along the attacker->target direction.
+    // Writing the target's position (a value change, not an add/remove) can't invalidate the
+    // caller's view (npc_attack iterates the ATTACKERS; the target is a different entity). A foe
+    // exactly ON the attacker (zero offset — only a degenerate test) has no direction to push, so
+    // it stays put.
+    if (powered) {
+      Vec2& target_pos = reg.get<Transform>(target).position;
+      const Vec2 away = target_pos - origin;
+      if (const float dist = glm::length(away); dist > 0.0f)
+        target_pos += (away / dist) * kKnockback;
+    }
     // The killing blow on a HOSTILE is a Valor deed for the attacker — the SECOND deed through the
     // morality write-point (after a rescue's Charity), proving it generalises across dimensions.
     // Credited only on the alive->dead TRANSITION, so a second swing landing on the same foe this
