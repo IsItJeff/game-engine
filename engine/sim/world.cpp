@@ -440,6 +440,7 @@ void World::step() {
   //    writing a system and adding a line here.
   const float dt = static_cast<float>(kSecondsPerTick);
   steer_npcs(registry_);  // NPCs decide where to flee (may set their velocity)
+  npc_guard(registry_);   // ...a hardened colonist instead PLANTS and raises a guard on a creature
   chase_prey(registry_);  // creatures decide to home in on the nearest person (player or NPC)
   integrate_motion(registry_, dt);
   npc_attack(registry_, rng_);     // NPCs strike any hazard now in reach (positions are current)

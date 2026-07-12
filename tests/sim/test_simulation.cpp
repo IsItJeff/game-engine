@@ -5074,6 +5074,79 @@ TEST_CASE("a raised guard trains Guarding: blocking was the one action that taug
       trained_guarding(false));  // ...taking it open-stanced did not (that trains Toughness)
 }
 
+TEST_CASE("a hardened colonist raises a guard against a creature but a fresh one does not",
+          "[sim]") {
+  // NPC guard, the parity un-stranding: a BULWARK (veteran Endurance) plants and blocks when a
+  // creature is on it; a fresh (level-1) colonist does not — the gate that keeps every existing
+  // steer test bit-identical.
+  const auto guards = [](int endurance_level) {
+    entt::registry reg;
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{100.0f, 100.0f});
+    reg.emplace<eng::sim::Velocity>(npc,
+                                    eng::Vec2{50.0f, 0.0f});  // was moving (steer set a velocity)
+    reg.emplace<eng::sim::Attributes>(npc).endurance.level = endurance_level;
+    const entt::entity creature = reg.create();
+    reg.emplace<eng::sim::Enemy>(creature);
+    reg.emplace<eng::sim::Transform>(creature,
+                                     eng::Vec2{120.0f, 100.0f});  // 20 off, in guard range
+    eng::sim::npc_guard(reg);
+    return reg.all_of<eng::sim::Blocking>(npc);
+  };
+  REQUIRE_FALSE(guards(1));  // a fresh colonist doesn't tank (the bit-identity gate)...
+  REQUIRE(guards(3));        // ...a hardened one (Endurance 3) raises a guard
+}
+
+TEST_CASE("a guarding colonist trains Guarding: the skill is no longer player-only", "[sim]") {
+  // The un-stranding proved end to end: npc_guard raises a bulwark's guard (rooting it), then the
+  // creature's blow it turns trains Guarding -> Endurance — the skill only the player could reach
+  // before.
+  entt::registry reg;
+  std::mt19937 rng{1234};
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(npc, eng::Vec2{50.0f, 0.0f});  // moving...
+  reg.emplace<eng::sim::Stats>(npc);                             // full health + stamina
+  reg.emplace<eng::sim::Skills>(npc);
+  reg.emplace<eng::sim::Attributes>(npc).endurance.level = 3;  // a bulwark (DEX 1 -> never dodges)
+  const entt::entity beast = reg.create();
+  reg.emplace<eng::sim::Transform>(beast, eng::Vec2{0.0f, 0.0f});  // in contact, off cooldown
+  reg.emplace<eng::sim::Enemy>(beast);
+  reg.emplace<eng::sim::Stats>(beast, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+
+  eng::sim::npc_guard(reg);
+  REQUIRE(reg.all_of<eng::sim::Blocking>(npc));  // it planted and raised a guard...
+  REQUIRE(reg.get<eng::sim::Velocity>(npc).value.x == Approx(0.0f));  // ...rooted (stopped moving)
+  eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+  REQUIRE(reg.get<eng::sim::Skills>(npc).find(eng::sim::SkillId::Guarding) !=
+          nullptr);  // the turned blow trained Guarding
+}
+
+TEST_CASE("a wounded bulwark gives way to healing: it retreats instead of tanking", "[sim]") {
+  // The hale gate: a hardened colonist plants and tanks only while HEALTHY. Below half health it
+  // does NOT raise a guard — npc_guard stands aside so steer's wounded-retreat can carry it to a
+  // hearth to mend, rather than rooting it beside the creature to stand-and-die.
+  const auto guards_at = [](float health_fraction) {
+    entt::registry reg;
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Attributes>(npc).endurance.level = 3;  // a bulwark...
+    eng::sim::Stats& st = reg.emplace<eng::sim::Stats>(npc);
+    st.health.current = st.health.max * health_fraction;
+    const entt::entity creature = reg.create();
+    reg.emplace<eng::sim::Enemy>(creature);
+    reg.emplace<eng::sim::Transform>(creature, eng::Vec2{10.0f, 0.0f});  // right on it
+    eng::sim::npc_guard(reg);
+    return reg.all_of<eng::sim::Blocking>(npc);
+  };
+  REQUIRE(guards_at(1.0f));        // hale -> it holds the line...
+  REQUIRE_FALSE(guards_at(0.3f));  // ...but badly wounded -> it gives way and retreats to heal
+}
+
 TEST_CASE("a raised guard ripostes only while it has the stamina to spend", "[sim]") {
   // The offence half of the block: a guarding defender bites back, so planting your guard wears the
   // attacker down as well as softening its blows. But a riposte is an EXERTION — a WINDED guard

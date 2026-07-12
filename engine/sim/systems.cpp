@@ -852,6 +852,53 @@ void steer_npcs(entt::registry& reg) {
   }
 }
 
+void npc_guard(entt::registry& reg) {
+  // A hardened colonist — a BULWARK (trained Endurance) — PLANTS and raises a guard when a creature
+  // is upon it, rather than trading open-stance blows: it emplaces Blocking, so resolve_creature_
+  // contacts SOFTENS the hit, lets it RIPOSTE, and — the point — trains the GUARDING skill. That is
+  // the first path for an NPC to reach Guarding at all: until now only the player set Blocking (via
+  // MovePlayer), so the skill was unreachable for colonists — a real player==NPC parity hole. Gated
+  // on a veteran Endurance level a FRESH NPC (level 1 — every existing test) never meets, so no
+  // Blocking is ever raised in a fresh world -> bit-identical; the guard only emerges once a
+  // colonist has toughened up over a long run. Rooted while guarding (velocity 0), mirroring the
+  // player's guard-root, so a bulwark holds the line rather than kiting. Drops the stance when no
+  // creature is near. MUST run AFTER steer_npcs (to override the velocity it set) and before
+  // integrate_motion + resolve_creature_contacts. No RNG. Only touches the Npc view, so a guarding
+  // PLAYER (its own Blocking, set by MovePlayer) is never disturbed.
+  constexpr int kBulwarkLevel = 3;  // the Endurance level at which a colonist will stand and tank
+  constexpr float kGuardRange =
+      30.0f;  // a creature within this raises the guard (just past contact)
+  constexpr float kGuardHealthFloor =
+      0.5f;  // ...but only while HALE: below half health it retreats to heal instead of tanking
+  auto npcs = reg.view<Npc, Transform, Attributes, Velocity>();
+  auto creatures = reg.view<Enemy, Transform>();
+  for (const entt::entity n : npcs) {
+    bool raise = false;
+    // A bulwark holds the line only while HALE. A WOUNDED one (below kGuardHealthFloor) does NOT
+    // guard — it lets steer_npcs' wounded-retreat rung stand, falling back to a hearth to mend (a
+    // hearth wards creatures, so that retreat is a real escape). So planting-and-tanking is the
+    // brave choice of a healthy veteran, not a suicidal stand at low HP — and it never overrides
+    // the heal-retreat. No Stats (a bare test fixture) -> treated as hale, so it still guards.
+    const Stats* st = reg.try_get<Stats>(n);
+    const bool hale = st == nullptr || st->health.current > st->health.max * kGuardHealthFloor;
+    if (hale && npcs.get<Attributes>(n).endurance.level >= kBulwarkLevel) {  // hardy AND unhurt?
+      const Vec2 pos = npcs.get<Transform>(n).position;
+      for (const entt::entity c : creatures) {
+        if (glm::distance(pos, creatures.get<Transform>(c).position) < kGuardRange) {
+          raise = true;  // a creature is on it — plant and block
+          break;
+        }
+      }
+    }
+    if (raise) {
+      reg.emplace_or_replace<Blocking>(n);
+      npcs.get<Velocity>(n).value = Vec2{0.0f, 0.0f};  // hold the line while guarding
+    } else {
+      reg.remove<Blocking>(n);  // no threat (or too green) -> lower the guard (a no-op if none)
+    }
+  }
+}
+
 void chase_prey(entt::registry& reg) {
   // Creatures hunt PEOPLE — the player and NPCs alike. "Prey" is everything with a Stats
   // sheet (so it can be hurt) that isn't itself a creature: motes and pickups have no
@@ -3419,7 +3466,8 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
         attack_dmg *= kEnrageDamage;
       }
       // A raised GUARD softens the blow (before VIT mitigates it too) — the active-defence trade
-      // for the mobility it costs. Applies to anyone Blocking; only the player guards today.
+      // for the mobility it costs. Applies to anyone Blocking — the player (MovePlayer) and a
+      // hardened NPC bulwark (npc_guard) alike, so both soak, riposte, and train Guarding.
       if (reg.all_of<Blocking>(p)) {
         // Only kBlockDamageFactor of the blow gets through a raised guard. GUARDING eases even
         // that: a trained guard TURNS MORE of it (less through), via the same half-floor mastery
