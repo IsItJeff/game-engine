@@ -308,13 +308,15 @@ The bit-identity gate is spatial: with **no `ColdZone`** in the world nobody eve
 stays full and untouched. Creatures don't have it drained (the same person-not-monster set), and a
 revive restores it (else you'd wake still freezing).
 
-**Colonists seek the fire when they chill.** Warmth drives behaviour like the other needs: `steer_npcs`'
-hearth-retreat rung now fires on a colonist that is wounded **or chilled** (warmth below
-`kColdSeekFraction`), so a cold colonist heads for the nearest hearth to re-warm — the seek want that
-matches hunger's forage rung and thirst's drink rung, closing the "huddle by the fire" loop *directly*
-rather than only via the freeze-into-wounded path. (Full warmth → no seek, so a warm colony steers
-exactly as before — bit-identical.) A cold-*avoidance* rung — steering *around* a `ColdZone` rather
-than only running to a fire once already chilled — is the natural refinement from here.
+**Colonists both flee the cold and seek the fire.** Warmth drives behaviour like the other needs, on
+both ends. *Prevention:* an otherwise-idle colonist standing in a `ColdZone` **steers out of it** (a
+low-priority `steer_npcs` rung, radially away from the zone toward its nearest edge), so a wanderer
+doesn't blunder into the cold and linger. *Recovery:* once a colonist is actually **chilled** (warmth
+below `kColdSeekFraction`), the hearth-retreat rung — which already pulls a *wounded* colonist to the
+fire — pulls it there too, to re-warm; the chilled case outranks the idle avoidance, so a cold
+colonist heads to the *fire* rather than merely out of the cold. Together they are the full "flee the
+cold, huddle by the fire" loop, matching hunger's forage rung and thirst's drink rung. (Full warmth
+and no cold zone → both rungs are dormant, so a warm colony steers exactly as before — bit-identical.)
 
 ### Food plots: a renewable source
 
