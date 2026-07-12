@@ -508,26 +508,28 @@ baseline integer; armour's float defence shows every roll). The roll is drawn fr
 `drop_rng_` stream, so it never perturbs the creature/combat waves — every dodge, spawn and wave is
 bit-identical, *only* the dropped quality varies. What you *start* with, the venom fang, and a
 player's dropped blade stay quality **1.0** (baseline). Deterministic (same seed → same rolls). And a
-fine steel drop can rarely (~15%) roll the **first named TRAIT**: a *venomous* variant — a heavy
-poison blade that keeps steel's full heft but trades one notch of Strength for hits that **envenom**
-(reusing the whole shipped venom → Poisoned path), a paired +/- that is never pure-upside. That
-variant decision is a *portable* raw `mt19937` draw (identical on every platform), a NAMED intra-item
-trade without a new field or a `traits[]` list (both premature). And you can *see* quality: a finer
-item **glints brighter** on the field (`quality_sheen`, a pure presentation helper the renderer
+fine steel drop can rarely roll a **named TRAIT** — two so far, mutually exclusive: ~15% *venomous* (a
+heavy poison blade that trades one notch of Strength for hits that **envenom**, reusing the shipped
+venom → Poisoned path) and ~15% *keen* (a razor blade that trades the same notch of Strength for a
+**crit-chance** bonus, reusing the Luck crit), each a paired +/- that is never pure-upside — the rest
+plain. The trait decision is a *portable* raw `mt19937` draw (identical on every platform). Venom
+needed no new field; the keen crit isn't expressible through an existing field, so `Weapon`/`Equipped`
+each gained one `crit_bonus` (appended last, default 0 → bit-identical) — but still **no `traits[]`
+list**: the variants never stack, so no list is needed until they must. And you can *see* quality: a
+finer item **glints brighter** on the field (`quality_sheen`, a pure presentation helper the renderer
 applies — baseline 1.0 renders unchanged), so a fine drop catches the eye without a numeric UI.
 
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), hardcoded defs (plain
-    steel, a venom fang, an armour, and now a rolled *venomous steel* variant) each pairing a boon
-    (`+Attribute`/`+defence`/`+venom`) with a bane — a move-heft on either weapon (heavier steel,
-    lighter venom) and a slower second wind on armour, so weapon and armour banes stay *distinct*
-    even as the blades share a kind. Each archetype's kill already feeds this loop as *creature
-    loot* (the four `DropKind`s). The rest of the design's Equipment — NPC armour-*seeking*, the
-    `Item{def, quality, durability, traits[]}` model (`quality` scales the boon at equip AND rolls per
-    fine drop; the **first named trait** — venomous steel — now rolls too, expressed through existing
-    fields; a `traits[]` *list* waits until two named traits must stack on one item), the
-    `+skill/+aspect` bonuses (which ride the [SkillDef](progression.md) seam), and wear/repair — layer
-    on top without reworking this plumbing.
+    steel, a venom fang, an armour, and two rolled steel variants — *venomous* and *keen*) each pairing
+    a boon (`+Attribute`/`+defence`/`+venom`/`+crit`) with a bane, so weapon and armour banes stay
+    *distinct* even as the blades share a kind. Each archetype's kill already feeds this loop as
+    *creature loot* (the four `DropKind`s). The rest of the design's Equipment — NPC armour-*seeking*,
+    the `Item{def, quality, durability, traits[]}` model (`quality` scales the boon at equip AND rolls
+    per fine drop; **two named traits** now roll — venom via existing fields, keen via a single added
+    `crit_bonus`; a `traits[]` *list* waits until two traits must STACK on one item, which the
+    mutually-exclusive roll avoids), the `+skill/+aspect` bonuses (which ride the
+    [SkillDef](progression.md) seam), and wear/repair — layer on top without reworking this plumbing.
 
 ### Dying — `handle_deaths` (Downed, then rescue or respawn)
 

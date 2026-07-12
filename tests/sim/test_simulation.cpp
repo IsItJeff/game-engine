@@ -4933,10 +4933,11 @@ TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
   REQUIRE(reg.get<eng::sim::Transform>(dropped_armour).position.x == Approx(sentinel_pos.x));
   REQUIRE(reg.get<eng::sim::Transform>(dropped_armour).position.y == Approx(sentinel_pos.y));
   // ...and exactly ONE of the two weapons is envenomed (the spitter's fang, at its 6.0 dps) — the
-  // brute's steel is plain — lying where the spitter fell. (A brute's steel can RARELY roll the
-  // venomous trait, at a distinct 4.0 dps; this fixed drop_rng_ seed rolls it PLAIN — a PORTABLE
-  // raw draw, so it's plain on every platform — keeping this archetype-loot check about DROP KIND,
-  // not the rare variant, which has its own tests below.)
+  // brute's steel is NOT — lying where the spitter fell. (A brute's steel can roll a trait; under
+  // this fixed drop_rng_ seed it rolls KEEN — a crit blade, venom 0 — a PORTABLE raw draw so it's
+  // keen on every platform. Keen adds no venom, so the fang stays the only venom source and
+  // venom_count == 1 holds; this keeps the archetype-loot check about DROP KIND, with the traits
+  // covered by their own tests below.)
   entt::entity fang = entt::null;
   int venom_count = 0;
   for (const entt::entity w : reg.view<eng::sim::Weapon>()) {
@@ -5069,15 +5070,80 @@ TEST_CASE("venomous steel is a named trait: venom bought with a notch of Strengt
   REQUIRE(eq.move_penalty == Approx(0.25f));             // ...heft intact
 }
 
-TEST_CASE("a brute's fine steel sometimes rolls venomous always with its paired downside",
+TEST_CASE("keen steel is a named trait: crit bought with a notch of Strength the heft intact",
           "[sim]") {
-  // Prove the drop loop ROLLS the trait: over many brute kills, SOME steel comes out venomous and
-  // some plain; every venomous one carries the paired trade (venom AND reduced Strength), every
-  // plain one is clean (+4, no venom), and all qualities stay in band. The venomous decision is a
-  // PORTABLE raw mt19937 draw (a fresh seed per kill, so each is the first raw output — identical
-  // on every stdlib), so the mix is deterministic cross-platform; the quality is band-tested, never
-  // an exact float. Rarity (~15%) means plain dominates.
+  // The SECOND named weapon trait, at its canonical spawn (no roll). Keen steel keeps steel's full
+  // 0.25 heft and trades one notch of Strength (kKeenStrength 3) for a CRIT-chance bonus
+  // (kKeenCritBonus) — a paired +/-, never pure-upside, a distinct proc from venom (a Luck/crit
+  // build). It folds through to the Equipped cache, where perform_attack reads it and adds it to
+  // the Luck crit chance.
+  entt::registry reg;
+  const eng::Vec2 pos{45.0f, 45.0f};
+  eng::sim::spawn_keen_steel(reg, pos, 2.0f);  // quality 2.0 to prove the boon still scales
+  const eng::sim::Weapon& w = reg.get<eng::sim::Weapon>(*reg.view<eng::sim::Weapon>().begin());
+  REQUIRE(w.crit_bonus == Approx(eng::sim::kKeenCritBonus));  // the +crit boon...
+  REQUIRE(w.crit_bonus > 0.0f);
+  REQUIRE(w.venom_per_second == 0.0f);                   // ...and it is NOT venomous (exclusive)...
+  REQUIRE(w.strength_bonus == eng::sim::kKeenStrength);  // ...bought with the paired -STR trade...
+  REQUIRE(w.strength_bonus < 4);                         // ...strictly under a default +4 blade...
+  REQUIRE(w.move_penalty == Approx(0.25f));  // ...and steel's FULL heft stays (the bane is intact)
+
+  const entt::entity wearer = reg.create();
+  reg.emplace<eng::sim::Transform>(wearer, pos);
+  const entt::entity grabbed = eng::sim::equip_nearest_gear(reg, wearer);
+  REQUIRE(reg.valid(grabbed));
+  const eng::sim::Equipped& eq = reg.get<eng::sim::Equipped>(wearer);
+  REQUIRE(eq.crit_bonus == Approx(eng::sim::kKeenCritBonus));  // crit folds through to the cache...
+  REQUIRE(eq.strength_bonus == static_cast<int>(eng::sim::kKeenStrength *
+                                                2.0f));  // ...boon scaled by quality int(3*2)=6
+  REQUIRE(eq.move_penalty == Approx(0.25f));             // ...heft intact
+}
+
+TEST_CASE("a keen blade lands the doubled crit a plain one at the same Luck never would", "[sim]") {
+  // The keen PAYOFF, in combat: at Luck 1 a plain wielder's crit chance is 0 (crit_chance guards it
+  // to no draw), so every hit is base damage; a KEEN wielder gets +kKeenCritBonus crit, so over
+  // many swings SOME land the DOUBLED blow. We detect it by the max damage dealt: keen exceeds
+  // plain. The crit roll is a uniform_real (not portable), so we assert a >-relationship over many
+  // swings (keen crits at least once, plain never), never an exact float — robust on every
+  // platform.
+  const auto max_damage_over_swings = [](float crit_bonus) {
+    std::mt19937 rng{4242};
+    float max_dealt = 0.0f;
+    for (int i = 0; i < 200; ++i) {
+      entt::registry reg;
+      const entt::entity atk = reg.create();
+      reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+      reg.emplace<eng::sim::Attributes>(atk);  // Luck 1 -> no innate crit (crit_chance 0)
+      reg.emplace<eng::sim::Skills>(atk);
+      reg.emplace<eng::sim::Equipped>(atk).crit_bonus = crit_bonus;  // only the crit trait differs
+      const entt::entity foe = reg.create();
+      reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});  // in reach
+      reg.emplace<eng::sim::Stats>(foe,
+                                   eng::sim::Vital{1000.0f, 1000.0f, 0.0f});  // survives to read
+      reg.emplace<eng::sim::Enemy>(foe);
+      const float before = reg.get<eng::sim::Stats>(foe).health.current;
+      eng::sim::perform_attack(reg, atk, rng);
+      const float dealt = before - reg.get<eng::sim::Stats>(foe).health.current;
+      if (dealt > max_dealt) max_dealt = dealt;
+    }
+    return max_dealt;
+  };
+  // Same seed, same swings — the ONLY difference is the keen crit bonus, and it lands a bigger
+  // blow.
+  REQUIRE(max_damage_over_swings(eng::sim::kKeenCritBonus) > max_damage_over_swings(0.0f));
+}
+
+TEST_CASE("a brute's fine steel rolls plain venomous or keen each with its paired downside",
+          "[sim]") {
+  // Prove the drop loop rolls BOTH named traits (mutually exclusive): over many brute kills, some
+  // steel comes out venomous (+venom, -1 STR), some keen (+crit, -1 STR), the rest plain (+4, no
+  // proc). Every trait carries its paired downside, every plain one is clean, and all qualities
+  // stay in band. The trait decision is a PORTABLE raw mt19937 draw (a fresh seed per kill, so each
+  // is the first raw output — identical on every stdlib), so the mix is deterministic
+  // cross-platform; the quality is band-tested, never an exact float. Rarity (~15% each) means
+  // plain dominates.
   int venomous = 0;
+  int keen = 0;
   int plain = 0;
   for (int i = 0; i < 200; ++i) {
     std::mt19937 rng{static_cast<std::uint32_t>(1000 + i)};  // fresh PORTABLE seed per kill
@@ -5089,19 +5155,25 @@ TEST_CASE("a brute's fine steel sometimes rolls venomous always with its paired 
     eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f, rng);
     const eng::sim::Weapon& w = reg.get<eng::sim::Weapon>(*reg.view<eng::sim::Weapon>().begin());
     REQUIRE(w.quality >= eng::sim::kFineQualityMin);
-    REQUIRE(w.quality < eng::sim::kFineQualityMax);  // every drop, venomous or plain, is in-band
+    REQUIRE(w.quality < eng::sim::kFineQualityMax);  // every drop, any trait, is in-band
     if (w.venom_per_second > 0.0f) {
       ++venomous;
-      REQUIRE(w.strength_bonus == eng::sim::kVenomousStrength);  // venomous -> the paired -STR...
+      REQUIRE(w.crit_bonus == 0.0f);                             // exclusive: venomous, not keen
+      REQUIRE(w.strength_bonus == eng::sim::kVenomousStrength);  // the paired -STR...
       REQUIRE(w.strength_bonus < 4);                             // ...never pure-upside
+    } else if (w.crit_bonus > 0.0f) {
+      ++keen;
+      REQUIRE(w.strength_bonus == eng::sim::kKeenStrength);  // keen -> the paired -STR...
+      REQUIRE(w.strength_bonus < 4);                         // ...never pure-upside
     } else {
       ++plain;
       REQUIRE(w.strength_bonus == 4);  // plain steel keeps the full +4
     }
   }
-  REQUIRE(venomous > 0);      // the trait DOES roll...
-  REQUIRE(plain > 0);         // ...both outcomes appear...
-  REQUIRE(venomous < plain);  // ...but it stays RARE (~15%), so plain steel dominates
+  REQUIRE(venomous > 0);      // the venom trait rolls...
+  REQUIRE(keen > 0);          // ...the keen trait rolls...
+  REQUIRE(plain > venomous);  // ...but each stays RARE (~15%), so plain steel dominates...
+  REQUIRE(plain > keen);      // ...both traits
 }
 
 TEST_CASE("the Equip command wields the nearest weapon in reach", "[sim]") {
@@ -5163,6 +5235,30 @@ TEST_CASE("the Drop command sheds your wielded weapon at your feet", "[sim]") {
   world.submit(eng::sim::equip(eng::sim::kLocalPlayer));
   world.step();
   REQUIRE(world.registry().all_of<eng::sim::Equipped>(player));  // wielded again — a closed loop
+}
+
+TEST_CASE("dropping a keen blade sheds its crit bonus so no phantom crit lingers", "[sim]") {
+  // Regression: the Drop command clears the weapon slot, and a keen blade's crit_bonus must go with
+  // it — exactly as strength/heft/venom do — or a player who drops a keen blade while ARMOURED
+  // keeps a phantom crit with no weapon (breaking never-pure-upside and drop=undo-equip). Armour is
+  // worn too, so the Equipped cache SURVIVES the drop (only the weapon slot clears), letting us
+  // read the shed crit.
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  eng::sim::Equipped& eq = world.registry().emplace<eng::sim::Equipped>(player);
+  eq.strength_bonus = eng::sim::kKeenStrength;  // wielding a KEEN blade...
+  eq.move_penalty = 0.25f;
+  eq.crit_bonus = eng::sim::kKeenCritBonus;  // ...its crit edge...
+  eq.defence_bonus = 6.0f;  // ...and wearing armour, so the cache outlives the drop
+
+  world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
+  world.step();
+
+  REQUIRE(world.registry().all_of<eng::sim::Equipped>(player));  // armour keeps the cache alive...
+  const eng::sim::Equipped& after = world.registry().get<eng::sim::Equipped>(player);
+  REQUIRE(after.crit_bonus == 0.0f);             // ...but the keen crit was SHED with the weapon...
+  REQUIRE(after.strength_bonus == 0);            // ...along with the rest of the weapon slot...
+  REQUIRE(after.defence_bonus == Approx(6.0f));  // ...while the armour stays worn
 }
 
 TEST_CASE("a bare-handed Drop does nothing", "[sim]") {
