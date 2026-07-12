@@ -3383,6 +3383,44 @@ TEST_CASE("a lethal cruel strike escalates to Violence: killing a colonist sinks
   REQUIRE(standing_after_cruel_strike(3.0f) == -10);  // killed -> Cruelty AND Violence (the death)
 }
 
+TEST_CASE("a lethal cruel strike spares Violence when the victim had themselves turned bad",
+          "[sim]") {
+  // The design's "violence_unjust": violence counts only against a standing >= 0 victim — "killing
+  // bandits barely dents you". Same frail-3-HP lethal setup as the escalation test above; the ONE
+  // difference is whether the victim carries a below-zero standing of their OWN (earned by their
+  // own cruelty). Killing an INNOCENT records Cruelty AND Violence (-6 + -4 = -10); killing one who
+  // had already gone bad records Cruelty ALONE (-6) — the blow is still cruel, but the death is
+  // rough justice, not unjust violence.
+  const auto killer_standing_against = [](bool victim_had_turned_bad) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(player);
+    reg.emplace<eng::sim::Skills>(player);
+    reg.emplace<eng::sim::PlayerControlled>(player);  // only a player turns cruel
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{20.0f, 0.0f});         // inside reach
+    reg.emplace<eng::sim::Stats>(colonist, eng::sim::Vital{3.0f, 3.0f, 0.0f});  // frail -> dies
+    reg.emplace<eng::sim::Attributes>(colonist);  // VIT 1 -> no defence
+    reg.emplace<eng::sim::Npc>(colonist);
+    if (victim_had_turned_bad) {
+      // Stain the victim's OWN ledger so its standing sits below zero — one Cruelty deed is -6,
+      // enough to make felling it "just" and spare the killer the Violence escalation.
+      eng::sim::BehaviorLedger& vled = reg.emplace<eng::sim::BehaviorLedger>(colonist);
+      vled.dims[static_cast<std::size_t>(eng::sim::Deed::Cruelty)] = 1;
+      REQUIRE(eng::sim::standing(vled) < 0);  // guard: the victim really is below-zero standing
+    }
+
+    std::mt19937 rng{1234};  // the cruel branch draws no RNG
+    eng::sim::perform_attack(reg, player, rng);
+    const eng::sim::BehaviorLedger* led = reg.try_get<eng::sim::BehaviorLedger>(player);
+    REQUIRE(led != nullptr);  // a cruel strike always records at least Cruelty
+    return eng::sim::standing(*led);
+  };
+  REQUIRE(killer_standing_against(false) == -10);  // innocent victim -> Cruelty AND Violence
+  REQUIRE(killer_standing_against(true) == -6);  // villain victim  -> Cruelty only, Violence spared
+}
+
 TEST_CASE("a hostile in reach shields a nearby colonist: no accidental Cruelty mid-combat",
           "[sim]") {
   // The safety gate that makes cruelty a CHOICE, not a slip: hostiles are always searched first and

@@ -90,6 +90,14 @@ colonist (drops it to 0 HP), the death earns `Deed::Violence` *on top of* the Cr
 escalation from wounding to slaying, sinking standing by the Cruelty **×6** *and* the Violence **×4**
 (−10, versus −6 for a non-lethal betrayal). A cruel strike that only wounds stays Cruelty-only.
 
+Only **unjust** violence counts, though: the extra Violence lands only when the victim's own
+`standing` was **≥ 0** — an innocent. Kill a colonist who had *themselves* turned bad (a below-zero
+standing earned through their own cruelty) and the death is **rough justice**, not villainy: the blow
+is still Cruelty (you struck a person who wasn't fighting you), but no Violence on top — the design's
+*"killing bandits barely dents you"*. Every colonist starts neutral (standing 0), so today this is
+dormant wiring — a victim can only sink below zero once NPC-villain AI or a villainous co-op player
+exists — but it keeps the Violence tally faithful the moment a wrongdoer can be on the receiving end.
+
 A cruel strike also lands a *personal* mark: besides the Cruelty deed, it forms a **grudge** — the
 struck colonist's affinity toward the striker drops, and a grudge-holder later **refuses to rescue**
 that player. That is a finer, earlier consequence than the global *fear* below (which needs standing
