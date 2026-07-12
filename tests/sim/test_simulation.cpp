@@ -398,6 +398,47 @@ TEST_CASE("exhaustion collapses a player: empty fatigue puts you Downed, a reviv
       Approx(reg.get<eng::sim::Stats>(player).fatigue.max));  // ...and RESTED, so no re-collapse
 }
 
+TEST_CASE("a trained Survivalist tires slower: the skill lengthens the fatigue timer", "[sim]") {
+  // The design's growth source: the Survivalist skill EASES the fatigue drain (eased_bane, never to
+  // zero), so a trained survivor lasts longer before exhaustion — the one thing that buffers a
+  // need. A novice (no skill) drains the full rate. tick_fatigue reads the skill level.
+  const auto fatigue_left_after_moving = [](int survivalist_level) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Velocity>(e, eng::Vec2{50.0f, 0.0f});  // moving = draining
+    reg.emplace<eng::sim::Stats>(e).fatigue.current = 80.0f;
+    if (survivalist_level > 1)
+      reg.emplace<eng::sim::Skills>(e).train(eng::sim::SkillId::Survivalist).level =
+          survivalist_level;
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) eng::sim::tick_fatigue(reg, dt);
+    return reg.get<eng::sim::Stats>(e).fatigue.current;
+  };
+  // A veteran survivor (level 11 -> the eased_bane 0.5 relief cap) drains HALF, so it keeps more
+  // fatigue than a novice over the same run — a longer timer, never removed.
+  REQUIRE(fatigue_left_after_moving(11) > fatigue_left_after_moving(1));
+}
+
+TEST_CASE("pushing into exhaustion trains Survivalist but a rested one learns nothing", "[sim]") {
+  // You learn to endure only by ENDURING: advance_progression trains Survivalist -> Endurance ONLY
+  // while fatigue is low (below kExhaustionLearnAt). A rested mover (fatigue high) trains none of
+  // it, so a rested colony's Endurance is bit-identical — the gate that keeps the pre-Survivalist
+  // world unchanged.
+  const auto learned_survivalist = [](float fatigue) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Velocity>(e, eng::Vec2{50.0f, 0.0f});  // moving = exerting
+    reg.emplace<eng::sim::Skills>(e);
+    reg.emplace<eng::sim::Attributes>(e);
+    reg.emplace<eng::sim::CharacterLevel>(e);
+    reg.emplace<eng::sim::Stats>(e).fatigue.current = fatigue;
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::advance_progression(reg);
+    return reg.get<eng::sim::Skills>(e).find(eng::sim::SkillId::Survivalist) != nullptr;
+  };
+  REQUIRE(learned_survivalist(10.0f));        // exhausted (fatigue 10) -> learned Survivalist...
+  REQUIRE_FALSE(learned_survivalist(90.0f));  // ...but rested (fatigue 90) -> never learned it
+}
+
 TEST_CASE("an empty stomach starves health", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();

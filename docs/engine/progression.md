@@ -168,7 +168,7 @@ attribute → stat — is what stays as it widens into a full character sheet.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck, Wisdom, Charisma), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`, `Throwing`, `Foraging`, `Leadership`, `Guarding`, `Resistance`, `Athletics`).
+- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck, Wisdom, Charisma), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`, `Throwing`, `Foraging`, `Leadership`, `Guarding`, `Resistance`, `Athletics`, `Survivalist`).
 - `engine/sim/systems.cpp` (anon namespace) — the `SkillDef` table, `attr_ref`, and `grant_skill_xp` (the one funnel every skill→attribute XP grant flows through: main + contributors).
 - `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression` (movement→Conditioning / resting→Recovery), `update_stamina` (Endurance speeds recovery), `train_on_damage` (the damage → Toughness feeder), `perform_attack` (the shared swing resolver) and `npc_attack` (NPCs fight too).
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
