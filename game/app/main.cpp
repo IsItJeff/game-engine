@@ -241,7 +241,8 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
                        fa.max);  // falls while exerting (worst sprinting), mends at rest
     const eng::sim::Vital& mp = stats->mp;
     ImGui::Text("mana: %.0f / %.0f", static_cast<double>(mp.current), static_cast<double>(mp.max));
-    ImGui::ProgressBar(mp.current / mp.max);  // spent by casting (C: bolt, H: mend), regens at rest
+    ImGui::ProgressBar(mp.current /
+                       mp.max);  // spent casting (C: bolt, H: mend, B: barrier), regens at rest
     const eng::sim::Vital& wm = stats->warmth;
     ImGui::Text("warmth: %.0f / %.0f", static_cast<double>(wm.current),
                 static_cast<double>(wm.max));
@@ -491,10 +492,14 @@ int main(int /*argc*/, char* /*argv*/[]) {
     }
     space_was_down = space_raw;
 
-    // H, edge-triggered, hurts the player by 15. It travels the same funnel as
-    // everything else — input becomes a DamagePlayer command the server applies —
-    // so you can watch the bar drop, then the regen system heal it back up.
-    const bool hurt_raw = keys[SDL_SCANCODE_H];
+    // P (for "pain"), edge-triggered, hurts the player by 15 — a DEBUG aid. It travels the same
+    // funnel as everything else (input becomes a DamagePlayer command the server applies), so you
+    // can force the health bar down on demand: watch regen claw it back, or test the
+    // Downed/respawn, hearth-heal, and shield-absorb paths without hunting down a creature. On P,
+    // NOT H — H is the mend spell (CastHeal, below); sharing one key fired BOTH, so pressing H to
+    // heal ALSO self-damaged you 15 and spent the mend on someone else. Distinct keys, distinct
+    // actions.
+    const bool hurt_raw = keys[SDL_SCANCODE_P];
     if (hurt_raw && !hurt_was_down && !imgui_wants_keys) {
       transport.send(eng::net::Message{eng::sim::damage_player(eng::sim::kLocalPlayer, 15.0f)});
     }
