@@ -4286,6 +4286,51 @@ TEST_CASE("a raised shield soaks a creature blow then expires", "[sim]") {
   REQUIRE_FALSE(reg.all_of<eng::sim::Shielded>(e));
 }
 
+TEST_CASE("a raised shield soaks a spit too: the ranged twin of the melee ward", "[sim]") {
+  // The barrier is a GENERAL damage buffer, not a melee-only one: a homing shot
+  // (advance_projectiles
+  // -- a spitter's venom spit or a thrown bolt) is soaked by `absorb` exactly as a creature's melee
+  // blow is (resolve_creature_contacts), floored at 0. This closes a hole: npc_shield raises the
+  // ward when a CREATURE closes, and a spitter IS that creature, so a ward that stopped the claw
+  // but not the venom bolt left the AI's mana spent for nothing against the one ranged threat.
+  // Varying ONLY the shield is non-tautological: without the absorb read every case returns the
+  // full 20 and the shielded asserts fail.
+  const auto damage_taken = [](bool shielded, float absorb) {
+    entt::registry reg;
+    // a bare victim: no VIT to mitigate and the bolt carries a pre-set 20 damage, so it lands FLAT
+    // and any gap is the shield alone (advance_projectiles applies p.damage without re-mitigating).
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim).health.current = 100.0f;
+    if (shielded) reg.emplace<eng::sim::Shielded>(victim, eng::sim::Shielded{5.0f, absorb});
+    const entt::entity shot = reg.create();
+    reg.emplace<eng::sim::Transform>(shot, eng::Vec2{0.0f, 0.0f});  // on the victim -> impacts now
+    reg.emplace<eng::sim::Projectile>(shot,
+                                      eng::sim::Projectile{victim, entt::null, 20.0f});  // 20 bolt
+    eng::sim::advance_projectiles(reg, 1.0f / 60.0f);
+    return 100.0f - reg.get<eng::sim::Stats>(victim).health.current;
+  };
+  REQUIRE(damage_taken(false, 0.0f) == Approx(20.0f));  // a bare victim eats the whole 20 bolt
+  REQUIRE(damage_taken(true, 6.0f) == Approx(14.0f));   // a 6-absorb barrier soaks 6 -> 14 lands
+  REQUIRE(damage_taken(true, 100.0f) == Approx(0.0f));  // a thick barrier eats the whole weak bolt
+
+  // ...but the ward stops DAMAGE, not CONTACT: a VENOM spit still ENVENOMS a shielded target (the
+  // fang breaks skin), mirroring the melee rule (a poison-ward is a separate spell). Even a barrier
+  // thick enough to soak every point of direct damage doesn't stop the venom from landing.
+  entt::registry reg;
+  const entt::entity victim = reg.create();
+  reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(victim).health.current = 100.0f;
+  reg.emplace<eng::sim::Shielded>(victim,
+                                  eng::sim::Shielded{5.0f, 100.0f});  // soaks all the damage
+  const entt::entity shot = reg.create();
+  reg.emplace<eng::sim::Transform>(shot, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Projectile>(
+      shot, eng::sim::Projectile{victim, entt::null, 20.0f, 600.0f, 5.0f});  // a venom bolt
+  eng::sim::advance_projectiles(reg, 1.0f / 60.0f);
+  REQUIRE(reg.all_of<eng::sim::Poisoned>(victim));  // venom lands through the barrier
+}
+
 TEST_CASE("a defter thrower's bolt flies faster: dexterity's Speed aspect", "[sim]") {
   // DEX's design "Speed" aspect: a defter thrower launches a FASTER projectile, so it reaches the
   // target sooner and is wasted less often when the target dies mid-flight (advance_projectiles
