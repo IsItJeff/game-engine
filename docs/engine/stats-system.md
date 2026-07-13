@@ -352,7 +352,10 @@ Grazing eats a patch bite-by-bite. **Harvesting** turns it into *production*. Pr
 `Harvest` command through the funnel) near a ripe plot and `harvest_nearest_crop` spends a chunk of
 its `stock` to drop a single **meal** — a `Pickup` like a loot orb, but *prepared*: it refills more
 hunger than that stock grazed raw, and being food rather than monster loot it grants none of the
-orb's combat rewards (no heal, no permanent max-HP). So a plot is worth more worked than grubbed at.
+orb's combat rewards — no heal, no permanent max-HP, and **no `Scavenging` XP** (eating a meal
+mustn't grow `Luck` → crit the way grabbing loot does, or a farmer would out-crit a fighter off pure
+food; only a real orb — one carrying a heal or a max-HP bump — trains the loot skill). So a plot is
+worth more worked than grubbed at.
 The meal sits where it's cut — a discrete morsel any hungry colonist walks to and eats on contact,
 exactly like a loot orb (carrying one to whoever's hungriest is a later slice, not this seam). A
 patch too bare to bother (`stock` below the harvest cost) yields nothing — no half-meals.
