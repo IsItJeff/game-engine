@@ -651,6 +651,7 @@ void World::apply_command(const Command& cmd) {
       auto attackers = registry_.view<PlayerControlled, Transform, Attributes, Skills>();
       for (const entt::entity a : attackers) {
         if (attackers.get<PlayerControlled>(a).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't swing
         const entt::entity t = perform_attack(registry_, a, rng_);
         if (t != entt::null) struck.push_back(t);
       }
@@ -667,6 +668,7 @@ void World::apply_command(const Command& cmd) {
       auto throwers = registry_.view<PlayerControlled, Transform, Attributes, Skills, Stats>();
       for (const entt::entity a : throwers) {
         if (throwers.get<PlayerControlled>(a).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't throw
         perform_throw(registry_, a);
       }
       break;
@@ -768,6 +770,7 @@ void World::apply_command(const Command& cmd) {
       auto casters = registry_.view<PlayerControlled, Transform, Attributes, Skills, Stats>();
       for (const entt::entity a : casters) {
         if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't cast
         magic_bolt(registry_, a);
       }
       break;
@@ -780,6 +783,7 @@ void World::apply_command(const Command& cmd) {
       auto casters = registry_.view<PlayerControlled, Transform, Attributes, Skills, Stats>();
       for (const entt::entity a : casters) {
         if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't mend
         heal_spell(registry_, a);
       }
       break;
