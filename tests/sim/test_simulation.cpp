@@ -5513,6 +5513,41 @@ TEST_CASE("a melee hit cleaves a second creature when they cluster", "[sim]") {
   REQUIRE(second_hp_lost(400.0f) == 0.0f);  // 380 away -> well outside the swing, untouched
 }
 
+TEST_CASE("a power swing cleaves from where the blow landed not where the foe was knocked",
+          "[sim]") {
+  // Regression: a POWER swing SHOVES the struck foe (knockback), but the cleave must still catch a
+  // bystander that was in the swing's ARC — centred on where the blow LANDED, not on where the
+  // primary was flung. Geometry: attacker at origin, primary at (10,0) (struck, then knocked out to
+  // (40,0)), bystander at (10,35) — 35 from the struck spot (inside the ~40 cleave width) but ~46
+  // from the knocked-back spot, so it would be WRONGLY spared if the cleave read the post-knockback
+  // position.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk);
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::PowerAttack>(atk);  // a HEAVY swing -> it shoves the struck foe
+  const entt::entity primary = reg.create();
+  reg.emplace<eng::sim::Transform>(primary, eng::Vec2{10.0f, 0.0f});  // nearest -> the aimed target
+  reg.emplace<eng::sim::Stats>(primary, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(primary);  // DEX 1 -> never dodges, so the hit lands
+  reg.emplace<eng::sim::Enemy>(primary);
+  const entt::entity bystander = reg.create();
+  reg.emplace<eng::sim::Transform>(bystander, eng::Vec2{10.0f, 35.0f});  // in the STRUCK spot's arc
+  reg.emplace<eng::sim::Stats>(bystander, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(bystander);
+  reg.emplace<eng::sim::Enemy>(bystander);
+
+  std::mt19937 rng{1234};
+  eng::sim::perform_attack(reg, atk, rng);
+
+  // The primary really was shoved (sanity: the knockback fired, so this isn't a no-op)...
+  REQUIRE(reg.get<eng::sim::Transform>(primary).position.x > 10.0f);
+  // ...and the bystander was still CLEAVED — centred on where the blow landed (10,0), 35 away (<
+  // ~40), NOT on the knocked-back (40,0), ~46 away (which the old code read, wrongly sparing it).
+  REQUIRE(reg.get<eng::sim::Stats>(bystander).health.current < 100.0f);
+}
+
 TEST_CASE("a raised guard softens a creature's blow", "[sim]") {
   // A Blocking victim takes less damage — the reward that pays for the mobility a guard costs.
   const auto hit_damage = [](bool guarding) {

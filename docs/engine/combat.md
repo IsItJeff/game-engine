@@ -244,9 +244,12 @@ envenoming spit from a distance you can't melee. (A slow, heavily-plated **senti
   of **kill vigor**: at low health you both hit harder *and* heal on the kill, a real last-stand — the
   symmetric mirror of the enrage you exploit in your foes.
 - **Cleave** — a wide swing catches a **second** foe: after a melee hit lands on a creature, the
-  nearest *other* `Enemy` within `kCleaveRadius` (40, a swing's width) of it takes `kCleaveFraction`
-  (½) of the blow, softened by *its* own VIT. This hands melee an **anti-swarm** answer — the
-  close-range twin of the ranged throw — with no new input: one swing, two foes when they cluster.
+  nearest *other* `Enemy` within `kCleaveRadius` (40, a swing's width) of **where the blow landed**
+  takes `kCleaveFraction` (½) of the blow, softened by *its* own VIT. (The struck spot is captured
+  *before* a power swing's knockback shoves the primary, so a bystander in the arc is caught by where
+  you hit — not spared because the primary was flung out of range.) This hands melee an **anti-swarm**
+  answer — the close-range twin of the ranged throw — with no new input: one swing, two foes when they
+  cluster.
   It's spillover, not an aimed blow, so it carries **no crit/execute/backstab/venom, and no Valor**
   (the same "spillover isn't a strike" call the [riposte](#raising-a-guard--active-block-k) makes); it still
   chips through `handle_deaths` and flashes so it reads. Pure sim, no RNG (the cleave draws none), so

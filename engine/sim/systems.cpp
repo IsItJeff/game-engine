@@ -2397,8 +2397,15 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // here (motes returned above); a target with no Velocity simply can't be flanked.
   // (The facing geometry lives in the shared backstab_multiplier — one "don't turn your back" rule,
   // the same one a creature uses on a fleeing victim in resolve_creature_contacts.)
-  const float backstab = backstab_multiplier(origin, reg.get<Transform>(target).position,
-                                             reg.try_get<Velocity>(target));
+  // Capture where the blow LANDS now — BEFORE a powered swing's knockback (below) can shove the
+  // target. The CLEAVE further down centres its second-foe search on this struck spot, not on where
+  // the foe was flung to; otherwise a powered hit would spare a bystander that was in the swing's
+  // arc simply because the primary got knocked out of the cleave radius. For an ordinary swing
+  // nothing shoves the target, so struck_pos is just its current position and the cleave is
+  // unchanged (bit-identical). Reused for the backstab read below, which also wants the
+  // pre-knockback spot.
+  const Vec2 struck_pos = reg.get<Transform>(target).position;
+  const float backstab = backstab_multiplier(origin, struck_pos, reg.try_get<Velocity>(target));
 
   // EXECUTE: a creature already worn below kExecuteThreshold of its HP takes MORE from the
   // finishing blow — the offensive MIRROR of enrage (resolve_creature_contacts), which is keyed on
@@ -2476,12 +2483,14 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   constexpr float kCleaveRadius =
       40.0f;  // a swing's width — a foe this near the struck one is caught
   constexpr float kCleaveFraction = 0.5f;  // ...for this share of the blow
-  const Vec2 target_pos = enemies.get<Transform>(target).position;
+  // Centre on `struck_pos` (captured at the strike, above), NOT the target's CURRENT position: a
+  // powered swing has already SHOVED the target away this call, and a bystander in the swing's arc
+  // must be caught by where the blow LANDED, not spared because the primary was flung out of range.
   entt::entity cleaved = entt::null;
   float nearest_other = kCleaveRadius;
   for (const entt::entity other : enemies) {
     if (other == target) continue;  // don't re-hit the one you struck
-    const float d = glm::distance(target_pos, enemies.get<Transform>(other).position);
+    const float d = glm::distance(struck_pos, enemies.get<Transform>(other).position);
     if (d < nearest_other) {
       nearest_other = d;
       cleaved = other;
