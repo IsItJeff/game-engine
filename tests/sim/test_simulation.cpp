@@ -7111,6 +7111,48 @@ TEST_CASE("dropping a keen blade sheds its crit bonus so no phantom crit lingers
   REQUIRE(after.defence_bonus == Approx(6.0f));  // ...while the armour stays worn
 }
 
+TEST_CASE("dropping a weapon sheds its durability too so no phantom blade mends by the fire",
+          "[sim]") {
+  // Regression (bug-hunt find): the Drop command clears the weapon slot, and the blade's remaining
+  // DURABILITY must go with it -- exactly as strength/heft/venom/crit do -- or a player who drops a
+  // WORN blade while ARMOURED keeps a phantom weapon_durability with no weapon. That stale value
+  // has teeth: mend_gear grows it back by a hearth (repairing a blade that's on the ground), and
+  // remove_equipped_if_empty (checked when the armour later shatters) refuses to shed the
+  // truly-bare cache because it still reads a non-zero durability. The sibling weapon-shatter site
+  // already clears it; Drop was the lone desync. Armour is worn too, so the Equipped cache SURVIVES
+  // the drop (only the weapon slot clears), letting us read the shed durability.
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  eng::sim::Equipped& eq = world.registry().emplace<eng::sim::Equipped>(player);
+  eq.strength_bonus = 4;         // wielding a worn blade...
+  eq.move_penalty = 0.25f;       // ...with its heft...
+  eq.weapon_durability = 20.0f;  // ...and life left on it (0 < d < max, so mend_gear WOULD grow it)
+  eq.defence_bonus = 6.0f;       // ...and wearing armour, so the cache outlives the drop
+
+  world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
+  world.step();
+
+  REQUIRE(world.registry().all_of<eng::sim::Equipped>(player));  // armour keeps the cache alive...
+  const eng::sim::Equipped& after = world.registry().get<eng::sim::Equipped>(player);
+  REQUIRE(after.weapon_durability ==
+          Approx(0.0f));                         // ...but the durability was SHED (RED before: 20)
+  REQUIRE(after.strength_bonus == 0);            // ...along with the rest of the weapon slot...
+  REQUIRE(after.defence_bonus == Approx(6.0f));  // ...while the armour stays worn
+
+  // And the harm it prevents: with the slot truly clear, mend_gear (guarded on weapon_durability >
+  // 0) finds no blade to repair, so a hearth can't conjure durability onto a weapon that's on the
+  // floor.
+  const entt::entity hearth = world.registry().create();
+  world.registry().emplace<eng::sim::Transform>(
+      hearth, world.registry().get<eng::sim::Transform>(player).position);
+  world.registry().emplace<eng::sim::Hearth>(hearth,
+                                             eng::sim::Hearth{50.0f});  // radius covers player
+  for (int i = 0; i < 60; ++i)
+    eng::sim::mend_gear(world.registry(), 1.0f / 60.0f);  // a second by fire
+  REQUIRE(world.registry().get<eng::sim::Equipped>(player).weapon_durability ==
+          Approx(0.0f));  // RED before: mend climbs the phantom blade above 20
+}
+
 TEST_CASE("a bare-handed Drop does nothing", "[sim]") {
   // Drop with no weapon wielded is a harmless no-op — no phantom weapon appears.
   eng::sim::World world;
