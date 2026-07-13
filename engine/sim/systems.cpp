@@ -1271,16 +1271,19 @@ void update_stamina(entt::registry& reg, float dt) {
       if (reg.all_of<Sprinting>(e)) stamina.current -= kSprintDrainBonus * dt;
       if (stamina.current < 0.0f) stamina.current = 0.0f;  // ...never below empty
     } else {
-      // Resting: recover, faster the tougher you are — but NOT on an empty stomach or canteen. A
-      // starving or dehydrated character gets no second wind: the stamina twin of
-      // regenerate_vitals' starvation heal-gate, so survival failure saps your reserves too, not
-      // just your health. And, composed with the stamina==0 exhaustion crawl, a starver who flees
-      // tires to a crawl it can't shake off — the design's "escalating inefficiency" emerging from
-      // two systems, no new penalty. update_stamina runs just BEFORE drain_hunger/drain_water in
-      // step(), so this reads last tick's need level: a 1-frame lag, immaterial for a Need that
-      // empties over minutes. Creatures default hunger/water to full (100), so they're never gated
-      // here.
-      if (st.hunger.current <= 0.0f || st.water.current <= 0.0f) continue;
+      // Resting: recover, faster the tougher you are — but NOT on an empty stomach or canteen, NOR
+      // while FROZEN. A starving, dehydrated, or freezing character gets no second wind: the
+      // stamina twin of regenerate_vitals' heal-gate (which blocks healing on all three), so ANY
+      // survival failure saps your reserves too, not just your health — a freezing rester is as
+      // spent as a starving one, not mysteriously refilling its stamina by the cold. And, composed
+      // with the stamina==0 exhaustion crawl, a spent character who flees tires to a crawl it can't
+      // shake off — the design's "escalating inefficiency" emerging from two systems, no new
+      // penalty. update_stamina runs just BEFORE drain_hunger/drain_water/drain_warmth in step(),
+      // so this reads last tick's need level: a 1-frame lag, immaterial for a Need that empties
+      // over minutes. Creatures default hunger/water/warmth to full (100), so they're never gated
+      // here; and warmth only reaches 0 inside a ColdZone, so a world without one is bit-identical.
+      if (st.hunger.current <= 0.0f || st.water.current <= 0.0f || st.warmth.current <= 0.0f)
+        continue;
       // Nor behind a raised GUARD: bracing to turn blows is exertion, not rest — you get no second
       // wind while Blocking. So a guard-tank bleeds the stamina its ripostes spend (see
       // resolve_creature_contacts) and can't refill it until it lowers the guard, making a
