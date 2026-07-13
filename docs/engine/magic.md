@@ -49,8 +49,10 @@ so the whole colony can learn from one book over time (and the player no longer 
 by reaching it first — the supply a `Scholar`-aspiration colonist needs to reliably become a mage).
 `study_spellbooks` teaches **any person** — the player *and* an NPC (a colonist who finds a tome becomes
 a mage too, the player==NPC parity) — and skips a reader who already knows the spell (so a re-read is a
-no-op; the lectern teaches each newcomer once). Learning *more* spells from further books or a mentor is
-the next slice of the trunk.
+no-op; the lectern teaches each newcomer once). A learned caster then wears a small **arcane-violet
+core** on the field (`draw_entities`), an inner spark distinct from the transient guard/downed/shield
+rings — the visible payoff of the whole loop, so you can *see* which colonists a Spellbook has turned
+into mages. Learning *more* spells from further books or a mentor is the next slice of the trunk.
 
 ### The first spell — `magic_bolt`
 

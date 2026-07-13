@@ -181,6 +181,24 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     if (world.registry().all_of<eng::sim::Shielded>(e)) {
       dl->AddCircle(ImVec2{p.x, p.y}, radius + 5.0f, IM_COL32(90, 235, 220, 235), 0, 2.0f);
     }
+
+    // A CASTER reads on the FIELD: any being that has LEARNED Spellcasting wears a small
+    // arcane-violet CORE — an inner spark, NOT an outer status ring, so a mage is legible at a
+    // glance. Persistent (a mage always knows magic), unlike the transient guard/downed/shield
+    // rings, so it's the visible payoff of the whole learn-magic loop: the opener mage, and every
+    // Scholar-aspiration colonist that reached a Spellbook and emerged a caster, wears the mark for
+    // good. Drawn LAST and at the centre (radius*0.4) so the dot's own colour cues still ring it.
+    // Presentation-only: reads the Skills sheet, never writes it; a being with no Skills (motes,
+    // creatures, gear) or no Spellcasting has none. Matches the arcane-violet of the Spellbook it's
+    // learned from.
+    if (const auto* sk = world.registry().try_get<eng::sim::Skills>(e);
+        sk != nullptr && sk->find(eng::sim::SkillId::Spellcasting) != nullptr) {
+      // Floored at 1.5px so the spark stays legible even on a shrunken dot — a heavily-shunned
+      // villain-mage's `radius` is scaled down by renown_scale, and the cue's whole job is to be
+      // seen.
+      const float core = radius * 0.4f < 1.5f ? 1.5f : radius * 0.4f;
+      dl->AddCircleFilled(ImVec2{p.x, p.y}, core, IM_COL32(180, 120, 245, 235));
+    }
   }
 }
 
