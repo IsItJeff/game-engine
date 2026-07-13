@@ -96,6 +96,21 @@ constexpr std::int8_t kGrudgeThreshold = -20;
 constexpr float kCamaraderieRadius = 120.0f;  // also the "how far a deed is witnessed" range below
 constexpr std::int8_t kCamaraderieAffinity = 5;
 
+// A LESSON forges GRATITUDE: the tick a student LEARNS a craft it never had from its mentor (the
+// skill first appears, 0 -> level 1), the student gains this much affinity TOWARD the mentor — a
+// shared-events-forge-ties bond beside camaraderie (a shared kill), admiration (a witnessed
+// rescue), and the grudge (a cruel strike). Directed student->mentor, feeding the same readers (the
+// apprentice clusters toward its master via bond-pull, defends it, is rescued-from-farther). A
+// DISCRETE moment like those, not the per-tick XP trickle: teach fires every adjacent tick, but a
+// skill is learned ONCE, so the bond forms once per NEW craft passed (a mentor who later teaches a
+// SECOND craft the student lacks bonds it again). Only the first-LEARN is caught, never a rank-up:
+// grant_skill_xp banks only XP, and levels are applied a step later by advance_progression, so
+// within teach the sole detectable breakthrough is the skill appearing. Set just ABOVE kBondPull
+// (10) so ONE lesson is a real Acquaintance tie the readers act on, yet below a rescue's +20 (a
+// lesson is a smaller thing than your life saved). Unlatched, so it fades if the apprenticeship
+// doesn't continue. A knob.
+constexpr std::int8_t kGratitudeAffinity = 12;
+
 // A cruel strike is WITNESSED: nearby colonists who saw it (within kCamaraderieRadius) form a small
 // grudge TOWARD the striker too — the negative mirror of camaraderie, so a reputation for cruelty
 // SPREADS through the community, not just the direct victim (who forms a larger grudge of their
@@ -1870,11 +1885,27 @@ void teach(entt::registry& reg) {
     if (student == entt::null) continue;  // no one nearby worth teaching this tick
 
     // The lesson: the student gains XP in the mentor's best skill (learning it at level 1 if new,
-    // via grant_skill_xp), and the mentor grows TEACHING -> Charisma for passing it on.
+    // via grant_skill_xp), and the mentor grows TEACHING -> Charisma for passing it on. Note
+    // whether the student ALREADY knew the craft, so a first-LEARN this tick can be detected below.
+    const bool knew_craft = folk.get<Skills>(student).find(best) != nullptr;
     grant_skill_xp(folk.get<Skills>(student), folk.get<Attributes>(student), best, kLessonPerTick,
                    &folk.get<CharacterLevel>(student));
     grant_skill_xp(folk.get<Skills>(mentor), folk.get<Attributes>(mentor), SkillId::Teaching,
                    kTeachingPerTick, &folk.get<CharacterLevel>(mentor));
+
+    // GRATITUDE: the tick a student LEARNS a craft it never had (the skill just appeared, 0 ->
+    // level 1) bonds it to the mentor (kGratitudeAffinity) — the shared-events-forge-ties bond
+    // beside camaraderie/admiration/grudge. Detected as first-LEARN, NOT a rank-up: grant_skill_xp
+    // banks only XP, and levels are applied a step later by advance_progression, so within teach
+    // the sole detectable breakthrough is the skill appearing (a rank-up would need to read after
+    // that later system). Fires once per NEW craft passed (a skill is learned once); a mentor whose
+    // best later becomes a SECOND craft the student lacks bonds it again. nudge_affinity is
+    // view-safe: it only get_or_emplaces Relationships + writes a vector, adding a component
+    // OUTSIDE the folk view's signature (Skills/Attributes/Transform/CharacterLevel) — the same
+    // reason camaraderie/grudge nudge safely mid-system. A world with no first-learn (every
+    // short-run fixture) forms no tie -> bit-identical.
+    if (!knew_craft && folk.get<Skills>(student).find(best) != nullptr)
+      nudge_affinity(reg, student, mentor, kGratitudeAffinity);
   }
 }
 

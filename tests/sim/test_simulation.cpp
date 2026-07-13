@@ -2149,6 +2149,39 @@ TEST_CASE("mentorship needs a real gap: fresh colonists teach nothing", "[sim]")
   REQUIRE_FALSE(taught(5, 500.0f));  // ...a veteran but no student in reach -> teaches no one
 }
 
+TEST_CASE("a first lesson bonds the student to the mentor: gratitude", "[sim]") {
+  // A shared-events-forge-ties bond (beside camaraderie, admiration, and the grudge): the tick a
+  // student LEARNS a craft it never had from its mentor (here Striking, 0 -> 1) bonds it TO the
+  // mentor. Set above kBondPull (10), so ONE lesson is a real Acquaintance tie the readers act on,
+  // not an inert sub-floor nudge. A short run where nobody learns anything forms no tie
+  // (bit-identical). Returns the student's affinity toward the mentor by VALUE (0 if no edge) —
+  // never a pointer into the destroyed local registry.
+  const auto gratitude = [](int mentor_striking) {
+    entt::registry reg;
+    const entt::entity mentor = reg.create();
+    reg.emplace<eng::sim::Npc>(mentor);
+    reg.emplace<eng::sim::Transform>(mentor, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mentor);
+    reg.emplace<eng::sim::CharacterLevel>(mentor);
+    eng::sim::Skills& msk = reg.emplace<eng::sim::Skills>(mentor);
+    if (mentor_striking > 1) msk.train(eng::sim::SkillId::Striking).level = mentor_striking;
+    const entt::entity student = reg.create();
+    reg.emplace<eng::sim::Npc>(student);
+    reg.emplace<eng::sim::Transform>(student, eng::Vec2{10.0f, 0.0f});  // within mentor reach (40)
+    reg.emplace<eng::sim::Attributes>(student);
+    reg.emplace<eng::sim::CharacterLevel>(student);
+    reg.emplace<eng::sim::Skills>(student);  // a novice — learning Striking is the first lesson
+    eng::sim::teach(reg);
+    const auto* rel = reg.try_get<eng::sim::Relationships>(student);
+    if (rel == nullptr) return 0;
+    for (const eng::sim::Relation& e : rel->edges)
+      if (e.other == mentor) return static_cast<int>(e.affinity);
+    return 0;
+  };
+  REQUIRE(gratitude(5) >= 10);  // learning a craft -> a REAL Acquaintance bond (>= kBondPull)...
+  REQUIRE(gratitude(1) == 0);   // ...a fresh mentor teaches nothing -> no lesson, no gratitude bond
+}
+
 TEST_CASE("train_on_damage ignores non-finite and non-positive damage", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();
