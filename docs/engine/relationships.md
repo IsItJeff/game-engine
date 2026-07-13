@@ -14,10 +14,11 @@ affinity-moving events:
 - **`Relationships`** — a lazy, sparse, append-ordered `std::vector<Relation>` on the
   subject: how *this* character regards others.
 - **`nudge_affinity(from, toward, delta)`** — the single write-point every affinity-moving
-  event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Four fire it today:
+  event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Five fire it today:
   a **rescue** forms a **mutual** bond between rescuer and saved *and* (if witnessed) earns the
-  rescuer **admiration** from onlookers, a **cruel strike** forms a grudge, and **felling a foe near
-  allies** forges *camaraderie* (nearby colonists warm to the hero).
+  rescuer **admiration** from onlookers, a **cruel strike** forms a grudge, **felling a foe near
+  allies** forges *camaraderie* (nearby colonists warm to the hero), and a **first lesson**
+  forges *gratitude* (a student bonds to the mentor who teaches it a new craft).
 
 ## Why it matters
 
@@ -45,7 +46,7 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
 
 ## How it works
 
-**Four events** move affinity today — three that bond, one that grudges. The first positive one lives
+**Five events** move affinity today — four that bond, one that grudges. The first positive one lives
 at the **rescue** in `handle_deaths` — the same line that already credits the rescuer with
 **Charity**:
 
@@ -96,6 +97,19 @@ downed ally, `handle_deaths` calls that same `bond_witnesses` centred on the res
 onlookers **admire the hero** (witness → rescuer), exactly as they warm to a killer. The
 witnessed-event set is now symmetric: a cruel strike spreads grudges, and a kill *and* a rescue both
 spread bonds — the one heroism that used to go unseen no longer does.
+
+A **first lesson** forges the fifth tie — **gratitude**. When `teach` (mentorship — a veteran passing
+a skill to a nearby novice) lands the student a craft it never had (the skill first appears,
+`0 → 1`), the student bonds to its mentor: `nudge_affinity(student, mentor, kGratitudeAffinity)`. It's
+a **discrete** moment like the other three — a skill is *learned once*, so a lesson bonds once per
+**new craft** passed (a mentor who later teaches a second craft the student lacks bonds it again), not
+the per-tick XP trickle `teach` grants every adjacent tick. (Only the first-**learn** is caught, not a
+rank-up: `grant_skill_xp` banks XP, and levels are applied a step later by `advance_progression`, so
+within `teach` the only visible breakthrough is the skill *appearing*.) Unlike the witnessed events
+it's a **direct** tie (student → mentor), not one spread to onlookers. Set just above `kBondPull`, so
+**one** lesson is a real Acquaintance bond the readers act on — the apprentice **clusters toward**,
+**defends**, and is **rescued from farther** by the master who taught it — yet unlatched, so it fades
+if the apprenticeship doesn't continue.
 
 A witnessed heroic act — a kill *or* a rescue — is scaled by the hero's **Charisma** (see
 [progression](progression.md)) in **two** ways. *How much* devotion each witness feels:
@@ -190,7 +204,7 @@ felt strongly about the one who died, in whichever direction they felt.
 
 ## The tradeoffs
 
-- **Four events, a few readers.** No personality-match seeding (that's a later ring) and no
+- **Five events, a few readers.** No personality-match seeding (that's a later ring) and no
   *stored* bond stages — the ladder is the derived `bond_tier`, not a slot — just the smallest struct
   those grow into. (Ties do now **decay** and the deepest **latch**, see above.) Exactly as the
   morality seed shipped a couple of deeds and let the rest wire themselves.
@@ -199,9 +213,9 @@ felt strongly about the one who died, in whichever direction they felt.
   friend a creature is bearing down on (the `steer_npcs` rung just below the downed-rescue, the first
   slice of the design's *PROTECT* stance). The *remaining* deeper ones — fleeing *with* a friend,
   refusing to *fight* them, healing them *first* — are still later work.
-- **Unbounded edge list.** Bounded in practice (ties form only on a rescue, a grudge, or a shared
-  kill — a finite set of triggers), but formally open — a `ponytail:` comment names the `cap-N +
-  evict-weakest` upgrade so it's tracked debt, not silent.
+- **Unbounded edge list.** Bounded in practice (ties form only on a rescue, a grudge, a shared kill,
+  or a first lesson — a finite set of triggers), but formally open — a `ponytail:` comment names the
+  `cap-N + evict-weakest` upgrade so it's tracked debt, not silent.
 - **`int8`, not the ledger's `int32`.** Affinity *saturates into bands*; it doesn't
   accumulate over a life toward a gate the way `standing` does. So it takes the
   Personality-axis width, and no float or wide int enters the sim.
@@ -214,9 +228,10 @@ trait-scaled-radius shape every other axis uses — so a loyal colonist crosses 
 near a bonded ally while a fickle one follows only a friend underfoot. **All six personality
 axes are now wired.**
 
-Beyond that, the write-point is the whole point: four events already prove it out (a rescue bonds the
-saved *and* wins the rescuer admiration, a cruel strike grudges, a shared kill forges camaraderie), so
-each further event — a **shared meal**, a **broken promise** — is just one more `nudge_affinity` call,
+Beyond that, the write-point is the whole point: five events already prove it out (a rescue bonds the
+saved *and* wins the rescuer admiration, a cruel strike grudges, a shared kill forges camaraderie, a
+first lesson forges gratitude), so each further event — a **shared meal**, a **broken promise** — is
+just one more `nudge_affinity` call,
 and `trust`
 appends as a second `Relation` field the day its own event lands. The derived `bond_tier` above
 already names the ladder those events climb, and **`decay_bonds`** already lets cold ties fade toward
