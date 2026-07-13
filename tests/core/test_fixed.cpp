@@ -72,3 +72,16 @@ TEST_CASE("Fixed saturates instead of overflowing (UB-free, replay-stable)", "[f
   REQUIRE((big * big) == Fixed::from_raw(0x7fffffff));
   REQUIRE((Fixed::from_raw(0x7fffffff) + Fixed::from_int(1)) == Fixed::from_raw(0x7fffffff));
 }
+
+TEST_CASE("Fixed round and negate are UB-free at the raw extremes", "[fixed]") {
+  // The two ops that historically skipped the 64-bit path: round() added kOne/2 in int32
+  // (overflowing near INT32_MAX), and unary operator-() negated in int32 (overflowing at
+  // INT32_MIN). At the saturated extremes both must stay UB-free — the ASan/UBSan CI leg guards
+  // this, and the values must be right (the old int32 overflow both trips UBSan AND yields a wrong
+  // wrapped result).
+  const Fixed max_val = Fixed::from_raw(0x7fffffff);  // ~32767.99998 — the saturated max
+  REQUIRE(max_val.round() == 32768);  // rounds up; the +kOne/2 must not overflow int32
+  const Fixed min_val = Fixed::from_raw(-0x7fffffff - 1);  // INT32_MIN raw — the saturated min
+  REQUIRE((-min_val) == Fixed::from_raw(0x7fffffff));      // negate saturates (no -INT32_MIN UB)
+  REQUIRE((-Fixed::from_int(3)) == Fixed::from_int(-3));  // and ordinary negation still round-trips
+}
