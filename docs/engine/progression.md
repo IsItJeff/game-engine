@@ -38,7 +38,9 @@ Seventeen strands are wired end to end so far, across all seven attributes:
   [combat](combat.md#slipping-the-blow-evasion-dexterity)). Athletics is Conditioning's *burst* twin:
   steady movement builds Endurance, a **sprint** builds the agility (DEX) that sharpens dodge *and*
   throw-aim — so a kiter who dashes a lot becomes genuinely harder to hit (player-triggered, like
-  Throwing, since only the player sprints);
+  Throwing, since only the player sprints). Agility also **wades a mire's mud faster**
+  (`waded_mire_factor`) — the *movement twin* of Strength's weapon-carry and Endurance's armour-bear,
+  the same `eased_bane` half-floor so mud always still slows;
 - **collecting loot** trains **Scavenging**, which raises **Luck** — fortune with *two* effects: your
   chance to land a **critical hit** for doubled damage (see
   [combat](combat.md#lucky-strikes-crits-luck)) **and** how much **health a found orb restores** (the

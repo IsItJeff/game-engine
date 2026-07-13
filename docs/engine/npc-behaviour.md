@@ -364,8 +364,17 @@ boggy patch of mud — is the first piece of terrain that touches movement: `int
 **movement** of anyone standing in it by the mire's `slow_factor` (**0.4** = a crawl to ~40% speed). It
 is **not a rung** — it doesn't decide *where* to go, it drags on the choice already made, so a colonist
 fleeing, foraging, or charging across the mud all bog down the same way. It slows **player, NPC,
-creature, and ambient mote alike** — mud doesn't care who you are, which makes it *tactical* from both
+creature, and ambient mote alike** — no one is *immune* — which makes it *tactical* from both
 sides: lead a charging brute through it to gain ground, or get caught fleeing across it.
+
+But **agility eases the mud**: a nimble (higher-**Dexterity**) mover *wades* faster —
+`waded_mire_factor` shrinks the drag `(1 − slow_factor)` by DEX through the same **`eased_bane`** the
+STR weapon-carry and VIT armour-bear use, so the mire is no longer the one movement modifier that
+reads no attribute. The relief is capped at **half**, so a master still slows (agility is *not*
+immunity — the parity above holds), and a mover with **no `Attributes`** (a mote, a projectile) or
+**DEX 1** takes the *full* drag, so the pre-agility world is bit-identical. So a slippery swarmer (its
+innate DEX) crosses a bog that mires a lumbering brute — the same "who you are shapes how you move"
+the weapon-heft and need debuffs already draw.
 
 The key detail is **what** it scales: the mire drags on the **position delta** `integrate_motion`
 applies this tick — `position += velocity · dt · mire_factor` — and **never the stored velocity**. That

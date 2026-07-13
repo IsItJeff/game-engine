@@ -1213,25 +1213,33 @@ void integrate_motion(entt::registry& reg, float dt) {
   // convenience.
   //
   // A MIRE drags on it: a mover standing in a boggy MireZone advances at that mire's slow_factor
-  // this tick — so people, creatures, AND ambient motes all crawl through the mud (parity: mud
-  // doesn't care who you are; kite a brute through it, or get caught fleeing across it). Crucially
-  // the drag scales the MOVEMENT (the position delta), NOT the stored Velocity. That is what makes
-  // it safe for a mover NOTHING re-drives each tick — an ambient mote, or an idle loner steer_npcs
-  // left alone (e.g. a sociability<=0 colonist that matched no want-rung): it keeps its drift
-  // velocity and simply crawls THROUGH the mud at a steady slow_factor and exits, rather than
-  // having its velocity multiplied down in place every tick to a frozen stop it never escapes. (An
-  // earlier version scaled the velocity itself and had to exclude motes to dodge that compounding
-  // freeze — but idle loners hit it too; scaling the delta fixes it for every mover at once.) A
-  // RE-driven mover (creature/steered NPC/commanded player) travels the same distance either way
-  // (to within float rounding), and every velocity-reading system downstream (update_stamina,
-  // drain_hunger — both binary moving/still) sees the true heading, so a mired crawler still counts
-  // as MOVING (it's exerting hard for little ground). No MireZone in the world -> mire_factor
-  // is 1.0 -> position += velocity
-  // * dt exactly (x * 1.0f == x, so bit-identical). No RNG.
+  // this tick — so people, creatures, AND ambient motes all crawl through the mud (parity: no one
+  // is IMMUNE to it; kite a brute through it, or get caught fleeing across it). Crucially the drag
+  // scales the MOVEMENT (the position delta), NOT the stored Velocity. That is what makes it safe
+  // for a mover NOTHING re-drives each tick — an ambient mote, or an idle loner steer_npcs left
+  // alone (e.g. a sociability<=0 colonist that matched no want-rung): it keeps its drift velocity
+  // and simply crawls THROUGH the mud and exits, rather than having its velocity multiplied down in
+  // place every tick to a frozen stop it never escapes. (An earlier version scaled the velocity
+  // itself and had to exclude motes to dodge that compounding freeze — but idle loners hit it too;
+  // scaling the delta fixes it for every mover at once.) A RE-driven mover (creature/steered
+  // NPC/commanded player) travels the same distance either way (to within float rounding), and
+  // every velocity-reading system downstream (update_stamina, drain_hunger — both binary
+  // moving/still) sees the true heading, so a mired crawler still counts as MOVING (it's exerting
+  // hard for little ground).
+  //
+  // AGILITY eases the drag: a nimble (higher-Dexterity) mover WADES the mud faster —
+  // waded_mire_factor shrinks the drag by DEX (the movement twin of STR's weapon-carry and VIT's
+  // armour-bear, so the mire is no longer the one movement modifier reading no attribute), capped
+  // at half so mud still slows a master (agility isn't immunity — the parity above holds). A mover
+  // with no Attributes (a mote, a projectile) or DEX 1 takes the FULL drag. No MireZone in the
+  // world -> mire_factor is 1.0
+  // -> waded_mire_factor returns 1.0 -> position += velocity * dt exactly (bit-identical). No RNG.
   auto view = reg.view<Transform, Velocity>();
   for (const entt::entity e : view) {
     Transform& tf = view.get<Transform>(e);
-    tf.position += view.get<Velocity>(e).value * dt * mire_factor(reg, tf.position);
+    const float factor =
+        waded_mire_factor(mire_factor(reg, tf.position), reg.try_get<Attributes>(e));
+    tf.position += view.get<Velocity>(e).value * dt * factor;
   }
 }
 

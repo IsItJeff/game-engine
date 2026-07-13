@@ -995,9 +995,9 @@ struct Attributes {
 // first relieves kBaneReliefPerLevel of it, capped at kBaneReliefCap (half) so a worn item ALWAYS
 // costs something (the tradeoff survives to endgame). Mastery level 1 (the spawn default, every
 // un-mastered fixture) yields relief 0 — the FULL bane — so the pre-mastery world is bit-identical.
-// Shared by the weapon-heft (STR) and armour-stamina (VIT) easers below, so both gear banes shrink
-// by the SAME rule. Manual clamp, no <algorithm> pulled in for one call (matching build_title
-// above).
+// Shared by the weapon-heft (STR) and armour-stamina (VIT) gear easers below AND the mire-wade
+// (DEX) terrain easer, so every "mastery shrinks a penalty, never removes it" case bends by the
+// SAME rule. Manual clamp, no <algorithm> pulled in for one call (matching build_title above).
 inline float eased_bane(float base_penalty, int mastery_level) {
   constexpr float kBaneReliefPerLevel = 0.05f;  // each mastery level past 1 eases the bane 5%...
   constexpr float kBaneReliefCap = 0.5f;        // ...up to half; a worn item always costs something
@@ -1023,6 +1023,28 @@ inline float carried_move_penalty(float base_penalty, const Attributes* attrs) {
 // penalty into the recovery boost.
 inline float borne_regen_penalty(float base_penalty, const Attributes* attrs) {
   return attrs != nullptr ? eased_bane(base_penalty, attrs->endurance.level) : base_penalty;
+}
+
+// DEX = "agility": a nimble mover WADES a mire's mud better — the movement twin of STR's weapon
+// carry and VIT's armour-bear, closing the gap where the mire was the ONE movement modifier that
+// read no attribute (weapon-heft and need-efficiency already shape move speed). Given a mire's
+// `slow_factor` (< 1 means drag; 1.0 is firm ground), returns the EFFECTIVE factor after Dexterity
+// eases it: the DRAG itself (1 - slow_factor) shrinks by `eased_bane`, so a nimble mover keeps more
+// of its speed — but eased_bane caps the relief at half, so mud ALWAYS slows (agility is not
+// immunity, the tradeoff the parity comment cares about survives). Firm ground (>= 1), a null
+// Attributes (a mote, a projectile), OR Dexterity level 1 (every un-trained mover, every existing
+// mire test) -> the slow_factor is returned VERBATIM via an early return, so the pre-agility world
+// is EXACTLY bit-identical -- not merely ~1-ulp-close. That matters: the round-trip `1 - (1 - x)`
+// is NOT the float identity for x < 0.5 (it double-rounds), so a DEX-1 mover routed through the
+// eased path would drift a ulp from the old `mire_factor` value and desync the lockstep/replay
+// gate; the dex <= 1 short-circuit keeps it literally equal. Read in integrate_motion, the one
+// place the mire drag is applied.
+inline float waded_mire_factor(float slow_factor, const Attributes* attrs) {
+  if (slow_factor >= 1.0f || attrs == nullptr) return slow_factor;  // firm ground, or no agility
+  const int dex = attrs->dexterity.level;
+  if (dex <= 1) return slow_factor;  // untrained -> the raw drag VERBATIM (no 1-(1-x) round-trip)
+  const float drag = 1.0f - slow_factor;  // how much speed the mud steals
+  return 1.0f - eased_bane(drag, dex);    // agility keeps some of it back
 }
 
 // A BUILD-derived title — the "from build" half of the derived recognition the `standing_title`
