@@ -154,15 +154,19 @@ give waves texture:
 | **Brute** (red) | 40 | 70 | 15 | 0% | slow, tanky, hits hard — wear it down, kite it |
 | **Swarmer** (orange) | 15 | 130 | 8 | ~21% | fast, fragile (~one strike), weak, *slippery*, and **venomous** — corners you in numbers, and its bite lingers |
 | **Spitter** (violet) | 25 | 55 | 4 | 0% | slow, fragile, feeble in melee — but **ranged** and **venomous**: plinks you with a homing spit that **envenoms** on hit, from beyond your reach, so you must close on it or throw back; drops a **venom fang** when felled |
+| **Leech** (blood-red) | 22 | 75 | 8 | 0% | middling — but it **DRINKS**: every bite it lands **heals it 4** (`lifesteal_per_hit`), the *only* creature self-heal, so it out-sustains a slow chip. **Burst it or kite it** — don't stand and trade |
 
 The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips ~1 strike in
-5, its innate Dexterity) *and venomous*, and the spitter is **RANGED** *and venomous* — so they
-threaten you for different reasons: the brute up front, the swarm on the retreat, the spitter's
-envenoming spit from a distance you can't melee. (A slow, heavily-plated **sentinel** — 60 HP, VIT 5
-— rounds out the reinforcement mix and drops armour.)
+5, its innate Dexterity) *and venomous*, the spitter is **RANGED** *and venomous*, and the leech
+**SUSTAINS** — so they threaten you for different reasons: the brute up front, the swarm on the
+retreat, the spitter's envenoming spit from a distance you can't melee, and the leech's self-heal that
+punishes a war of attrition. (A slow, heavily-plated **sentinel** — 60 HP, VIT 5 — rounds out the
+reinforcement mix and drops armour.)
 
-- **HP** (a `Stats` component) that strikes whittle down; **no regen**, so you can wear
-  it down. **VIT** (an `Attributes` component) softens the blows it takes.
+- **HP** (a `Stats` component) that strikes whittle down; **no regen** — *except* the **leech**, whose
+  landed bites heal it (`lifesteal_per_hit`, "procs as data"), so you must out-damage its drink or
+  deny its hits — for every other archetype you can simply wear it down. **VIT** (an `Attributes`
+  component) softens the blows it takes.
 - **`chase_prey`** homes its velocity on the **nearest person** each tick — the player
   *or* an NPC — at the creature's own `chase_speed`, so a swarmer runs you down while a
   brute lumbers. It **skips anyone sheltering in a `Hearth`** (`in_a_hearth`, the same reach

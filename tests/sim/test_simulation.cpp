@@ -5429,6 +5429,31 @@ TEST_CASE("a worn-down creature enrages and hits harder", "[sim]") {
   REQUIRE(wounded_hit > healthy_hit);          // ...and the cornered beast hit harder
 }
 
+TEST_CASE("a leech drinks: a landed bite heals the creature up to its max", "[sim]") {
+  // The LEECH archetype's sustain: every blow it LANDS heals it `lifesteal_per_hit` (the only
+  // creature self-heal — creatures otherwise never regen), capped at its own max. A plain creature
+  // (lifesteal 0) heals nothing (the gate). Measured on the CREATURE's health after one landed
+  // bite.
+  const auto leech_healed = [](float lifesteal, float start_hp) {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(
+        victim);  // no Attributes -> DEX 1 (never dodges) -> the bite lands
+    const entt::entity leech = reg.create();
+    reg.emplace<eng::sim::Transform>(leech, eng::Vec2{0.0f, 0.0f});  // in contact -> it bites
+    reg.emplace<eng::sim::Enemy>(leech).lifesteal_per_hit = lifesteal;
+    reg.emplace<eng::sim::Stats>(leech, eng::sim::Vital{start_hp, 40.0f, 0.0f});  // room to heal
+    std::mt19937 rng{1234};
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return reg.get<eng::sim::Stats>(leech).health.current - start_hp;  // how much it healed
+  };
+  REQUIRE(leech_healed(4.0f, 10.0f) == Approx(4.0f));  // a wounded leech drinks 4 on its bite
+  REQUIRE(leech_healed(0.0f, 10.0f) == Approx(0.0f));  // a plain creature heals nothing (the gate)
+  REQUIRE(leech_healed(4.0f, 38.0f) ==
+          Approx(2.0f));  // near-full -> capped at max 40 (gains only 2)
+}
+
 TEST_CASE("a creature backstabs a fleeing victim: don't turn your back on a beast", "[sim]") {
   // The DEFENSIVE mirror of the melee backstab (perform_attack), through the SAME shared
   // backstab_multiplier: a creature hits a victim FLEEING it (moving away, back turned) harder, so
@@ -7175,7 +7200,7 @@ TEST_CASE("a creature's blow harms an NPC too, not just the player", "[sim]") {
   REQUIRE(evasion->xp.to_double() > 0.0);
 }
 
-TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, spitter)",
+TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, spitter, leech)",
           "[sim]") {
   // make_brute/make_swarmer/make_spitter are file-local, but a fresh World seeds one of each. Pin
   // their HP/speed/damage here: make_creature takes three adjacent float params (hp, chase_speed,
@@ -7188,6 +7213,7 @@ TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, 
   bool saw_brute = false;
   bool saw_swarmer = false;
   bool saw_spitter = false;
+  bool saw_leech = false;
   for (const entt::entity e : reg.view<eng::sim::Enemy>()) {
     const float hp = reg.get<eng::sim::Stats>(e).health.max;
     const eng::sim::Enemy& en = reg.get<eng::sim::Enemy>(e);
@@ -7206,7 +7232,14 @@ TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, 
       REQUIRE(en.spit_range == Approx(250.0f));
       REQUIRE(en.spit_damage == Approx(7.0f));
       REQUIRE(en.poison_per_second == Approx(5.0f));  // its spit envenoms on hit
-    } else {  // swarmer: fragile, fast, weak — and slippery
+    } else if (hp == Approx(22.0f)) {  // leech: middling, melee — but DRINKS on every landed bite
+      saw_leech = true;
+      REQUIRE(en.chase_speed == Approx(75.0f));
+      REQUIRE(en.attack_damage == Approx(8.0f));
+      REQUIRE(en.lifesteal_per_hit ==
+              Approx(4.0f));           // the sustain — heals per bite (only the leech)
+      REQUIRE(en.spit_range == 0.0f);  // melee-only
+    } else {                           // swarmer: fragile, fast, weak — and slippery
       saw_swarmer = true;
       REQUIRE(hp == Approx(15.0f));
       REQUIRE(en.chase_speed == Approx(130.0f));
@@ -7218,4 +7251,5 @@ TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, 
   REQUIRE(saw_brute);
   REQUIRE(saw_swarmer);
   REQUIRE(saw_spitter);
+  REQUIRE(saw_leech);
 }
