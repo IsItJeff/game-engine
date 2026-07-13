@@ -486,8 +486,10 @@ inline constexpr float kPoisonDuration = 3.0f;  // how long a fresh envenoming l
                                                 // shared by the swarmer's bite and a venom weapon
 
 // A cast BARRIER — the game's first TIMED BUFF, Poisoned's beneficial mirror (same {timer,
-// magnitude} shape). While present, `absorb` is soaked off each creature blow before it bites
-// (resolve_creature_contacts), the last line of defence on top of static VIT/armour. Raised by
+// magnitude} shape). While present, `absorb` is soaked off each incoming hit before it bites — a
+// melee blow (resolve_creature_contacts) OR a ranged shot (advance_projectiles: a spitter's venom
+// bolt or a thrown one) — a GENERAL damage buffer, the last line of defence on top of static
+// VIT/armour. It stops DAMAGE, not CONTACT (a spit's venom still lands). Raised by
 // shield_spell (the design's defensive "ward"-role spell, named Shield here so it doesn't collide
 // with warded ARMOUR's thorns), aged and reaped by tick_shield. Absent = unshielded = every
 // existing contact is bit-identical.

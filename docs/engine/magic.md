@@ -110,9 +110,15 @@ collide with warded **armour**'s thorns. What sets it apart:
 
 - **It is the game's first *timed buff*** — `Shielded {remaining, absorb}`, the beneficial mirror of
   the `Poisoned` DoT (same `{timer, magnitude}` shape). While it lasts, **`absorb` is soaked off each
-  creature blow** in `resolve_creature_contacts`, the last line of defence *on top of* armour and VIT.
-  Floored at 0: unlike mitigation's permanent 10% chip floor, a temporary, mana-bought, expiring
-  barrier is allowed to fully eat a weak blow — that's the point of raising it.
+  incoming hit** — a **melee blow** (`resolve_creature_contacts`) *and* a **ranged shot**
+  (`advance_projectiles`: a spitter's venom bolt or a thrown one) — a **general** damage buffer, the
+  last line of defence *on top of* armour and VIT. That the ward covers ranged matters: `npc_shield`
+  raises it when a **creature closes**, and a **spitter** is exactly such a creature, so a ward that
+  stopped the claw but not the venom bolt would leave the mana spent for nothing against the one
+  ranged threat. Like the melee case it stops **damage, not contact** — a venom spit still envenoms a
+  shielded target (a poison-ward is a separate spell). Floored at 0: unlike mitigation's permanent 10%
+  chip floor, a temporary, mana-bought, expiring barrier is allowed to fully eat a weak blow — that's
+  the point of raising it.
 - **`Intellect` thickens it** — `kBaseAbsorb` (6) + a per-`Intellect`-level delta, so the same
   attribute that sharpens a bolt hardens a shield. Casting it trains `Spellcasting → Intellect`, the
   same learn-by-doing loop (a dedicated Abjuration/Warding skill is a follow-up).

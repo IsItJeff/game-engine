@@ -3102,7 +3102,21 @@ void advance_projectiles(entt::registry& reg, float dt) {
       // do: chip HP, blink the target, and credit the OWNER Valor on the alive->dead transition.
       if (Stats* st = reg.try_get<Stats>(p.target); st != nullptr) {
         const bool was_alive = st->health.current > 0.0f;
-        st->health.current -= p.damage;
+        // A cast SHIELD soaks a RANGED hit too, exactly as it soaks a melee blow
+        // (resolve_creature_contacts): `absorb` comes off the carried damage, floored at 0. The
+        // ward is a GENERAL damage buffer, not melee-only -- npc_shield raises it when a creature
+        // closes, and a spitter IS that creature, so its venom bolt must be soaked or the mana was
+        // spent for nothing against the one ranged threat. Unshielded (no Shielded -> every
+        // existing throw and spit) takes the full p.damage, bit-identical. Read HERE, before the
+        // chip, so the alive->dead transition below (and its Valor/vigor credit) weighs the SOAKED
+        // damage. Like the melee ward it stops DAMAGE, not CONTACT: the venom below still lands (a
+        // poison-ward is a separate spell -- see resolve_creature_contacts).
+        float dealt = p.damage;
+        if (const Shielded* shield = reg.try_get<Shielded>(p.target); shield != nullptr) {
+          dealt -= shield->absorb;
+          if (dealt < 0.0f) dealt = 0.0f;
+        }
+        st->health.current -= dealt;
         if (st->health.current < 0.0f) st->health.current = 0.0f;
         stamp_flash(reg, p.target);
         // A VENOM spit ENVENOMS its target — the ranged echo of a swarmer's bite, reusing Poisoned
