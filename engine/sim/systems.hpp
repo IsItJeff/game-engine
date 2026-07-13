@@ -222,8 +222,8 @@ void heal_spell(entt::registry& reg, entt::entity caster);
 // trained by casting -> Spellcasting -> INT. (Re)emplaces the caster's own Shielded
 // (get_or_emplace, so a recast re-ups rather than stacks); tick_shield ages it. A no-op if the
 // caster hasn't learned, is at 0 HP, or the mana bar is empty -> a non-caster world is
-// bit-identical. Actor-agnostic like the bolt/mend, but there's no NPC driver yet (player-only via
-// CastShield today). No RNG.
+// bit-identical. Actor-agnostic like the bolt/mend: the player casts it via CastShield, a colonist
+// mage via npc_shield (a threat-triggered self-ward) — the player==NPC parity. No RNG.
 void shield_spell(entt::registry& reg, entt::entity caster);
 
 // NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),
@@ -249,6 +249,14 @@ void npc_cast(entt::registry& reg);
 // order. heal_spell no-ops with no wounded ally or no mana. MUST run after integrate_motion
 // (current positions). Draws no RNG.
 void npc_heal(entt::registry& reg);
+
+// NPCs ward: every Npc that has LEARNED Spellcasting, has a FULL mana bar, is NOT already Shielded,
+// and has a creature within a threat range raises a barrier on itself (via the shared shield_spell)
+// — the defensive twin of npc_cast/npc_heal, closing the player==NPC parity for the shield. Runs
+// BEFORE npc_cast so a threatened mage wards first then bolts under the barrier. Wards once per
+// lapse (the not-already-Shielded gate), not per recharge. MUST run after integrate_motion (current
+// positions). Draws no RNG.
+void npc_shield(entt::registry& reg);
 
 // NPCs farm: every Npc carrying a Provider Aspiration reaps the nearest ripe food plot in reach
 // into a meal (via the shared, actor-agnostic harvest_nearest_crop the player's Harvest command
