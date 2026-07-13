@@ -115,7 +115,13 @@ constexpr int kDeedDriftStep = 2;
 // one of your own fall shakes you. Same small magnitude, so one lost friend costs about one brave
 // deed's worth of nerve. A tuning knob.
 constexpr int kGriefDrift = -kDeedDriftStep;
-// ...and its ACUTE twin: for this many seconds after a bonded friend falls, the survivor PANICS
+// The opposite bereavement: when a sworn NEMESIS falls, a survivor's nerve steadies the OTHER way
+// (VINDICATION, handle_deaths) — the tormentor that cowed you is gone, so you stand a little
+// taller. The positive mirror of grief (and, like grief, one deed's worth of drift). No acute twin:
+// a rival's death is a quiet relief, not a shock, so there is no vindication-equivalent of the
+// panic rout. A tuning knob.
+constexpr int kVindicationDrift = kDeedDriftStep;
+// ...and grief's ACUTE twin: for this many seconds after a bonded friend falls, the survivor PANICS
 // (Panicked, read by steer_npcs, ticked down by tick_panic) — a short rout on top of the permanent
 // nerve slip above. A tuning knob.
 constexpr float kPanicDuration = 3.0f;
@@ -3575,37 +3581,50 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
       }
     }
   }
-  // GRIEF: permadeath lands on the LIVING too. Before the dead are swept away (they are still valid
-  // here — destroy is the next line), any survivor who held a real BOND (affinity at or above the
-  // shared kBondFriendAt friend floor) to one of the fallen takes it to heart: their bravery drifts
-  // DOWN a step (kGriefDrift), the exact negative mirror of a Valor deed's bravery-UP — fighting
-  // monsters hardens you, watching one of your own fall shakes you. A rattled mourner then flees a
-  // hazard sooner (steer_npcs reads bravery), so a lost friend leaves a visible mark on those left
-  // behind — the "NPCs are people, and people change" pillar reaching past the one who died. Only
-  // friend-and-above ties grieve: you don't mourn a mere acquaintance, and a dead RIVAL/Nemesis
-  // (negative affinity) is no loss. The corpse must be a PERSON (Npc + health <= 0), never a slain
-  // creature — no one mourns a monster (and creatures never accrue friend-affinity anyway, but the
-  // Npc guard makes that explicit). Runs only on a death tick (dead empty -> nothing bonded is a
-  // corpse -> untouched); pure int math, no RNG. No Personality/Relationships, or no friend-bond to
-  // a fresh corpse, keeps the pre-bond world bit-identical. ponytail: O(survivors x their few
-  // edges) but only when someone dies; a reverse bond-index is the upgrade if death ticks ever get
-  // crowded.
+  // GRIEF and VINDICATION: permadeath lands on the LIVING too. Before the dead are swept away (they
+  // are still valid here — destroy is the next line), a survivor's nerve drifts when someone they
+  // had strong FEELINGS about falls — and which WAY it drifts depends on the bond:
+  //   * a lost FRIEND (affinity >= kBondFriendAt) -> GRIEF: bravery DOWN a step (kGriefDrift), the
+  //     negative mirror of a Valor deed's bravery-UP, PLUS an acute panic rout — watching one of
+  //     your own fall shakes you.
+  //   * a slain NEMESIS (affinity <= kBondNemesisAt, a sworn latched grudge) -> VINDICATION:
+  //   bravery
+  //     UP a step (kVindicationDrift) and NO panic — the tormentor that cowed you is gone, so you
+  //     stand a little taller. The quiet mirror of grief.
+  // A rattled mourner flees sooner, a vindicated one holds its ground (steer_npcs reads bravery),
+  // so a death leaves a visible mark on those left behind — the "NPCs are people, and people
+  // change" pillar reaching past the one who died, in BOTH directions. Only strong ties stir: a
+  // mere acquaintance or a passing rival (between the two floors) is neither mourned nor
+  // celebrated. The corpse must be a PERSON (Npc + health <= 0), never a slain creature — no one
+  // mourns OR gloats over a monster (and creatures never accrue affinity anyway, but the Npc guard
+  // makes it explicit). Runs only on a death tick; pure int math, no RNG. No
+  // Personality/Relationships, or no strong bond to a fresh corpse, keeps the pre-bond world
+  // bit-identical (a Nemesis-tier grudge can't exist at spawn — it takes sustained cruelty to sink
+  // an edge to kBondNemesisAt). ponytail: O(survivors x their few edges) but only when someone
+  // dies; a reverse bond-index is the upgrade if death ticks ever get crowded.
   auto mourners = reg.view<Personality, Relationships>();
   for (const entt::entity m : mourners) {
     if (const Stats* ms = reg.try_get<Stats>(m); ms != nullptr && ms->health.current <= 0.0f)
-      continue;  // a corpse (or a mourner falling this same tick) doesn't grieve
+      continue;  // a corpse (or a mourner falling this same tick) neither grieves nor gloats
     for (const Relation& edge : mourners.get<Relationships>(m).edges) {
-      if (edge.affinity < kBondFriendAt || !reg.valid(edge.other)) continue;  // not a real friend
+      if (!reg.valid(edge.other)) continue;  // a stale handle to a reused id
+      const bool friend_bond = edge.affinity >= kBondFriendAt;
+      const bool nemesis_bond = edge.affinity <= kBondNemesisAt;
+      if (!friend_bond && !nemesis_bond) continue;  // a lukewarm tie stirs nothing when it falls
       const Stats* es = reg.try_get<Stats>(edge.other);
-      if (es != nullptr && es->health.current <= 0.0f && reg.all_of<Npc>(edge.other)) {
-        drift_axis(mourners.get<Personality>(m).bravery,
-                   kGriefDrift);  // each lost friend a blow...
+      if (es == nullptr || es->health.current > 0.0f || !reg.all_of<Npc>(edge.other))
+        continue;  // not a fallen PERSON
+      if (friend_bond) {
+        drift_axis(mourners.get<Personality>(m).bravery, kGriefDrift);  // a lost friend a blow...
         // ...and an acute ROUT right now: the survivor panics for kPanicDuration seconds
         // (steer_npcs flees harder + flees creatures, tick_panic counts it down).
         // emplace_or_replace so losing a SECOND friend the same tick just refreshes the timer.
         // Panicked is not in the `mourners` view (Personality+Relationships), so emplacing it
         // mid-iteration is safe.
         reg.emplace_or_replace<Panicked>(m, Panicked{kPanicDuration});
+      } else {  // nemesis_bond -> the sworn enemy is gone
+        drift_axis(mourners.get<Personality>(m).bravery,
+                   kVindicationDrift);  // ...a slain foe a lift
       }
     }
   }

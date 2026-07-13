@@ -3388,6 +3388,47 @@ TEST_CASE("a bonded survivor grieves a fallen friend: permadeath shakes the livi
   REQUIRE_FALSE(reg.all_of<eng::sim::Panicked>(bystander));
 }
 
+TEST_CASE("a survivor is vindicated by a fallen nemesis: a sworn foe's death emboldens", "[sim]") {
+  // The quiet mirror of grief. When a sworn NEMESIS (a latched deep grudge, affinity <=
+  // kBondNemesisAt = -60) is slain, the survivor's BRAVERY drifts UP a step — the tormentor that
+  // cowed it is gone, so it stands taller — and, unlike grief, NO panic (a rival's death is relief,
+  // not a shock). A mere rival (above the nemesis floor) is no such release, so its nerve is
+  // untouched — the bit-identity gate.
+  entt::registry reg;
+
+  const entt::entity fallen = reg.create();
+  reg.emplace<eng::sim::Stats>(fallen, eng::sim::Vital{0.0f, 100.0f, 0.0f});  // a slain NPC
+  reg.emplace<eng::sim::Npc>(fallen);
+
+  // The vindicated: a living colonist that HATED the fallen (affinity -80, at/below the -60 nemesis
+  // floor). Bravery starts at +20 so the RISE is unambiguous and clear of the clamp.
+  const entt::entity avenged = reg.create();
+  reg.emplace<eng::sim::Stats>(avenged);
+  reg.emplace<eng::sim::Npc>(avenged);
+  eng::sim::Personality& ap = reg.emplace<eng::sim::Personality>(avenged);
+  ap.bravery = 20;
+  ap.compassion = 30;  // set a second axis to prove ONLY bravery moves (mirror of the grief test)
+  reg.emplace<eng::sim::Relationships>(avenged).edges.push_back(eng::sim::Relation{fallen, -80});
+
+  // A mere RIVAL (affinity -30, above the nemesis floor) — a passing dislike is no release.
+  const entt::entity rival = reg.create();
+  reg.emplace<eng::sim::Stats>(rival);
+  reg.emplace<eng::sim::Npc>(rival);
+  reg.emplace<eng::sim::Personality>(rival).bravery = 20;
+  reg.emplace<eng::sim::Relationships>(rival).edges.push_back(eng::sim::Relation{fallen, -30});
+
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f);
+
+  REQUIRE_FALSE(reg.valid(fallen));  // permadeath reaps the fallen nemesis...
+  // ...the sworn foe's death lifted the avenged colonist's nerve one step (kVindicationDrift =
+  // +kDeedDriftStep = +2): 20 -> 22, and it did NOT panic (relief, not a rout).
+  REQUIRE(reg.get<eng::sim::Personality>(avenged).bravery == 22);
+  REQUIRE(reg.get<eng::sim::Personality>(avenged).compassion == 30);  // ONLY bravery moved
+  REQUIRE_FALSE(reg.all_of<eng::sim::Panicked>(avenged));
+  // ...and the mere rival is unmoved — its nerve holds at 20 (the bit-identity gate).
+  REQUIRE(reg.get<eng::sim::Personality>(rival).bravery == 20);
+}
+
 TEST_CASE("a panicked colonist flees a creature it would normally stand against", "[sim]") {
   // The acute panic's teeth: routed, a colonist bolts even from the CREATURES it usually stands and
   // fights (steer_npcs doesn't flee creatures otherwise). Same NPC + creature, only the marker
