@@ -282,6 +282,12 @@ void steer_npcs(entt::registry& reg) {
   // walking pace. Knobs.
   constexpr float kTendRange = 300.0f;
   constexpr float kTendSpeed = 80.0f;
+  // Study: a SCHOLAR-aspiration colonist that hasn't yet learned to cast walks to the nearest
+  // Spellbook to READ it (study_spellbooks grants Spellcasting on arrival) — the knowledge twin of
+  // the warrior's hunt and the provider's harvest. Same wide range (it spots a tome across the
+  // map), a purposeful pace. Knobs.
+  constexpr float kStudyRange = 300.0f;
+  constexpr float kStudySpeed = 80.0f;
 
   // Nested loops: every NPC against every hazard / orb / fallen ally / weapon — O(n*m), fine
   // for a handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts
@@ -297,6 +303,8 @@ void steer_npcs(entt::registry& reg) {
   auto hearths = reg.view<Hearth, Transform>();
   auto creatures = reg.view<Enemy, Transform>();      // for the DEFEND rung: a threat near a friend
   auto cold_zones = reg.view<ColdZone, Transform>();  // for the AVOID-THE-COLD rung
+  auto books =
+      reg.view<Spellbook, Transform>();  // for the SCHOLAR aspiration: a tome to learn from
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
 
@@ -877,6 +885,35 @@ void steer_npcs(entt::registry& reg) {
             const float len = glm::length(toward);
             if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kTendSpeed * move_scale;
             continue;  // heading to the field to work — skip the idle rungs below
+          }
+          break;
+        }
+        case AspirationKind::Scholar: {
+          // Dreams of magic: an idle colonist that hasn't yet LEARNED to cast walks to the nearest
+          // Spellbook to study it (study_spellbooks teaches Spellcasting on arrival) — so a Scholar
+          // ASPIRES to magic, seeks the tome, and EMERGES a caster (npc_cast/npc_heal then drive
+          // it), the knowledge mirror of the warrior's hunt and the provider's harvest. Once it
+          // carries Spellcasting the dream is FULFILLED, so it stops seeking books and falls to the
+          // idle rungs (casting on its own). Self-limiting like the others: a hungry/cold/wounded
+          // scholar tended that need on a rung above. A colonist with no Skills sheet counts as
+          // unlearned -> keeps seeking until a tome teaches it.
+          if (const Skills* sk = reg.try_get<Skills>(n);
+              sk != nullptr && sk->find(SkillId::Spellcasting) != nullptr)
+            break;  // already a mage — dream fulfilled, no tome to seek
+          entt::entity tome = entt::null;
+          float nearest_tome = kStudyRange;
+          for (const entt::entity b : books) {
+            const float d = glm::distance(pos, books.get<Transform>(b).position);
+            if (d < nearest_tome) {
+              nearest_tome = d;
+              tome = b;
+            }
+          }
+          if (tome != entt::null) {
+            const Vec2 toward = books.get<Transform>(tome).position - pos;
+            const float len = glm::length(toward);
+            if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kStudySpeed * move_scale;
+            continue;  // off to the library — skip the idle rungs below
           }
           break;
         }

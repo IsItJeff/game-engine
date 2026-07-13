@@ -287,7 +287,7 @@ dormant, so a world without cold steers exactly as before — bit-identical.
 Every rung so far is a **reaction** — flee a threat, rescue a friend, feed a need, mend a wound,
 avoid a rival, step out of the cold. A new **`Aspiration`** component adds the ladder's first
 **proactive** want: a *dream* the colonist pursues when nothing is pressing. The rung `switch`es on
-which dream it carries — **two kinds** are wired, and `-Wswitch` guards against a future one forgetting
+which dream it carries — **three kinds** are wired, and `-Wswitch` guards against a future one forgetting
 its rung.
 
 The **`Warrior`** dreams of battle. Reaching the idle end of the ladder (nothing to fear or need), it
@@ -307,7 +307,22 @@ only fires on a plot with enough stock, so a provider reaps a patch then must wa
 meals trickle out to feed the colony rather than a firehose. So the food economy grows a *producer*,
 not just consumers.
 
-Both dreams sit **above** the idle rally/bond/gather rungs (a colonist chases its dream rather than
+The **`Scholar`** dreams of **magic**. An idle colonist that hasn't yet learned to cast steers toward
+the nearest **`Spellbook`** (within `kStudyRange`), and on arrival [`study_spellbooks`](magic.md) teaches
+it **`Spellcasting`** — so a Scholar *aspires* to power, seeks the tome, and **emerges a caster**: from
+then on [`npc_cast` / `npc_heal`](magic.md) drive it to bolt foes and mend allies. It's self-limiting the
+other way too — once it **carries `Spellcasting`** the dream is *fulfilled*, so it stops seeking books
+and behaves as any other mage. The knowledge twin of the warrior's hunt and the provider's harvest, and
+the first aspiration that grows a colonist's *abilities*, not just directs its errands.
+
+One honest caveat: unlike the warrior's creatures (which respawn) and the provider's plots (which
+regrow), the Scholar's target — a `Spellbook` — is today a **single, consumable** tome, and the player
+(also a non-caster) usually reads it early. So while the *drive* fires for every Scholar (it walks to a
+tome whenever one exists), the *fulfilment* is currently rare. A **renewable spellbook supply** (a
+periodic or multiple-tome spawn) is the follow-up that makes the dream reliably reachable — the drive is
+here; the world just needs enough books to feed it.
+
+All three dreams sit **above** the idle rally/bond/gather rungs (a colonist chases its dream rather than
 loiter by the fire) but **below** every need and fear — so the drive is **self-limiting**. A hungry,
 cold, or wounded colonist tended that first on a rung above; only a **hale, content** one hunts or
 farms.
@@ -316,8 +331,9 @@ The gate that keeps every other colonist — and every existing scene — **bit-
 component itself: it is **default-absent**, so the rung is a no-op for anyone without it. Nobody in the
 opening scene, and no test colonist, carries one; only the **reinforcements** that wander in over a
 long run are given a dream by their temperament — a **brave** one the `Warrior`, an **industrious**
-(but not brave) one the `Provider` — keyed on the personality already rolled (no extra RNG, so the
-spawner's stream is unchanged). So the world stays proactive-free until a driven newcomer arrives.
+(but not brave) one the `Provider`, and a **greedy** (but neither) one the `Scholar` — keyed on the
+personality already rolled (no extra RNG, so the spawner's stream is unchanged), a priority chain so a
+colonist gets one dream, never several. So the world stays proactive-free until a driven newcomer arrives.
 
 !!! info "Greedy and memoryless — on purpose"
     It flees the *single nearest* threat, with no memory. An NPC can dodge one

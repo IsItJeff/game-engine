@@ -855,6 +855,8 @@ struct FoodSource {
 enum class AspirationKind : std::uint8_t {
   Warrior,   // dreams of battle — an idle, hale one seeks the nearest creature to fight
   Provider,  // dreams of plenty — an idle one works the land, harvesting a ripe plot into a meal
+  Scholar,   // dreams of magic — an unlearned one seeks a Spellbook to LEARN Spellcasting, then
+             // casts
 };
 struct Aspiration {
   AspirationKind kind = AspirationKind::Warrior;
