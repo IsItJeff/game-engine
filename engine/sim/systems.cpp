@@ -1060,56 +1060,50 @@ void chase_prey(entt::registry& reg) {
   }
 }
 
-void slow_in_mire(entt::registry& reg) {
-  // Bog down anyone standing in a MIRE. For every AGENT-mover (Transform + Velocity, minus ambient
-  // Hazard motes — see below), if its position is inside any MireZone, scale this tick's velocity
-  // by that mire's slow_factor — so it crawls across the mud this frame. It slows PLAYER, NPC, and
-  // CREATURE alike — mud doesn't care who you are (nice parity, and it makes a mire tactical from
-  // both sides: kite a brute through it, or get caught fleeing across it).
-  //
-  // ORDERING IS LOAD-BEARING: this MUST run AFTER every velocity-setter (apply_command's
-  // MovePlayer, steer_npcs, npc_guard, chase_prey) and BEFORE integrate_motion — it scales the
-  // FINAL velocity of the tick, the one integrate_motion is about to apply. Those systems re-DECIDE
-  // (overwrite) velocity every tick from scratch, so the slow is applied fresh each frame from a
-  // clean base: step out of the mud and you're back to full speed next tick, no lingering drag to
-  // undo. It composes MULTIPLICATIVELY with the other velocity scales already baked in (the
-  // exhaustion crawl, the equip heft) — a tired, armoured colonist in a bog is slower still,
-  // correct.
-  //
-  // WHY exclude<Hazard>: that "re-decided fresh each tick" invariant is what makes multiplying in
-  // place safe. Ambient MOTES (the Hazard drifters) are the ONE mover nothing re-drives — their
-  // velocity is set ONCE at spawn and never rewritten (player/steer/chase/guard all skip them).
-  // Slow them in place and the ×slow_factor would COMPOUND every tick to a dead stop they never
-  // recover from — motes piling up frozen in the mud. So the mire is AGENT terrain (things that
-  // re-choose their heading each tick); a mote just drifts through. Excluding Hazard is also why
-  // the invariant above holds universally for what's left.
-  //
-  // If two mires overlap, the STICKIEST (smallest slow_factor) wins — one multiply, and picking the
-  // min is order-independent, so overlapping scenery stays deterministic. No MireZone in the scene
-  // -> the inner view is empty -> factor stays 1.0 -> no multiply -> bit-identical. No RNG.
+namespace {
+// The MOVEMENT multiplier at a position: the STICKIEST MireZone it sits inside (the smallest
+// slow_factor), or 1.0 on firm ground. Picking the MIN is order-independent, so overlapping bogs
+// stay deterministic. No MireZone in the world -> the view is empty -> 1.0. A file-local helper for
+// integrate_motion.
+float mire_factor(entt::registry& reg, Vec2 pos) {
+  float factor = 1.0f;  // firm ground; the deepest mud it's standing in drags it down most
   auto mires = reg.view<MireZone, Transform>();
-  auto movers = reg.view<Transform, Velocity>(entt::exclude<Hazard>);
-  for (const entt::entity e : movers) {
-    const Vec2 pos = movers.get<Transform>(e).position;
-    float factor = 1.0f;  // 1.0 = clear ground; the deepest mud it's standing in drags it down most
-    for (const entt::entity z : mires) {
-      const MireZone& mire = mires.get<MireZone>(z);
-      if (glm::distance(pos, mires.get<Transform>(z).position) <= mire.radius &&
-          mire.slow_factor < factor) {
-        factor = mire.slow_factor;
-      }
+  for (const entt::entity z : mires) {
+    const MireZone& mire = mires.get<MireZone>(z);
+    if (glm::distance(pos, mires.get<Transform>(z).position) <= mire.radius &&
+        mire.slow_factor < factor) {
+      factor = mire.slow_factor;
     }
-    if (factor < 1.0f) movers.get<Velocity>(e).value *= factor;
   }
+  return factor;
 }
+}  // namespace
 
 void integrate_motion(entt::registry& reg, float dt) {
-  // The classic update: new position = old position + velocity * time. Runs over
-  // every entity that has both a Transform and a Velocity, and no others — that
-  // automatic filtering is the ECS's core convenience.
+  // The classic update: new position = old position + velocity * time. Runs over every entity that
+  // has both a Transform and a Velocity, and no others — that automatic filtering is the ECS's core
+  // convenience.
+  //
+  // A MIRE drags on it: a mover standing in a boggy MireZone advances at that mire's slow_factor
+  // this tick — so people, creatures, AND ambient motes all crawl through the mud (parity: mud
+  // doesn't care who you are; kite a brute through it, or get caught fleeing across it). Crucially
+  // the drag scales the MOVEMENT (the position delta), NOT the stored Velocity. That is what makes
+  // it safe for a mover NOTHING re-drives each tick — an ambient mote, or an idle loner steer_npcs
+  // left alone (e.g. a sociability<=0 colonist that matched no want-rung): it keeps its drift
+  // velocity and simply crawls THROUGH the mud at a steady slow_factor and exits, rather than
+  // having its velocity multiplied down in place every tick to a frozen stop it never escapes. (An
+  // earlier version scaled the velocity itself and had to exclude motes to dodge that compounding
+  // freeze — but idle loners hit it too; scaling the delta fixes it for every mover at once.) A
+  // RE-driven mover (creature/steered NPC/commanded player) travels the same distance either way
+  // (to within float rounding), and every velocity-reading system downstream (update_stamina,
+  // drain_hunger — both binary moving/still) sees the true heading, so a mired crawler still counts
+  // as MOVING (it's exerting hard for little ground). No MireZone in the world -> mire_factor
+  // is 1.0 -> position += velocity
+  // * dt exactly (x * 1.0f == x, so bit-identical). No RNG.
   auto view = reg.view<Transform, Velocity>();
   for (const entt::entity e : view) {
-    view.get<Transform>(e).position += view.get<Velocity>(e).value * dt;
+    Transform& tf = view.get<Transform>(e);
+    tf.position += view.get<Velocity>(e).value * dt * mire_factor(reg, tf.position);
   }
 }
 

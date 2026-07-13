@@ -314,31 +314,35 @@ TEST_CASE("an exhausted colonist crawls too: NPC steer speed drops at 0 stamina"
   REQUIRE(spent < rested);  // ...but slower when exhausted
 }
 
-TEST_CASE("a mire drags on anyone crossing it: velocity scales inside but not outside", "[sim]") {
-  // The mire's core: slow_in_mire scales this tick's velocity by the mire's slow_factor for a mover
-  // STANDING in it, and leaves a mover on firm ground untouched (the bit-identity gate — no mire in
-  // reach, no drag). A creature entity (just Transform + Velocity here) proves the parity: mud
-  // slows whoever crosses it, player or NPC or beast alike.
-  const auto vx_after = [](bool inside) {
+TEST_CASE("a mire drags the movement not the velocity: a mover crawls but keeps its heading",
+          "[sim]") {
+  // The mire scales the MOVEMENT integrate_motion applies (the position delta), NOT the stored
+  // velocity — so a mover in the mud advances less this tick than one on firm ground, yet its
+  // velocity is untouched (which is what lets an un-re-driven mover crawl THROUGH instead of
+  // freezing — see the next test). It slows player, NPC, creature, and mote alike (mud doesn't care
+  // who you are); a mover clear of any bog moves the full distance (the bit-identity gate).
+  const auto advanced = [](bool inside) {
     entt::registry reg;
     const entt::entity mire = reg.create();
     reg.emplace<eng::sim::Transform>(mire, eng::Vec2{0.0f, 0.0f});
     reg.emplace<eng::sim::MireZone>(mire, eng::sim::MireZone{100.0f, 0.4f});
     const entt::entity mover = reg.create();
-    reg.emplace<eng::sim::Transform>(mover, inside ? eng::Vec2{20.0f, 0.0f}  // well within radius
-                                                   : eng::Vec2{500.0f, 0.0f});  // far clear of it
+    const float x0 = inside ? 20.0f : 500.0f;  // within the radius, or far clear of it
+    reg.emplace<eng::sim::Transform>(mover, eng::Vec2{x0, 0.0f});
     reg.emplace<eng::sim::Velocity>(mover, eng::Vec2{100.0f, 0.0f});
-    eng::sim::slow_in_mire(reg);
-    return reg.get<eng::sim::Velocity>(mover).value.x;
+    eng::sim::integrate_motion(reg, 1.0f);  // dt = 1s for clean numbers
+    // the mire NEVER mutates velocity — the mover keeps its full heading either way
+    REQUIRE(reg.get<eng::sim::Velocity>(mover).value.x == Approx(100.0f));
+    return reg.get<eng::sim::Transform>(mover).position.x - x0;  // how far it actually moved
   };
-  REQUIRE(vx_after(true) == Approx(40.0f));    // inside -> 100 * 0.4 = a crawl
-  REQUIRE(vx_after(false) == Approx(100.0f));  // outside -> untouched (bit-identical)
+  REQUIRE(advanced(true) == Approx(40.0f));    // inside -> 100 * 1 * 0.4 = a crawl
+  REQUIRE(advanced(false) == Approx(100.0f));  // firm ground -> the full 100 (bit-identical)
 }
 
 TEST_CASE("the stickiest mud wins: overlapping mires apply the smallest factor once", "[sim]") {
   // Overlapping mires don't STACK (that would compound to 0.5*0.3 = 0.15) — the deepest mud (the
-  // smallest slow_factor) wins and is applied exactly ONCE, so the slow is order-independent and
-  // bounded. A mover sitting under both a 0.5 and a 0.3 mire crawls at 0.3, not 0.15.
+  // smallest slow_factor) wins and is applied exactly ONCE, so the drag is order-independent and
+  // bounded. A mover under both a 0.5 and a 0.3 mire crawls at 0.3, not 0.15.
   entt::registry reg;
   const entt::entity shallow = reg.create();
   reg.emplace<eng::sim::Transform>(shallow, eng::Vec2{0.0f, 0.0f});
@@ -350,28 +354,36 @@ TEST_CASE("the stickiest mud wins: overlapping mires apply the smallest factor o
   reg.emplace<eng::sim::Transform>(mover, eng::Vec2{0.0f, 0.0f});
   reg.emplace<eng::sim::Velocity>(mover, eng::Vec2{100.0f, 0.0f});
 
-  eng::sim::slow_in_mire(reg);
+  eng::sim::integrate_motion(reg, 1.0f);
 
-  REQUIRE(reg.get<eng::sim::Velocity>(mover).value.x == Approx(30.0f));  // 100 * 0.3, applied once
+  REQUIRE(reg.get<eng::sim::Transform>(mover).position.x ==
+          Approx(30.0f));  // 100 * 0.3, applied once
 }
 
-TEST_CASE("a drifting mote sails through the mire: ambient hazards are not bogged", "[sim]") {
-  // The mire is AGENT terrain. An ambient Hazard mote is the one mover nothing re-drives each tick
-  // (its velocity is set once at spawn), so slowing it IN PLACE would compound to a permanent stop.
-  // slow_in_mire excludes Hazard for exactly that reason — a mote drifts through the mud untouched.
-  // This pins that choice: remove the exclude and a mote inside a mire would (wrongly) be slowed.
+TEST_CASE("an un-re-driven mover crawls through the mire and exits: no compounding freeze",
+          "[sim]") {
+  // The bug the delta-scaling fixes. An ambient mote OR an idle loner (a mover nothing re-drives
+  // each tick — steer_npcs leaves a sociability<=0 idle colonist's velocity alone) must CRAWL
+  // THROUGH the mud and out the far side, not have its velocity multiplied down in place every tick
+  // to a frozen stop. Because integrate_motion scales the MOVEMENT and never the stored velocity,
+  // the mover keeps its heading and makes steady linear progress across the bog. (The old
+  // velocity-scaling version froze it at ~x=17, well short of the far edge — this test would fail
+  // against that.)
   entt::registry reg;
   const entt::entity mire = reg.create();
   reg.emplace<eng::sim::Transform>(mire, eng::Vec2{0.0f, 0.0f});
   reg.emplace<eng::sim::MireZone>(mire, eng::sim::MireZone{100.0f, 0.4f});
-  const entt::entity mote = reg.create();
-  reg.emplace<eng::sim::Transform>(mote, eng::Vec2{20.0f, 0.0f});  // squarely inside the mire
-  reg.emplace<eng::sim::Velocity>(mote, eng::Vec2{100.0f, 0.0f});
-  reg.emplace<eng::sim::Hazard>(mote);  // ...but it's an ambient mote, not an agent
+  const entt::entity mover = reg.create();
+  reg.emplace<eng::sim::Transform>(mover, eng::Vec2{-50.0f, 0.0f});  // inside the bog, heading east
+  reg.emplace<eng::sim::Velocity>(mover, eng::Vec2{100.0f, 0.0f});
 
-  eng::sim::slow_in_mire(reg);
+  // Integrate several ticks with NOTHING re-driving the velocity (no steer/command) — the mote /
+  // idle loner case. A crawl of 100*0.4 = 40 units/tick clears the ~150-unit bog in a handful of
+  // ticks.
+  for (int i = 0; i < 5; ++i) eng::sim::integrate_motion(reg, 1.0f);
 
-  REQUIRE(reg.get<eng::sim::Velocity>(mote).value.x == Approx(100.0f));  // undragged: drifts on
+  REQUIRE(reg.get<eng::sim::Transform>(mover).position.x > 100.0f);       // it CROSSED, not stuck
+  REQUIRE(reg.get<eng::sim::Velocity>(mover).value.x == Approx(100.0f));  // velocity never mutated
 }
 
 TEST_CASE("hunger drains over time and never self-recovers", "[sim]") {

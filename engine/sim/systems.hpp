@@ -48,12 +48,10 @@ void npc_guard(entt::registry& reg);
 // chosen velocity turns into movement this tick.
 void chase_prey(entt::registry& reg);
 
-// Drag on movement inside a MireZone: scale this tick's velocity for anyone standing in the mud.
-// MUST run after every velocity-setter and BEFORE integrate_motion (it slows the final velocity).
-void slow_in_mire(entt::registry& reg);
-
-// Move every entity with a Transform and Velocity: position += velocity * dt.
-// This is Euler integration — the simplest way to turn a velocity into motion.
+// Move every entity with a Transform and Velocity: position += velocity * dt. A mover standing in a
+// MireZone advances at that bog's slow_factor this tick — the drag scales the MOVEMENT (position
+// delta), not the stored velocity, so a mover nothing re-drives (a mote, an idle loner) crawls
+// through and exits rather than compounding to a frozen stop. No mire -> position += velocity * dt.
 void integrate_motion(entt::registry& reg, float dt);
 
 // Wrap positions around the field edges (toroidal space) so nothing drifts out
