@@ -58,7 +58,12 @@ class Fixed {
 
   constexpr std::int32_t raw() const { return raw_; }
   constexpr std::int32_t floor() const { return raw_ >> kFractionBits; }  // toward -infinity
-  constexpr std::int32_t round() const { return (raw_ + kOne / 2) >> kFractionBits; }
+  // Add kOne/2 in int64 before the shift: the sum can exceed INT32_MAX for a Fixed near its
+  // saturated max (~32767.5+), so doing it in int32 would overflow (UB). The shifted result fits
+  // int32.
+  constexpr std::int32_t round() const {
+    return static_cast<std::int32_t>((static_cast<std::int64_t>(raw_) + kOne / 2) >> kFractionBits);
+  }
   constexpr double to_double() const { return static_cast<double>(raw_) / kOne; }
   // The fractional part in [0, 1) — the piece the fractional-carry accumulator keeps.
   constexpr Fixed frac() const { return *this - from_int(floor()); }
@@ -71,7 +76,9 @@ class Fixed {
   constexpr Fixed operator-(Fixed o) const {
     return from_raw(saturate(static_cast<std::int64_t>(raw_) - o.raw_));
   }
-  constexpr Fixed operator-() const { return from_raw(-raw_); }
+  // Negate through the 64-bit saturate path like every other op: -raw_ in int32 overflows at
+  // INT32_MIN (the saturated min), so widen first — negating the min then saturates to the max.
+  constexpr Fixed operator-() const { return from_raw(saturate(-static_cast<std::int64_t>(raw_))); }
   constexpr Fixed operator*(Fixed o) const {
     return from_raw(saturate((static_cast<std::int64_t>(raw_) * o.raw_) >> kFractionBits));
   }
