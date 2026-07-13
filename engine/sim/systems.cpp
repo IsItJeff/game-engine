@@ -1347,8 +1347,11 @@ void update_stamina(entt::registry& reg, float dt) {
   constexpr float kHearthStaminaBoost = 2.0f;
 
   // Stats + Velocity = things that both tire and move. Motes have Velocity but no
-  // Stats, so the view skips them for free — only the player pays.
-  auto view = reg.view<Stats, Velocity>();
+  // Stats, so the view skips them for free. exclude<Downed> keeps the "a Downed body is inert"
+  // invariant literally true — a crumpled body neither spends nor recovers stamina (harmless in
+  // practice, since revive resets stamina to max regardless, but it mustn't tick while helpless).
+  // Only the player ever goes Downed, so this changes nothing for anyone standing (bit-identical).
+  auto view = reg.view<Stats, Velocity>(entt::exclude<Downed>);
   for (const entt::entity e : view) {
     Stats& st = view.get<Stats>(e);
     Vital& stamina = st.stamina;
@@ -1970,7 +1973,14 @@ void advance_progression(entt::registry& reg) {
   // NB: CharacterLevel is required here, so any new progression-capable entity must
   // be spawned WITH it (see world.cpp: player + NPC) — miss it and that entity
   // silently never grows, no error. Keep the progression components together.
-  auto view = reg.view<Skills, Attributes, Stats, Velocity, CharacterLevel>();
+  // exclude<Downed>: a crumpled body is INERT — it must not train while helpless. Its velocity is
+  // zeroed at the down, so without this it would sit in the rest branch banking Recovery ->
+  // Endurance
+  // -> CharacterLevel XP every tick, and revive resets vitals but NOT skills/attributes, so that XP
+  // would LEAK permanently (a knocked-out body grinding its veteran layer). The same invariant
+  // regenerate_vitals / mend_gear / collect_pickups / tick_poison all enforce. Only the player ever
+  // goes Downed (NPCs permadeath), so this changes nothing for anyone standing.
+  auto view = reg.view<Skills, Attributes, Stats, Velocity, CharacterLevel>(entt::exclude<Downed>);
   for (const entt::entity e : view) {
     Attributes& attrs = view.get<Attributes>(e);
     Attribute& endurance = attrs.endurance;

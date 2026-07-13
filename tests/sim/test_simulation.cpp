@@ -6369,6 +6369,32 @@ TEST_CASE("a downed bearer's gear isn't mended by the fire: an inert body tends 
   REQUIRE(mended(true) == Approx(10.0f));  // ...but a crumpled (Downed) one does not
 }
 
+TEST_CASE("a downed body trains nothing: advance_progression is inert on the fallen", "[sim]") {
+  // The "a Downed body is inert" invariant reaches advance_progression too: a knocked-out player
+  // with SPENT stamina must not bank Recovery/Endurance/CharacterLevel XP while helpless on the
+  // floor. Like the durability a revive can't undo (above), that XP PERSISTS past the down window
+  // (revive resets vitals, never skills), so it would leak permanently — a helpless body grinding
+  // its veteran layer. A STANDING, resting body with the same spent stamina trains normally (the
+  // control). Varies ONLY the Downed marker. Returns the character's XP after one tick.
+  const auto char_xp_after = [](bool downed) {
+    entt::registry reg;
+    const entt::entity p = reg.create();
+    reg.emplace<eng::sim::Skills>(p);
+    reg.emplace<eng::sim::Attributes>(p);
+    reg.emplace<eng::sim::Stats>(p).stamina.current =
+        10.0f;                           // spent (< max) -> the Recovery branch
+    reg.emplace<eng::sim::Velocity>(p);  // velocity 0 -> resting, not moving
+    reg.emplace<eng::sim::CharacterLevel>(p);
+    if (downed) reg.emplace<eng::sim::Downed>(p);
+    eng::sim::advance_progression(reg);
+    return reg.get<eng::sim::CharacterLevel>(p).xp;
+  };
+  REQUIRE(char_xp_after(false) >
+          eng::Fixed{});  // a resting body recovers stamina -> trains, gains XP...
+  REQUIRE(char_xp_after(true) ==
+          eng::Fixed{});  // ...a Downed (helpless) body trains NOTHING (inert)
+}
+
 TEST_CASE("a weapon wears with use and shatters: durability reverts the wielder to unarmed",
           "[sim]") {
   // The design's "durability now, repair later" — a connecting hit on a hostile dulls the blade by
