@@ -830,12 +830,13 @@ struct FoodSource {
 // is the first PROACTIVE one: an idle, safe colonist that carries an Aspiration goes and PURSUES
 // it instead of merely ambling to the fire. It is a soft drive, not a compulsion — it sits LOW in
 // the steer ladder, so any real want (fear, a wounded friend, hunger, thirst, cold) is tended
-// first; only a content colonist chases its dream. New kinds append LAST (exhaustive -Wswitch-free
-// for now — one kind, one direct compare; refactor to a switch when a second lands). The component
-// is DEFAULT-ABSENT: no entity carries it unless explicitly given one, so the pursuit rung is a
-// no-op for everyone else and the pre-Aspiration world is bit-identical.
+// first; only a content colonist chases its dream. New kinds append LAST (the steer rung switches
+// on the kind, so -Wswitch catches any new value that forgets a rung). The component is
+// DEFAULT-ABSENT: no entity carries it unless explicitly given one, so the pursuit rung is a no-op
+// for everyone else and the pre-Aspiration world is bit-identical.
 enum class AspirationKind : std::uint8_t {
-  Warrior,  // dreams of battle — an idle, hale one seeks the nearest creature to fight
+  Warrior,   // dreams of battle — an idle, hale one seeks the nearest creature to fight
+  Provider,  // dreams of plenty — an idle one works the land, harvesting a ripe plot into a meal
 };
 struct Aspiration {
   AspirationKind kind = AspirationKind::Warrior;

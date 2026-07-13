@@ -338,14 +338,20 @@ void spawn_npc_if_due(entt::registry& reg, float& timer, std::mt19937& rng, floa
   const Personality p = roll_archetype(rng, unit);
   const entt::entity e = make_npc(reg, pos, wander, p.bravery, p.greed, p.compassion, p.industry,
                                   p.sociability, p.loyalty);
-  // A genuinely BRAVE reinforcement (a Stalwart, or a jittered other that rolled high) DREAMS of
-  // battle — give it the Warrior aspiration, so an idle, hale one seeks out creatures to fight
-  // (steer_npcs' hunt rung) instead of gathering at the fire. Keyed on the personality we ALREADY
-  // rolled (no extra rng draw, so the spawner's stream is unchanged), so the world stays
-  // deterministic same-build. Openers and every test NPC get no aspiration, so those scenes are
-  // bit-identical — this only shapes the ongoing reinforcements. A tuning knob.
+  // A reinforcement DREAMS by its temperament, keyed on the personality we ALREADY rolled (no extra
+  // rng draw, so the spawner's stream is unchanged and the world stays deterministic same-build): a
+  // genuinely BRAVE one (a Stalwart, or a jittered other that rolled high) craves BATTLE — the
+  // Warrior aspiration (steer_npcs' hunt rung sends it after creatures); an INDUSTRIOUS but
+  // not-brave one (a Drudge) craves PLENTY instead — the Provider aspiration (it works the food
+  // plots, npc_harvest). Brave wins the tie, so a colonist is one OR the other, never both. Openers
+  // and every test NPC get no aspiration, so those scenes stay bit-identical — this only shapes the
+  // ongoing reinforcements. Tuning knobs.
   constexpr int kWarriorAspirationBravery = 60;
-  if (p.bravery >= kWarriorAspirationBravery) reg.emplace<Aspiration>(e, Aspiration{});
+  constexpr int kProviderAspirationIndustry = 60;
+  if (p.bravery >= kWarriorAspirationBravery)
+    reg.emplace<Aspiration>(e, Aspiration{AspirationKind::Warrior});
+  else if (p.industry >= kProviderAspirationIndustry)
+    reg.emplace<Aspiration>(e, Aspiration{AspirationKind::Provider});
 }
 
 // Build the opening scene: a controllable player in the centre, a few wandering
@@ -522,6 +528,8 @@ void World::step() {
   collect_pickups(registry_, dt);  // grab health orbs the slain creatures dropped; fade old ones
   study_spellbooks(registry_);     // ...and read a spellbook you're standing on to LEARN to cast
   drink(registry_, dt);            // anyone standing in a water source refills their canteen
+  npc_harvest(
+      registry_);  // ...a PROVIDER-aspiration colonist reaps a ripe plot it reached into a meal
   graze(registry_, dt);  // ...and in a food plot refills hunger (the plot regrows/depletes)
   npc_equip(registry_);  // unarmed NPCs wield a dropped weapon they've reached
   regenerate_vitals(registry_, dt);

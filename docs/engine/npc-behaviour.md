@@ -282,30 +282,42 @@ the temperature Need, the complement of the hearth-retreat's *recovery* (a colon
 chilled outranks this and heads to the **fire**, not just out of the cold). With no `ColdZone` it's
 dormant, so a world without cold steers exactly as before — bit-identical.
 
-### Aspiration: a warrior goes looking for a fight (the first proactive rung)
+### Aspiration: a colonist pursues its dream (the proactive rung)
 
 Every rung so far is a **reaction** — flee a threat, rescue a friend, feed a need, mend a wound,
 avoid a rival, step out of the cold. A new **`Aspiration`** component adds the ladder's first
-**proactive** want: a *dream* the colonist pursues when nothing is pressing. The one kind wired today
-is **`Warrior`** — a colonist that dreams of battle. Reaching the idle end of the ladder (nothing to
-fear or need), it **goes looking for a fight**: it steers toward the nearest creature within
-`kHuntRange` and **charges**. It doesn't do the fighting *here* — [`npc_attack`](combat.md) already
-strikes the nearest creature in Strength-reach every tick, so once the charge closes the gap the blows
-land on their own; this rung only supplies the *intent to close it*.
+**proactive** want: a *dream* the colonist pursues when nothing is pressing. The rung `switch`es on
+which dream it carries — **two kinds** are wired, and `-Wswitch` guards against a future one forgetting
+its rung.
 
-It sits **above** the idle rally/bond/gather rungs (a warrior seeks battle rather than loiter by the
-fire) but **below** every need and fear — so the drive is **self-limiting**. A hungry, cold, or
-wounded warrior tended that first on a rung above (a wounded one already retreated to a hearth to
-heal), and only a **hale, content** one hunts. And because creatures aren't a flee threat for an
+The **`Warrior`** dreams of battle. Reaching the idle end of the ladder (nothing to fear or need), it
+**goes looking for a fight**: it steers toward the nearest creature within `kHuntRange` and
+**charges**. It doesn't do the fighting *here* — [`npc_attack`](combat.md) already strikes the nearest
+creature in Strength-reach every tick, so once the charge closes the gap the blows land on their own;
+this rung only supplies the *intent to close it*. Because creatures aren't a flee threat for an
 un-panicked colonist, a warrior that charges in **stands and trades blows** — glory or death, its
 choice.
 
+The **`Provider`** is the peaceful twin: it dreams of **plenty**, and works the land. An idle provider
+steers toward the nearest food plot that still has stock to gather (within `kTendRange`), and once it
+arrives **`npc_harvest`** reaps a *ripe* plot into a meal — the same actor-agnostic
+[`harvest_nearest_crop`](stats-system.md) the player's **G** command calls, so a colonist farms exactly
+as you do (the design's promised *NPC farm behaviour*). It's **self-throttled**: `harvest_nearest_crop`
+only fires on a plot with enough stock, so a provider reaps a patch then must wait for it to regrow —
+meals trickle out to feed the colony rather than a firehose. So the food economy grows a *producer*,
+not just consumers.
+
+Both dreams sit **above** the idle rally/bond/gather rungs (a colonist chases its dream rather than
+loiter by the fire) but **below** every need and fear — so the drive is **self-limiting**. A hungry,
+cold, or wounded colonist tended that first on a rung above; only a **hale, content** one hunts or
+farms.
+
 The gate that keeps every other colonist — and every existing scene — **bit-identical** is the
-component itself: it is **default-absent**, so the hunt rung is a no-op for anyone without it. Nobody
-in the opening scene, and no test colonist, carries one; only the **brave reinforcements** that wander
-in over a long run are given the `Warrior` dream (keyed on the personality already rolled — no extra
-RNG, so the spawner's stream is unchanged). So the world stays proactive-free until a bold newcomer
-arrives to hunt.
+component itself: it is **default-absent**, so the rung is a no-op for anyone without it. Nobody in the
+opening scene, and no test colonist, carries one; only the **reinforcements** that wander in over a
+long run are given a dream by their temperament — a **brave** one the `Warrior`, an **industrious**
+(but not brave) one the `Provider` — keyed on the personality already rolled (no extra RNG, so the
+spawner's stream is unchanged). So the world stays proactive-free until a driven newcomer arrives.
 
 !!! info "Greedy and memoryless — on purpose"
     It flees the *single nearest* threat, with no memory. An NPC can dodge one
@@ -374,11 +386,11 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / defend / forage / drink / retreat-to-hearth-or-fire / arm-up / avoid-cold / avoid-grudge / **warrior-hunt** / rally / bond / hearth-gather ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, defend, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius **and** (proportionally) the hearth-gather radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, a **defend** rung (just below the downed-rescue) rushes an idle colonist toward a **bonded friend** a creature is bearing down on (`affinity ≥ kBondPull`, a creature within `kDefendThreatRadius`), an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — a **bond** rung (below rally) pulls it toward a bonded friend it likes, and a lowest **hearth-gather** rung ambles a sociable idle colonist to the nearest fire; the ladder's first **proactive** want, a **warrior-hunt** rung (just above rally), sends an idle colonist that carries an `Aspiration` of kind `Warrior` charging the nearest creature within `kHuntRange` (`npc_attack` lands the blows on arrival); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / defend / forage / drink / retreat-to-hearth-or-fire / arm-up / avoid-cold / avoid-grudge / **warrior-hunt** / rally / bond / hearth-gather ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, defend, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius **and** (proportionally) the hearth-gather radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, a **defend** rung (just below the downed-rescue) rushes an idle colonist toward a **bonded friend** a creature is bearing down on (`affinity ≥ kBondPull`, a creature within `kDefendThreatRadius`), an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — a **bond** rung (below rally) pulls it toward a bonded friend it likes, and a lowest **hearth-gather** rung ambles a sociable idle colonist to the nearest fire; the ladder's first **proactive** want, an **aspiration** rung (just above rally) that `switch`es on the colonist's `Aspiration` kind — a `Warrior` charges the nearest creature within `kHuntRange` (`npc_attack` lands the blows on arrival), a `Provider` walks to the nearest stocked food plot within `kTendRange` (`npc_harvest` reaps a ripe one into a meal on arrival); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
 - `engine/sim/systems.hpp` / `systems.cpp` — `integrate_motion` folds the **terrain drag**: a mover in a `MireZone` advances at its `slow_factor` this tick via `mire_factor(reg, pos)` (the stickiest overlapping mire wins). It scales the **movement**, not the stored velocity, so an un-re-driven mover (mote / idle loner) crawls through instead of compounding to a frozen stop; no mire → factor `1.0` → bit-identical.
-- `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `Aspiration` + `AspirationKind` (the first proactive drive, default-absent so it's dormant until seeded); `MireZone` (boggy terrain, default-absent scenery). `engine/sim/world.cpp` — `make_npc` sets `Personality` (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`, and a *brave* one is given the `Warrior` `Aspiration`); `make_mire` places the bog (one west of centre in `build_scene`).
+- `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `Aspiration` + `AspirationKind` (`Warrior`/`Provider`, the proactive drive, default-absent so it's dormant until seeded); `MireZone` (boggy terrain, default-absent scenery). `engine/sim/world.cpp` — `make_npc` sets `Personality` (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`, and a *brave* one is given the `Warrior` `Aspiration`, an *industrious* one the `Provider`); `make_mire` places the bog (one west of centre in `build_scene`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`, which folds the `MireZone` drag), and `npc_equip` (after it).
-- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player; a downed villain is neither feared nor rescued — the villain-veto, in both steer and `handle_deaths`), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally, the **warrior-hunt** (an idle `Warrior` charges the nearest creature; without the aspiration it stays put; and fear outranks the hunt), and the **mire** (a mover crawls a fraction of the distance inside a bog but keeps its velocity; overlapping mires apply the stickiest factor once; and an un-re-driven mover crawls through and exits rather than freezing).
+- `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player; a downed villain is neither feared nor rescued — the villain-veto, in both steer and `handle_deaths`), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally, the **warrior-hunt** (an idle `Warrior` charges the nearest creature; without the aspiration it stays put; and fear outranks the hunt), the **provider** (an idle `Provider` walks to a stocked plot; and `npc_harvest` reaps a ripe plot into a meal for a Provider but not a plain colonist), and the **mire** (a mover crawls a fraction of the distance inside a bog but keeps its velocity; overlapping mires apply the stickiest factor once; and an un-re-driven mover crawls through and exits rather than freezing).
 
 ## Go deeper
 

@@ -234,6 +234,15 @@ void npc_cast(entt::registry& reg);
 // (current positions). Draws no RNG.
 void npc_heal(entt::registry& reg);
 
+// NPCs farm: every Npc carrying a Provider Aspiration reaps the nearest ripe food plot in reach
+// into a meal (via the shared, actor-agnostic harvest_nearest_crop the player's Harvest command
+// also calls) — the peaceful mirror of npc_attack/npc_cast, the design's "NPC farm behaviour".
+// Self-throttled by the plot's regrow (harvest_nearest_crop no-ops unless a plot is ripe and in
+// reach). No Provider aspiration -> no-op -> bit-identical. Collect-then-harvest (spawn_meal
+// creates an entity). MUST run after integrate_motion (a provider is at the plot by then). Draws no
+// RNG.
+void npc_harvest(entt::registry& reg);
+
 // Wear the nearest dropped GEAR within reach of `wearer` — a Weapon or a piece of Armour,
 // whichever is closer — folding its mods into the matching SLOT of an Equipped cache and
 // RETURNing the item to destroy, or entt::null if none in reach. Non-clobbering: each slot's
