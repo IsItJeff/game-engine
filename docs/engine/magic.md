@@ -122,9 +122,12 @@ collide with warded **armour**'s thorns. What sets it apart:
   world), and a body at 0 HP can't cast it (like the bolt/mend). On the field it reads as a bright
   **arcane-cyan ring**, distinct from the guard's steel-blue.
 
-Today only the player casts it (via `CastShield`) — `shield_spell` is **actor-agnostic** like the
-bolt and mend, so an NPC self-ward (`npc_shield`, a threat-triggered cast) is a trivial follow-up,
-there's just no NPC driver yet (Throwing and Guarding began player-only the same way).
+The player casts it via `CastShield`, and — like the bolt and mend — an NPC casts the *same*
+`shield_spell` via **`npc_shield`**: a learned colonist mage with a full mana bar raises the barrier on
+itself when a creature closes within a threat range (and isn't already warded), completing the
+player==NPC parity for all three spells. It runs *before* `npc_cast` in the schedule, so a threatened
+battle-mage **wards first, then bolts under the barrier** — and re-wards only after the ward lapses (the
+not-already-`Shielded` gate), never wasting mana on a re-cast while it holds.
 
 ## What's next
 
@@ -133,8 +136,9 @@ ward**, and now **NPCs that seek magic out** exist (a `Spellbook` you read, a co
 beside you, a mend that heals your allies, a barrier that soaks a blow, and a [`Scholar`-aspiration
 colonist](npc-behaviour.md) that walks to a tome to learn — from a **permanent library** that reading no
 longer consumes, so every Scholar reliably becomes a mage) — the **offence / support / defence** trio is
-complete. Growing from here: **more spells** (an area blast, each its own book),
-an **NPC self-ward** (`npc_shield`) to close the shield's parity, a **dedicated Healing/Abjuration tome**
+complete, and a colonist mage now casts all three (`npc_cast` / `npc_heal` / `npc_shield`), the full
+player==NPC parity. Growing from here: **more spells** (an area blast, each its own book), a
+**dedicated Healing/Abjuration tome**
 so the support and ward skills have their own learn-paths (today they ride the Spellcasting gate), the
 **Focus / Attunement** skills that govern the mana pool's capacity and regen, and the **tech** branch
 (an Energy battery on gear, the design's twin trunk). Each

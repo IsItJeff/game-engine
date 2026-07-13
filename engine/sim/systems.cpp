@@ -2953,6 +2953,49 @@ void npc_heal(entt::registry& reg) {
   for (const entt::entity n : healers) heal_spell(reg, n);
 }
 
+void npc_shield(entt::registry& reg) {
+  // NPCs that have LEARNED to cast raise a BARRIER on themselves when a creature is CLOSING — the
+  // defensive third of the caster's kit (npc_cast bolts a threat, npc_heal mends an ally,
+  // npc_shield wards), reusing the very same shield_spell so a colonist mage wards EXACTLY as the
+  // player does (the player==NPC parity). Gated like the others plus two of its own: Spellcasting
+  // (learned) + a FULL mana bar (the no-spam throttle) + a creature within kShieldThreatRange (a
+  // real threat to ward against — a mage at peace doesn't waste mana) + NOT already Shielded (so it
+  // wards ONCE when first threatened, then fights UNDER the barrier and re-wards only after it
+  // lapses, never re-casting every recharge while the ward still holds). Runs BEFORE npc_cast in
+  // the schedule, so a threatened mage WARDS first and then bolts under the barrier on later full
+  // bars. shield_spell only emplaces the caster's own Shielded (no spawn), so no collect-then-act
+  // is strictly needed, but we mirror npc_cast's shape. Draws no RNG.
+  // ponytail: the "wards AND still bolts" balance relies on kShieldDuration (5s) OUTLASTING the
+  // mana refill (~2.5s at cost 25 / regen 10), so npc_cast gets a full bar while the ward holds. If
+  // either is retuned so the ward is SHORTER than the refill, this (running first) would re-grab
+  // every full bar and starve offence — gate npc_shield behind "not casting a bolt this tick" if
+  // that happens. A creature this close is worth warding against (knob). Wider than npc_guard's
+  // contact-tight kGuardRange (30): a guard is a free per-tick toggle that reacts at the moment of
+  // impact, but a ward is a mana-costed 5s pre-cast, so it wants LEAD TIME to be up before the blow
+  // lands.
+  constexpr float kShieldThreatRange = 120.0f;
+  std::vector<entt::entity> warders;
+  auto mages = reg.view<Npc, Transform, Attributes, Skills, Stats>();
+  auto creatures = reg.view<Enemy, Transform>();
+  for (const entt::entity n : mages) {
+    if (mages.get<Skills>(n).find(SkillId::Spellcasting) == nullptr) continue;  // never learned
+    const Vital& mp = mages.get<Stats>(n).mp;
+    if (mp.current < mp.max) continue;  // ward only on a full bar -> a ward, then a recharge
+    if (reg.all_of<Shielded>(n))
+      continue;  // already warded — don't re-cast while the barrier holds
+    const Vec2 pos = mages.get<Transform>(n).position;
+    bool threatened = false;
+    for (const entt::entity c : creatures) {
+      if (glm::distance(pos, creatures.get<Transform>(c).position) < kShieldThreatRange) {
+        threatened = true;
+        break;
+      }
+    }
+    if (threatened) warders.push_back(n);
+  }
+  for (const entt::entity n : warders) shield_spell(reg, n);
+}
+
 void shield_spell(entt::registry& reg, entt::entity caster) {
   // The DEFENSIVE spell of the trio (bolt = offence, mend = support, shield = defence) — a learned
   // caster raises a BARRIER on ITSELF, spending the same mana bar, that soaks part of each creature
@@ -2963,9 +3006,8 @@ void shield_spell(entt::registry& reg, entt::entity caster) {
   // Spellcasting -> INT) but instead of a Projectile or an ally-heal it (re)emplaces the caster's
   // own Shielded, which tick_shield ages and resolve_creature_contacts reads. Draws NO RNG. No
   // Transform needed (a self-ward has no position to aim), unlike the bolt/mend. Actor-agnostic
-  // like the other two, so an NPC self-ward (npc_shield, a threat-triggered cast) is a trivial
-  // follow-up — there's no NPC driver yet, so today only the player's CastShield reaches here
-  // (player-only, like Throwing and Guarding began before their NPC parity landed).
+  // like the other two: the player casts it via CastShield, a colonist mage via npc_shield (just
+  // above, a threat-triggered self-ward) — the player==NPC parity, closed for all three spells.
   constexpr float kShieldDuration = 5.0f;      // seconds the barrier holds (a knob)
   constexpr float kShieldManaCost = 25.0f;     // the same cost as a bolt/mend (a full 100 bar -> 4)
   constexpr float kBaseAbsorb = 6.0f;          // damage soaked per blow before Intellect

@@ -4051,6 +4051,54 @@ TEST_CASE("an NPC caster mends a wounded ally too: healing has player==NPC parit
   REQUIRE(reg.get<eng::sim::Stats>(ally).health.current > 30.0f);  // the NPC healer mended its ally
 }
 
+TEST_CASE("an NPC mage wards itself when a creature closes: shield has player==NPC parity",
+          "[sim]") {
+  // The defensive third of the NPC caster's kit (npc_cast bolts, npc_heal mends, npc_shield wards):
+  // a learned Npc with a full mana bar raises a barrier on ITSELF when a creature is within threat
+  // range — the same shield_spell the player casts (parity). Gates: learned + full bar + a creature
+  // near. Returns whether the mage ended up Shielded; varies ONLY the learned and threat
+  // conditions.
+  const auto warded = [](bool learned, bool creature_near) {
+    entt::registry reg;
+    const entt::entity mage = reg.create();
+    reg.emplace<eng::sim::Npc>(mage);
+    reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mage);
+    reg.emplace<eng::sim::Stats>(mage);  // full mana -> it can act
+    auto& sk = reg.emplace<eng::sim::Skills>(mage);
+    if (learned) sk.train(eng::sim::SkillId::Spellcasting);
+    if (creature_near) {
+      const entt::entity beast = reg.create();
+      reg.emplace<eng::sim::Enemy>(beast);
+      reg.emplace<eng::sim::Transform>(beast, eng::Vec2{50.0f, 0.0f});  // within threat range (120)
+    }
+    eng::sim::npc_shield(reg);
+    return reg.all_of<eng::sim::Shielded>(mage);
+  };
+  REQUIRE(warded(true, true));         // a learned mage with a creature closing wards itself...
+  REQUIRE_FALSE(warded(false, true));  // ...an unlearned one can't (the learned gate)...
+  REQUIRE_FALSE(warded(true, false));  // ...and a mage at peace doesn't waste mana warding
+
+  // The not-already-Shielded gate (the one thing that sets npc_shield apart from
+  // npc_cast/npc_heal): a mage ALREADY warded, even with a full bar and a threat, does NOT re-cast
+  // — so it doesn't burn mana refreshing a barrier that still holds (it fights under it, and
+  // re-wards only once it lapses).
+  entt::registry reg;
+  const entt::entity mage = reg.create();
+  reg.emplace<eng::sim::Npc>(mage);
+  reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(mage);
+  const float mana_before = reg.emplace<eng::sim::Stats>(mage).mp.current;  // full
+  reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);
+  reg.emplace<eng::sim::Shielded>(mage, eng::sim::Shielded{5.0f, 6.0f});  // already warded
+  const entt::entity beast = reg.create();
+  reg.emplace<eng::sim::Enemy>(beast);
+  reg.emplace<eng::sim::Transform>(beast, eng::Vec2{50.0f, 0.0f});  // a threat, still in range
+  eng::sim::npc_shield(reg);
+  REQUIRE(reg.get<eng::sim::Stats>(mage).mp.current ==
+          Approx(mana_before));  // no re-cast, no mana spent
+}
+
 TEST_CASE(
     "a 0-HP caster is inert: a permadeath-pending NPC neither bolts nor mends (player==NPC parity)",
     "[sim]") {
