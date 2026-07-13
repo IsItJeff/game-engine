@@ -1244,6 +1244,13 @@ void update_stamina(entt::registry& reg, float dt) {
   // hardiness means a better second wind. A tunable, and a new *effect* for
   // Endurance beyond the pool size.
   constexpr float kRecoveryPerEndurance = 0.10f;
+  // ...and the RECOVERY skill's OWN direct effect: each Recovery level past the first speeds the
+  // second wind a little MORE, on top of the Endurance that resting also feeds it. This is the
+  // design pattern where a skill matters BOTH through its main attribute AND by its own level (the
+  // twin of Survivalist, which feeds Endurance yet ALSO reads its own level to relieve the fatigue
+  // drain). Deliberately HALF of the Endurance rate so the two paths (Recovery -> Endurance ->
+  // recovery, and Recovery -> recovery directly) compound gently, not explosively — a knob.
+  constexpr float kRecoveryPerLevel = 0.05f;
   // Resting IN a Hearth's warmth recovers stamina this much faster — the stamina twin of the health
   // regen boost regenerate_vitals gives there (same 2.0 knob), so the fire is a FULL recovery spot:
   // mend AND catch your breath. A playtest knob.
@@ -1285,6 +1292,13 @@ void update_stamina(entt::registry& reg, float dt) {
       float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
                                                   kRecoveryPerEndurance
                                      : 1.0f;
+      // The RECOVERY skill's own second wind: a practised rester catches its breath faster still,
+      // read DIRECTLY from the skill level (the Survivalist pattern). No Recovery skill, or level 1
+      // (the spawn default and every non-progressing entity), -> ×1.0 -> the exact rate above, so a
+      // fresh world is bit-identical. Composes multiplicatively with the Endurance boost.
+      if (const Skills* sk = reg.try_get<Skills>(e))
+        if (const Skill* rec = sk->find(SkillId::Recovery))
+          boost *= 1.0f + static_cast<float>(rec->level - 1) * kRecoveryPerLevel;
       // Worn armour's BANE: plate slows your second wind. A fraction of recovery is lost while
       // armoured. ponytail/BALANCE: this bites only while RESTING (combat is spent moving), so
       // armour can feel near-free in a straight fight — a tuning knob; if it plays as pure

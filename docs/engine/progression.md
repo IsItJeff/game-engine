@@ -7,7 +7,9 @@ skills roll up into broad **attributes**, and attributes shape what you feel in 
 Seventeen strands are wired end to end so far, across all seven attributes:
 
 - staying active trains **Conditioning**, **surviving damage** trains **Toughness**,
-  **resting to recover** spent stamina trains **Recovery**, **turning a blow with a raised
+  **resting to recover** spent stamina trains **Recovery** (`update_stamina` — and, like Survivalist,
+  its own *level* then quickens that second wind DIRECTLY, on top of the Endurance the resting also
+  feeds it: a skill matters both through its attribute and by itself), **turning a blow with a raised
   guard** trains **Guarding** (`resolve_creature_contacts`, Toughness's *active* twin — grow
   Endurance by *blocking* a hit rather than *surviving* it), and **enduring venom** trains
   **Resistance** (`tick_poison`, Toughness's *poison* twin — keep shrugging off venom and you grow
