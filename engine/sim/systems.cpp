@@ -261,6 +261,12 @@ void steer_npcs(entt::registry& reg) {
   // Knobs.
   constexpr float kHuntRange = 300.0f;
   constexpr float kHuntSpeed = 85.0f;
+  // Tend: a PROVIDER-aspiration colonist (the peaceful twin of the warrior) walks to the nearest
+  // food plot that still has something to gather and WORKS it — npc_harvest reaps a ripe one into a
+  // meal on arrival. Same wide range as the hunt (it spots a field across the map), a purposeful
+  // walking pace. Knobs.
+  constexpr float kTendRange = 300.0f;
+  constexpr float kTendSpeed = 80.0f;
 
   // Nested loops: every NPC against every hazard / orb / fallen ally / weapon — O(n*m), fine
   // for a handful. A real crowd would query a spatial grid, the same upgrade resolve_contacts
@@ -795,38 +801,70 @@ void steer_npcs(entt::registry& reg) {
       }
     }
 
-    // Priority 5.5 — PURSUE AN ASPIRATION (the WARRIOR hunt): the first PROACTIVE rung. Every want
-    // above is a REACTION — flee a threat, rescue a friend, feed a need, mend a wound, avoid a
-    // rival. This one is a DREAM: a colonist that carries an Aspiration of kind Warrior, having
-    // nothing to fear or need (it reached this far down the ladder), goes LOOKING for a fight —
-    // steering toward the nearest creature within kHuntRange to close and engage it. It does NOT do
-    // the fighting here: npc_attack strikes the nearest creature in Strength-reach every tick, so
-    // once this charge closes the gap the blows land on their own — this rung only supplies the
-    // intent to close it. Sits ABOVE the idle rally/bond/gather rungs (a warrior seeks battle
-    // rather than loiter by the fire) but BELOW every need and fear (a hungry, cold, or wounded
-    // warrior tends that first — those rungs already `continue`d), so the drive is self-limiting: a
-    // hurting warrior retreats and heals (the P3.75 hearth rung) and only a hale, content one
-    // hunts. Creatures aren't a flee threat for an un-panicked colonist (only Panicked ones bolt
-    // from them), so a warrior that charges in STANDS and trades blows — glory or death, its
-    // choice. No Aspiration (every colonist today, every existing test) -> try_get is null ->
-    // skipped -> bit-identical. Reuses the `creatures` view fetched at the top of the loop for the
-    // DEFEND rung.
-    if (const Aspiration* asp = reg.try_get<Aspiration>(n);
-        asp != nullptr && asp->kind == AspirationKind::Warrior) {
-      entt::entity quarry = entt::null;
-      float nearest_foe = kHuntRange;
-      for (const entt::entity c : creatures) {
-        const float d = glm::distance(pos, creatures.get<Transform>(c).position);
-        if (d < nearest_foe) {
-          nearest_foe = d;
-          quarry = c;
+    // Priority 5.5 — PURSUE AN ASPIRATION: the PROACTIVE rung. Every want above is a REACTION —
+    // flee a threat, rescue a friend, feed a need, mend a wound, avoid a rival. This one is a
+    // DREAM: a colonist that carries an Aspiration, having nothing to fear or need (it reached this
+    // far down the ladder), goes and PURSUES it. The WARRIOR goes LOOKING for a fight — steering
+    // toward the nearest creature within kHuntRange to close and engage (it does NOT fight here:
+    // npc_attack strikes the nearest creature in Strength-reach every tick, so once this charge
+    // closes the gap the blows land on their own; this rung only supplies the intent). Sits ABOVE
+    // the idle rally/bond/gather rungs (a colonist chases its dream rather than loiter by the fire)
+    // but BELOW every need and fear (a hungry, cold, or wounded one tended that first — those rungs
+    // already `continue`d), so the drive is self-limiting: a hurting warrior retreats and heals
+    // (the P3.75 hearth rung) and only a hale, content one hunts. Creatures aren't a flee threat
+    // for an un-panicked colonist (only Panicked ones bolt from them), so a warrior that charges in
+    // STANDS and trades blows — glory or death, its choice. No Aspiration (every colonist today,
+    // every existing test) -> try_get is null -> skipped -> bit-identical. Reuses the `creatures`
+    // view (for the Warrior) and the `plots` view (for the Provider) fetched at the top of the
+    // loop. The PROVIDER is the peaceful twin (below): it works the land instead of seeking battle.
+    // Which dream a colonist carries picks the drive — a `switch` so -Wswitch flags any future kind
+    // that forgets a rung. Each `continue` skips the idle rally/bond/gather rungs below.
+    if (const Aspiration* asp = reg.try_get<Aspiration>(n); asp != nullptr) {
+      switch (asp->kind) {
+        case AspirationKind::Warrior: {
+          entt::entity quarry = entt::null;
+          float nearest_foe = kHuntRange;
+          for (const entt::entity c : creatures) {
+            const float d = glm::distance(pos, creatures.get<Transform>(c).position);
+            if (d < nearest_foe) {
+              nearest_foe = d;
+              quarry = c;
+            }
+          }
+          if (quarry != entt::null) {
+            const Vec2 toward = creatures.get<Transform>(quarry).position - pos;
+            const float len = glm::length(toward);
+            if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kHuntSpeed * move_scale;
+            continue;  // charging the fight — skip the idle rungs below
+          }
+          break;
         }
-      }
-      if (quarry != entt::null) {
-        const Vec2 toward = creatures.get<Transform>(quarry).position - pos;
-        const float len = glm::length(toward);
-        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kHuntSpeed * move_scale;
-        continue;  // charging the fight — skip the idle rally/bond/gather rungs below
+        case AspirationKind::Provider: {
+          // Work the land: steer toward the nearest food plot that still has stock to gather (a
+          // bare patch isn't worth the walk); npc_harvest reaps a RIPE one into a meal on arrival,
+          // so a provider FARMS for the colony instead of loitering — the food-economy mirror of
+          // the warrior's hunt. Reuses the `plots` view fetched for the forage rung above.
+          // Self-limiting like the warrior: a hungry/cold/wounded provider tended that need on a
+          // rung above.
+          entt::entity plot = entt::null;
+          float nearest_plot = kTendRange;
+          for (const entt::entity pl : plots) {
+            if (plots.get<FoodSource>(pl).stock <= 0.0f)
+              continue;  // a picked-bare patch isn't work
+            const float d = glm::distance(pos, plots.get<Transform>(pl).position);
+            if (d < nearest_plot) {
+              nearest_plot = d;
+              plot = pl;
+            }
+          }
+          if (plot != entt::null) {
+            const Vec2 toward = plots.get<Transform>(plot).position - pos;
+            const float len = glm::length(toward);
+            if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kTendSpeed * move_scale;
+            continue;  // heading to the field to work — skip the idle rungs below
+          }
+          break;
+        }
       }
     }
 
@@ -2711,6 +2749,27 @@ void npc_cast(entt::registry& reg) {
     casters.push_back(n);
   }
   for (const entt::entity n : casters) magic_bolt(reg, n);
+}
+
+void npc_harvest(entt::registry& reg) {
+  // PROVIDERS work the land: an Npc carrying a Provider Aspiration reaps the nearest RIPE food plot
+  // in reach into a MEAL — the peaceful mirror of npc_attack/npc_cast, and the "NPC farm behaviour"
+  // the shared, actor-agnostic harvest_nearest_crop was built to serve (the SAME call the player's
+  // Harvest command uses, so a colonist farms exactly as the player does — player==NPC parity). The
+  // steer ladder's Provider rung walks it to the plot; this does the gathering once it's in reach.
+  // harvest_nearest_crop no-ops unless a plot is ripe (stock >= kHarvestCost) AND within its
+  // radius, so it's SELF-THROTTLED by the plot's slow regrow — a provider reaps a patch, then must
+  // wait for it to grow back, meals trickling out to feed the colony rather than a firehose. Only a
+  // Provider- aspiration Npc farms; no Aspiration (every colonist/test today) -> no-op ->
+  // bit-identical. Collect-then-harvest: harvest_nearest_crop calls spawn_meal (emplacing a new
+  // entity's Transform), so gather the providers FIRST and harvest AFTER, never reallocating the
+  // pool mid-view.
+  std::vector<entt::entity> providers;
+  auto folk = reg.view<Npc, Transform, Aspiration>();
+  for (const entt::entity n : folk) {
+    if (folk.get<Aspiration>(n).kind == AspirationKind::Provider) providers.push_back(n);
+  }
+  for (const entt::entity n : providers) harvest_nearest_crop(reg, n);
 }
 
 void heal_spell(entt::registry& reg, entt::entity caster) {

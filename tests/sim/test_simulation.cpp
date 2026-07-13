@@ -1538,6 +1538,50 @@ TEST_CASE("an idle warrior charges the nearest creature: a proactive aspiration 
   REQUIRE(hunt_vx(false) == Approx(0.0f));  // no aspiration -> no hunt -> stays put (the gate)
 }
 
+TEST_CASE("an idle provider walks to a food plot to work it: the peaceful aspiration steers",
+          "[sim]") {
+  // The Warrior's peaceful twin: a colonist that DREAMS of plenty (an Aspiration of kind Provider),
+  // with nothing to fear or need, walks to the nearest STOCKED food plot to work it (npc_harvest
+  // reaps it on arrival). The Aspiration is the gate — without it the same idle colonist stays put.
+  const auto tend_vx = [](bool is_provider) {
+    entt::registry reg;
+    const entt::entity plot = reg.create();
+    reg.emplace<eng::sim::Transform>(plot, eng::Vec2{200.0f, 0.0f});  // to the RIGHT, in range
+    reg.emplace<eng::sim::FoodSource>(plot);  // default stock 100 -> worth it
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    if (is_provider)
+      reg.emplace<eng::sim::Aspiration>(colonist, eng::sim::AspirationKind::Provider);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(tend_vx(true) > 0.0f);            // a provider heads RIGHT, toward the plot
+  REQUIRE(tend_vx(false) == Approx(0.0f));  // no aspiration -> stays put (the gate)
+}
+
+TEST_CASE("a provider works a ripe plot into a meal: npc_harvest is the NPC farm behaviour",
+          "[sim]") {
+  // npc_harvest: a Provider-aspiration Npc in reach of a RIPE plot reaps it into a meal — the same
+  // actor-agnostic harvest_nearest_crop the player's Harvest command uses (player==NPC parity). A
+  // plain Npc (no Provider aspiration) at the same plot farms nothing — the gate.
+  const auto meals_after = [](bool is_provider) {
+    entt::registry reg;
+    const entt::entity plot = reg.create();
+    reg.emplace<eng::sim::Transform>(plot, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::FoodSource>(plot);  // default: ripe (stock 100), radius 60
+    const entt::entity farmer = reg.create();
+    reg.emplace<eng::sim::Transform>(farmer, eng::Vec2{10.0f, 0.0f});  // on the plot -> in reach
+    reg.emplace<eng::sim::Npc>(farmer);
+    if (is_provider) reg.emplace<eng::sim::Aspiration>(farmer, eng::sim::AspirationKind::Provider);
+    eng::sim::npc_harvest(reg);
+    return reg.view<eng::sim::Pickup>().size();  // a harvested plot drops a meal (a Pickup)
+  };
+  REQUIRE(meals_after(true) == 1);   // the provider reaped a meal
+  REQUIRE(meals_after(false) == 0);  // a plain colonist farmed nothing (the gate)
+}
+
 TEST_CASE("the warrior's hunt is a low want: fear outranks the dream of battle", "[sim]") {
   // The hunt sits BELOW every need and fear, so a warrior in danger tends that first. A creature to
   // the LEFT would draw the charge left; a HAZARD to the left (which the fear rung flees) sends it
