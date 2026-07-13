@@ -433,6 +433,41 @@ TEST_CASE("the stickiest mud wins: overlapping mires apply the smallest factor o
           Approx(30.0f));  // 100 * 0.3, applied once
 }
 
+TEST_CASE("a nimble mover wades a mire faster: Dexterity eases the mud drag but never negates it",
+          "[sim]") {
+  // The movement twin of STR's weapon-carry and VIT's armour-bear: the mire was the ONE movement
+  // modifier that read no attribute. Now a nimble (higher-DEX) mover crawls the mud FASTER -- the
+  // drag (1 - slow_factor) shrinks by Dexterity via eased_bane -- but capped at half, so mud ALWAYS
+  // slows (agility is not immunity). A DEX-1 mover (or one with no Attributes) takes the full drag,
+  // so every existing mire test is bit-identical.
+  const auto advanced = [](int dex) {
+    entt::registry reg;
+    const entt::entity mire = reg.create();
+    reg.emplace<eng::sim::Transform>(mire, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::MireZone>(mire,
+                                    eng::sim::MireZone{100.0f, 0.4f});  // slow to 0.4 (drag 0.6)
+    const entt::entity mover = reg.create();
+    reg.emplace<eng::sim::Transform>(mover, eng::Vec2{20.0f, 0.0f});  // inside the mire's radius
+    reg.emplace<eng::sim::Velocity>(mover, eng::Vec2{100.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mover).dexterity.level = dex;
+    eng::sim::integrate_motion(reg, 1.0f);                          // dt = 1s for clean numbers
+    return reg.get<eng::sim::Transform>(mover).position.x - 20.0f;  // distance it actually moved
+  };
+  // DEX 1: no ease -> the full 0.4 crawl (100 * 0.4) -> 40, bit-identical to an un-attributed
+  // mover.
+  REQUIRE(advanced(1) == Approx(40.0f));
+  // DEX 6: mid-ramp, BELOW the cap -- relief (6-1)*0.05 = 0.25 -> drag 0.6*0.75 = 0.45 -> factor
+  // 0.55
+  // -> 55. This pins the 5%/level SLOPE (the DEX 20 case below only pins the half cap).
+  REQUIRE(advanced(6) == Approx(55.0f));
+  // DEX 20: past the cap -- the 0.6 drag eased by half (eased_bane caps relief at 0.5) -> 0.7
+  // -> 70.
+  REQUIRE(advanced(20) == Approx(70.0f));
+  // Agility wades the mud FASTER (70 > 40) but never at full speed -- mud always slows (70 < 100).
+  REQUIRE(advanced(20) > advanced(1));
+  REQUIRE(advanced(20) < 100.0f);
+}
+
 TEST_CASE("an un-re-driven mover crawls through the mire and exits: no compounding freeze",
           "[sim]") {
   // The bug the delta-scaling fixes. An ambient mote OR an idle loner (a mover nothing re-drives
