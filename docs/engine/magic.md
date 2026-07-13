@@ -43,11 +43,14 @@ you can cast, so a world with no caster is **bit-identical** to before mana exis
 whole "magic is taught, not innate" rule: a colonist who never learned it does nothing, whatever its
 mana. And you **earn** it — the player starts *without* Spellcasting and learns it by **reading a
 `Spellbook`** (`study_spellbooks`): walk onto the arcane-violet tome `build_scene` places off to one
-side, and you gain the skill (the book is then consumed). So learning magic is a small quest — go
-find the tome — not a freebie at spawn. `study_spellbooks` teaches **any person** — the player *and*
-an NPC (a colonist who finds a tome becomes a mage too, the player==NPC parity) — and skips a reader
-who already knows the spell (a book is spent only on a real lesson). Learning *more* spells from
-further books or a mentor is the next slice of the trunk.
+side, and you gain the skill. So learning magic is a small quest — go find the tome — not a freebie at
+spawn. The tome is a **permanent library**, not a one-shot scroll: reading it does **not** consume it,
+so the whole colony can learn from one book over time (and the player no longer "steals" the only tome
+by reaching it first — the supply a `Scholar`-aspiration colonist needs to reliably become a mage).
+`study_spellbooks` teaches **any person** — the player *and* an NPC (a colonist who finds a tome becomes
+a mage too, the player==NPC parity) — and skips a reader who already knows the spell (so a re-read is a
+no-op; the lectern teaches each newcomer once). Learning *more* spells from further books or a mentor is
+the next slice of the trunk.
 
 ### The first spell — `magic_bolt`
 
@@ -128,10 +131,9 @@ there's just no NPC driver yet (Throwing and Guarding began player-only the same
 This is a seam, not the whole trunk. **Learning**, **NPC casters**, **support magic**, a **defensive
 ward**, and now **NPCs that seek magic out** exist (a `Spellbook` you read, a colonist mage that casts
 beside you, a mend that heals your allies, a barrier that soaks a blow, and a [`Scholar`-aspiration
-colonist](npc-behaviour.md) that walks to a tome to learn) — the **offence / support / defence** trio is
-complete. Growing from here: a **renewable spellbook supply** (today the world seeds a single tome,
-usually read by the player, so a Scholar rarely reaches one — a periodic or multiple-book supply lets
-the dream reliably fulfil as reinforcements arrive), **more spells** (an area blast, each its own book),
+colonist](npc-behaviour.md) that walks to a tome to learn — from a **permanent library** that reading no
+longer consumes, so every Scholar reliably becomes a mage) — the **offence / support / defence** trio is
+complete. Growing from here: **more spells** (an area blast, each its own book),
 an **NPC self-ward** (`npc_shield`) to close the shield's parity, a **dedicated Healing/Abjuration tome**
 so the support and ward skills have their own learn-paths (today they ride the Spellcasting gate), the
 **Focus / Attunement** skills that govern the mana pool's capacity and regen, and the **tech** branch

@@ -452,11 +452,13 @@ void spawn_warded_armour(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 void collect_pickups(entt::registry& reg, float dt);
 
 // Learn magic by READING: ANY person (player OR NPC) standing on a Spellbook gains the Spellcasting
-// skill and the tome is consumed — the design's "magic is learned, not innate" made a
-// found-and-read loop, and the player==NPC parity (a colonist that finds a tome becomes a mage too,
-// which npc_cast then lets cast). Creatures carry no Skills so they never learn; Downed bodies are
-// excluded. Skips a reader who already knows the spell (a book is spent only on a real lesson).
-// Collect-then-destroy.
+// skill — the design's "magic is learned, not innate" made a found-and-read loop, and the
+// player==NPC parity (a colonist that finds a tome becomes a mage too, which npc_cast then lets
+// cast). The tome is a PERMANENT LIBRARY, NOT consumed: the whole colony can learn from one book
+// over time (the Scholar aspiration's supply), and the player no longer "steals" the only tome by
+// reaching it first. Creatures carry no Skills so they never learn; Downed bodies are excluded.
+// Skips a reader who already knows the spell (a re-read is a no-op). Mutates only values, destroys
+// nothing — view-safe.
 void study_spellbooks(entt::registry& reg);
 
 }  // namespace eng::sim
