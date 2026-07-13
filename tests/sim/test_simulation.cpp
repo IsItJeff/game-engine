@@ -4760,6 +4760,39 @@ TEST_CASE("need_efficiency saps a starving or parched fighter toward a floor", "
   REQUIRE(need_efficiency(s) == Approx(0.75f));
 }
 
+TEST_CASE("a freezing colonist fights weaker too: warmth joins hunger and water in the need debuff",
+          "[sim]") {
+  // Cold's FIRST graded bite: warmth is a Need, so need_efficiency reads the worst of
+  // hunger/water/WARMTH -- a chilled colonist swings/throws/casts/moves weaker, below the lethal
+  // freeze chip drain_warmth deals at 0. Warmth defaults full and only drains in a ColdZone, so a
+  // warm colony is bit-identical -- the RED demonstrator being that, before this, a bone-cold but
+  // fed-and-watered colonist wrongly returned 1.0, ignoring the cold entirely.
+  using eng::sim::need_efficiency;
+  using eng::sim::Stats;
+  Stats s;                                      // defaults: hunger, water, AND warmth all 100/100
+  REQUIRE(need_efficiency(s) == Approx(1.0f));  // fed, watered, warm -> full power
+
+  s.warmth.current = 0.0f;                      // bone-cold, but still fed and watered
+  REQUIRE(need_efficiency(s) == Approx(0.5f));  // RED before: warmth ignored -> 1.0; now the floor
+
+  s.warmth.current = 25.0f;  // exactly the threshold: the last quarter hasn't bitten
+  REQUIRE(need_efficiency(s) == Approx(1.0f));
+
+  s.warmth.current = 12.5f;  // midway into the last quarter -> midway to the floor
+  REQUIRE(need_efficiency(s) == Approx(0.75f));
+
+  // Warmth is BINDING only when it is the WORST need: with a chill that ALSO bites (12.5% -> 0.75
+  // alone) but a hunger that bites HARDER (0% -> the 0.5 floor alone), the worst governs -- so the
+  // result is 0.5, not 0.75. This proves the min() actually picks the deeper need (a naive "take
+  // warmth" read would give 0.75), and that cold neither double-counts nor lifts a harsher penalty.
+  Stats cold_and_hungry;
+  cold_and_hungry.hunger.current = 0.0f;  // starving (alone -> 0.5 floor) governs...
+  cold_and_hungry.warmth.current =
+      12.5f;  // ...over a milder but STILL-BITING chill (alone -> 0.75)
+  REQUIRE(need_efficiency(cold_and_hungry) ==
+          Approx(0.5f));  // min picks the worst: hunger, not cold
+}
+
 TEST_CASE("need_pallor tracks the combat debuff: a starving colonist looks as gaunt as it fights",
           "[sim]") {
   // The presentation cue is DERIVED from need_efficiency, so the sallow look can never drift from
@@ -4777,6 +4810,11 @@ TEST_CASE("need_pallor tracks the combat debuff: a starving colonist looks as ga
   s.hunger.current = 100.0f;
   s.water.current = 0.0f;                   // parched
   REQUIRE(need_pallor(s) == Approx(1.0f));  // the other need pales it too
+
+  s.water.current = 100.0f;
+  s.warmth.current = 0.0f;                  // bone-cold, fed and watered
+  REQUIRE(need_pallor(s) == Approx(1.0f));  // freezing wastes it too (same source of truth)
+  s.warmth.current = 100.0f;                // warm again, so the water ramp below reads clean
 
   // Half-way into the last quarter: need_efficiency 0.75 -> pallor 0.5, and it stays locked to the
   // debuff formula so the look and the penalty are one number apart.
