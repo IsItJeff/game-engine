@@ -634,6 +634,10 @@ colonist leaves nothing.
     mote (`resolve_contacts`) lands on you. That last part also closes a real exploit: without
     it, a helpless body still trained Evasion/Toughness/veteran XP from blows it couldn't
     react to — a risk-free grind (go down beside a swarm, farm attributes, revive to full).
+    `advance_progression` (and `update_stamina`) close the *other* half of that grind: a downed
+    body's velocity is zeroed, so without the exclusion it would sit in the REST branch banking
+    Recovery → Endurance → CharacterLevel XP every tick — and that veteran XP, unlike the vitals a
+    revive restores, would persist forever.
     The *system*-side reads share one rule, spelled `entt::exclude<..., Downed>` on the view; the
     *command*-side ones skip a Downed commander in `apply_command`. Either way: *a crumpled person is
     not a valid target — nor an actor — until they're back up.* (The last "dying blow" as you cross 0
