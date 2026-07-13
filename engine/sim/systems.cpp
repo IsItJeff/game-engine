@@ -2679,6 +2679,14 @@ void magic_bolt(entt::registry& reg, entt::entity caster) {
   Stats* stats = reg.try_get<Stats>(caster);
   if (tf == nullptr || attrs == nullptr || skills == nullptr || stats == nullptr) return;
 
+  // A BODY AT 0 HP IS INERT — it can't cast. The player never reaches here at 0 HP (a 0-HP player
+  // is Downed, and the Cast command guards on Downed), but an NPC never goes Downed — handle_deaths
+  // permakills it, LATER in the same tick than npc_cast runs — so a mage chipped to 0 by an earlier
+  // resolve_creature_contacts / tick_poison would otherwise still fling a bolt from a dead body.
+  // Guarding at this shared choke point (not in npc_cast) is the root fix: it also covers the
+  // player and any future caller, and every real cast is at positive HP so it's bit-identical.
+  if (stats->health.current <= 0.0f) return;
+
   // THE LEARNED GATE: no Spellcasting skill -> you never learned to cast -> nothing happens. This
   // is what makes magic learned-not-innate, and it keeps a world of non-casters bit-identical — a
   // plain colonist with a full mana bar still can't fling a bolt.
@@ -2791,6 +2799,14 @@ void heal_spell(entt::registry& reg, entt::entity caster) {
   Skills* skills = reg.try_get<Skills>(caster);
   Stats* stats = reg.try_get<Stats>(caster);
   if (tf == nullptr || attrs == nullptr || skills == nullptr || stats == nullptr) return;
+
+  // A BODY AT 0 HP IS INERT — it can't mend either (the support twin of the bolt's guard). An NPC
+  // healer chipped to 0 HP by an earlier resolve_creature_contacts / tick_poison would otherwise
+  // still raise a living ally's HP from beyond the grave in the window before handle_deaths reaps
+  // it — the cleanest form of the parity break, a persistent wrong output on a body a player
+  // provably can't drive (a 0-HP player is Downed; the CastHeal command guards on Downed).
+  // Bit-identical: every real mend is at positive HP.
+  if (stats->health.current <= 0.0f) return;
 
   // THE LEARNED GATE: shares Spellcasting with the bolt — reading the arcane tome teaches BOTH the
   // offensive bolt and this mending word, so a caster can do either. (A dedicated Healing tome /
