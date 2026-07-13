@@ -4081,12 +4081,19 @@ void collect_pickups(entt::registry& reg, float dt) {
       stats.hunger.current += pk.food;
       if (stats.hunger.current > stats.hunger.max) stats.hunger.current = stats.hunger.max;
 
-      // Grabbing loot trains Scavenging -> Luck (deterministic XP, no RNG), so foraging
+      // Grabbing LOOT trains Scavenging -> Luck (deterministic XP, no RNG), so foraging
       // the field is itself a build: more Luck -> more crits (perform_attack). Guard on the
       // pair — a collector without Skills/Attributes (see the max-HP note above) still gets
-      // the heal, it just doesn't grow Luck.
+      // the heal, it just doesn't grow Luck. And gate it on the pickup being actual LOOT (a
+      // heal or a max-HP bump), NOT a MEAL: spawn_meal zeroes both so "a meal is food, not
+      // combat loot", but a meal is still a Pickup, so without this an eater would grind
+      // Scavenging -> Luck -> crit off pure FOOD -- a permanent combat reward the meal is
+      // designed to withhold (a Provider farming its own meals would out-crit a fighter). An
+      // orb keeps its defaults (heal 25, bonus 2), so it still trains -> bit-identical.
+      const bool is_loot = pk.heal > 0.0f || pk.bonus_max_hp > 0.0f;
       Skills* sk = reg.try_get<Skills>(p);
-      if (sk != nullptr && a != nullptr) {  // `a` fetched above for the Luck heal scaling
+      if (is_loot && sk != nullptr &&
+          a != nullptr) {  // `a` fetched above for the Luck heal scaling
         const Fixed kScavengingPerGrab = Fixed::from_int(10);  // XP per orb (ponytail: a knob)
         grant_skill_xp(*sk, *a, SkillId::Scavenging, kScavengingPerGrab,
                        reg.try_get<CharacterLevel>(p));

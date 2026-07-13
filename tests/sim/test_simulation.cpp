@@ -1033,6 +1033,41 @@ TEST_CASE("harvesting a ripe crop drops a meal that fills more than a loot orb",
   REQUIRE(reg.get<eng::sim::Stats>(farmer).hunger.current > 50.0f);  // a fuller meal than an orb
 }
 
+TEST_CASE("eating a meal does not train Scavenging or grow Luck: food is not combat loot",
+          "[sim]") {
+  // The meal-vs-orb reward boundary, completed. spawn_meal zeroes a meal's heal AND max-HP bump so
+  // "a meal is food, not combat loot" -- but collect_pickups grants Scavenging XP for EVERY pickup,
+  // and Scavenging feeds Luck, which drives crit (perform_attack). So eating food used to grind a
+  // permanent COMBAT reward through the back door -- a Provider could farm its own meals and grind
+  // crit off pure food. A meal now trains no Scavenging (so no Luck, so no crit); a LOOT orb
+  // (heal/max-HP > 0) still does, so the fight -> orb -> grab build stays bit-identical. Returns a
+  // bool, never a Skill* into the local registry (a returned pointer would dangle -> ASan abort).
+  const auto trained_scavenging = [](bool loot) {
+    entt::registry reg;
+    const entt::entity eater = reg.create();
+    reg.emplace<eng::sim::Transform>(eater, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(eater);
+    reg.emplace<eng::sim::Skills>(eater);
+    reg.emplace<eng::sim::Attributes>(eater);
+    const entt::entity item = reg.create();
+    reg.emplace<eng::sim::Transform>(item, eng::Vec2{0.0f, 0.0f});  // right on the eater
+    auto& pk = reg.emplace<eng::sim::Pickup>(item);
+    if (!loot) {  // a MEAL, exactly as spawn_meal makes it: the combat rewards zeroed...
+      pk.heal = 0.0f;
+      pk.bonus_max_hp = 0.0f;
+    }  // ...a LOOT orb keeps the Pickup defaults (heal 25, bonus_max_hp 2)
+    eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+    REQUIRE(!reg.valid(item));  // consumed either way -- the food still feeds you
+    const bool learned =
+        reg.get<eng::sim::Skills>(eater).find(eng::sim::SkillId::Scavenging) != nullptr;
+    // and the loot skill is the ONLY thing feeding Luck here, so no grant means no Luck XP either
+    if (!learned) REQUIRE(reg.get<eng::sim::Attributes>(eater).luck.xp == eng::Fixed{});
+    return learned;
+  };
+  REQUIRE_FALSE(trained_scavenging(false));  // a MEAL trains no loot skill (RED before: it did)
+  REQUIRE(trained_scavenging(true));  // a LOOT orb still trains Scavenging (control, unchanged)
+}
+
 TEST_CASE("a better cook's meal restores more to a famished eater", "[sim]") {
   // Cooking scales the meal's food, and — because the base meal sits BELOW the hunger cap — that
   // surplus actually LANDS: a famished eater (empty hunger, full room) gets more from a skilled
