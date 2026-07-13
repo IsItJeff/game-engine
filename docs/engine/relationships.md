@@ -42,7 +42,10 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
   tie), which is exactly the set the [defend rung](npc-behaviour.md) will send rushing to your side.
   The deep bands **latch**: `bond_latched` (a Partner
   `≥ +80` or a Nemesis `≤ −60`) marks a tie that **resists decay**, so the strongest bonds and grudges
-  persist while casual ones fade (see the leak below).
+  persist while casual ones fade (see the leak below). A **Partner** earns defend teeth to match its
+  durability: the [defend rung](npc-behaviour.md) sends a colonist across `kPartnerDefendBoost`× the
+  reach to *defend* one — the active twin of the farther reach a dear ally already gets when **Downed**
+  (the rescue rung, which grades reach continuously by raw affinity rather than the tier).
 
 ## How it works
 

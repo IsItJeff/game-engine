@@ -77,6 +77,11 @@ far below — but where bond-pull only *drifts* toward an idle friend, defend *r
 danger and **outranks the colonist's own hunger**, exactly as the downed-rescue does (a friend in
 peril beats a meal). Its reach scales with **bravery** — the courage to charge into danger for a
 friend, the same growing radius the rescue rung uses — so, like every acting rung, it reads a trait.
+And it scales with the **bond's depth**: a **`Partner`** ([`affinity ≥ kBondPartnerAt`](relationships.md),
+the deepest tie) is defended from `kPartnerDefendBoost`× farther — you cross the whole field for the one
+you're closest to, where a mere friend must be near. So the top bond *tier* earns its first combat
+teeth — a reader of the Partner **milestone**, where the twin rescue rung instead grades its farther
+reach by raw affinity.
 The **two survival
 needs** are the one exception to strict rung order: hunger is drawn above thirst, but they're
 resolved by **urgency** — a colonist seeks whichever need is the *more depleted* (lower

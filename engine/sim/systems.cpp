@@ -256,6 +256,13 @@ void steer_npcs(entt::registry& reg) {
   // Reuses kRescueSpeed (urgent, like a rescue). Knobs.
   constexpr float kDefendReach = 300.0f;
   constexpr float kDefendThreatRadius = 150.0f;
+  // A PARTNER (the deepest bond, affinity >= kBondPartnerAt) is defended from this much FARTHER:
+  // you cross the whole field for the one you're closest to, where a mere friend must be near. The
+  // teeth that make the top bond TIER mean something in a fight. This keys on the discrete TIER,
+  // DELIBERATELY unlike its twin the downed-rescue reach, which grades CONTINUOUSLY by raw affinity
+  // (d scaled by 1 - aff/200): rescue rewards any warmth, defend rewards the Partner milestone. The
+  // two land a Partner's reach near each other (~480 here vs ~500 there). A knob.
+  constexpr float kPartnerDefendBoost = 1.6f;
   // Hearth gather: the peacetime want, the lowest rung of all. A truly idle SOCIABLE colonist
   // ambles to the nearest fire to gather round it, so the hearth is a social HUB — not only the
   // field hospital the wounded-retreat rung makes it. This is the RADIUS at full sociability
@@ -554,7 +561,9 @@ void steer_npcs(entt::registry& reg) {
     if (const Relationships* rel = reg.try_get<Relationships>(n)) {
       entt::entity ward = entt::null;
       Vec2 ward_pos{0.0f, 0.0f};
-      float nearest_ward = kDefendReach * (1.0f + bravery / 200.0f);
+      const float base_reach = kDefendReach * (1.0f + bravery / 200.0f);
+      float nearest_d =
+          base_reach * kPartnerDefendBoost;  // the widest a friend could be (a Partner)
       for (const Relation& edge : rel->edges) {
         if (edge.affinity < kBondPull || !reg.valid(edge.other))
           continue;                                    // not a real bond, or a stale handle
@@ -571,9 +580,14 @@ void steer_npcs(entt::registry& reg) {
           }
         }
         if (!threatened) continue;
+        // A PARTNER (the deepest bond) is defended from FARTHER (kPartnerDefendBoost x); a plain
+        // friend uses the base bravery-scaled reach. Per-friend, so with no Partner bond (every
+        // existing scene) all reaches are the base and the selection is bit-identical to before.
+        const float reach =
+            edge.affinity >= kBondPartnerAt ? base_reach * kPartnerDefendBoost : base_reach;
         const float d = glm::distance(pos, ft->position);
-        if (d < nearest_ward) {
-          nearest_ward = d;
+        if (d < reach && d < nearest_d) {  // within THIS friend's reach, and the nearest so far
+          nearest_d = d;
           ward = edge.other;
           ward_pos = ft->position;
         }
