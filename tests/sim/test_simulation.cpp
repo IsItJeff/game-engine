@@ -5501,6 +5501,26 @@ TEST_CASE("build_title names the dominant trained attribute", "[sim]") {
   REQUIRE(title(tied) == "Warrior");
 }
 
+TEST_CASE("veteran_title names the experience tier from character level", "[sim]") {
+  // The fourth derived-recognition axis (beside standing/build/epithet): a pure query over
+  // CharacterLevel naming how SEASONED a character is. Bands: Novice (1-2), Seasoned (3-5),
+  // Veteran (6-9), Grizzled (10+) — a fresh colonist (level 1) is a Novice, a long-lived one earns
+  // its stripes. Pin every band edge so a retuned threshold can't drift silently.
+  const auto rank = [](int level) {
+    eng::sim::CharacterLevel cl;
+    cl.level = level;
+    return std::string(eng::sim::veteran_title(cl));
+  };
+  REQUIRE(rank(1) == "Novice");    // the default level -> fresh
+  REQUIRE(rank(2) == "Novice");    // still Novice at the top of its band
+  REQUIRE(rank(3) == "Seasoned");  // crosses into Seasoned
+  REQUIRE(rank(5) == "Seasoned");
+  REQUIRE(rank(6) == "Veteran");  // crosses into Veteran
+  REQUIRE(rank(9) == "Veteran");
+  REQUIRE(rank(10) == "Grizzled");  // crosses into Grizzled
+  REQUIRE(rank(25) == "Grizzled");  // and stays there
+}
+
 TEST_CASE("deed_epithet names you by your most-repeated deed once it crosses the threshold",
           "[sim]") {
   // The third derived-recognition axis: standing_title says how good/bad, build_title says what

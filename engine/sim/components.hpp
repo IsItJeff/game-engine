@@ -1068,4 +1068,21 @@ struct CharacterLevel {
   Fixed xp{};
 };
 
+// An EXPERIENCE-derived title — the fourth axis of the derived recognition, orthogonal to its three
+// siblings: standing_title says how GOOD or BAD you are (the deed ledger), build_title what KIND of
+// fighter (your dominant trained attribute), deed_epithet what you're KNOWN FOR (a single ledger
+// dim), and this says how much you've LIVED — your Character Level, the slow "veteran" layer that
+// grows from a fraction of ALL activity. A pure query over CharacterLevel (never a stored slot), so
+// it always matches the level behind it; the HUD shows it beside the character-level number and the
+// sim never reads it. The bands are chosen so a fresh colonist (level 1) is a Novice and a
+// long-lived one earns its stripes; deterministic (a plain level comparison). Ready to grow — finer
+// bands, a per-domain "Elder Smith" — the same way the sibling titles will.
+inline const char* veteran_title(const CharacterLevel& character) {
+  const int lvl = character.level;
+  if (lvl < 3) return "Novice";    // levels 1-2 — barely blooded
+  if (lvl < 6) return "Seasoned";  // 3-5 — has some rounds behind it
+  if (lvl < 10) return "Veteran";  // 6-9 — a proven survivor
+  return "Grizzled";               // 10+ — lived through it all
+}
+
 }  // namespace eng::sim

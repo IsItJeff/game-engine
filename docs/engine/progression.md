@@ -146,7 +146,10 @@ flowchart LR
    multiplier scales the earned Strength delta on combat damage** (`perform_attack`),
    so the veteran layer isn't just bigger bars — a seasoned fighter hits harder too.
    (Reach is left flat, so a veteran hits harder without changing which targets a
-   swing can reach.)
+   swing can reach.) The character level also **wears a rank**: `veteran_title` names
+   it Novice → Seasoned → Veteran → Grizzled in the HUD — the *experience* twin of the
+   `standing_title` (how good/bad) and `build_title` (what fighter) derived recognitions,
+   a pure query the sim never reads.
 
 !!! note "XP comes from many places; leveling happens in one"
     Step 1 grants **either** the *movement* XP (Conditioning) **or**, when idle with
