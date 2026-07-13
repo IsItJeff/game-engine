@@ -170,10 +170,12 @@ your own colonists and the number goes negative, the dot draws small, and the ti
 Suspect → Notorious*.
 
 And now standing **acts**, not just shows — *both* ways. A player who crosses the *Suspect* line
-becomes a **threat colonists flee**; a player who crosses the mirror *Known* line becomes a **hero
-they rally to**. `steer_npcs` folds a villain into its top-priority danger rung (turn on the colony
-and it recoils from you like a hazard) and a hero into its bottom-priority rally rung (idle
-colonists gather around their champion). Villainy repels, heroism attracts — the two faces of one
+becomes a **threat colonists flee**; a player — **or a renowned NPC colonist** — who crosses the
+mirror *Known* line becomes a **hero they rally to** (heroism is earnable by anyone, since Valor and
+Charity aren't player-gated the way Cruelty is, so the rally rung rallies to a famous NPC too — see
+[NPC behaviour](npc-behaviour.md)). `steer_npcs` folds a villain into its top-priority danger rung
+(turn on the colony and it recoils from you like a hazard) and a hero into its bottom-priority rally
+rung (idle colonists gather around their champion). Villainy repels, heroism attracts — the two faces of one
 scalar (see [NPC behaviour](npc-behaviour.md)). And a fallen villain earns no mercy: the rescue rung
 reads standing too — **both ways**. On the dark side, **the colony abandons a downed villain**:
 nobody crosses the field to save one whose deeds marked it, nor lifts it at point-blank (both the
