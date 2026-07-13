@@ -45,7 +45,11 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
   persist while casual ones fade (see the leak below). A **Partner** earns defend teeth to match its
   durability: the [defend rung](npc-behaviour.md) sends a colonist across `kPartnerDefendBoost`× the
   reach to *defend* one — the active twin of the farther reach a dear ally already gets when **Downed**
-  (the rescue rung, which grades reach continuously by raw affinity rather than the tier).
+  (the rescue rung, which grades reach continuously by raw affinity rather than the tier). And a
+  **Nemesis** earns the mirror of those teeth: the [avoid rung](npc-behaviour.md) gives it a berth
+  `kNemesisAvoidBoost`× wider than a merely-resented rival gets — you keep the most distance from your
+  worst enemy. Both are tier-keyed, so only the two *latched* extremes (Partner / Nemesis) feel the
+  boost; a passing bond or grudge in between behaves exactly as before.
 
 ## How it works
 

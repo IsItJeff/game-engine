@@ -273,6 +273,10 @@ void steer_npcs(entt::registry& reg) {
   // entity it RESENTS (affinity <= kGrudgeThreshold). Smaller than the friend-gather range (a
   // personal-space bubble, not a cross-field draw). Reuses kRallySpeed. A knob.
   constexpr float kAvoidRadius = 150.0f;
+  // A NEMESIS (the deepest grudge, affinity <= kBondNemesisAt) is avoided from this much FARTHER —
+  // the widest berth for your worst enemy, the negative twin of kPartnerDefendBoost's defend teeth.
+  // Keys on the discrete Nemesis TIER, symmetric with that positive twin. A knob.
+  constexpr float kNemesisAvoidBoost = 1.6f;
   // Hunt: an idle colonist that DREAMS of battle (an Aspiration of kind Warrior) seeks the nearest
   // creature within this range and CHARGES it — the first proactive, goal-driven steer. The range
   // is wide (it spots a fight across much of the field) but the rung is LOW priority, so only a
@@ -814,7 +818,13 @@ void steer_npcs(entt::registry& reg) {
     if (const Relationships* rel = reg.try_get<Relationships>(n)) {
       entt::entity rival = entt::null;
       Vec2 rival_pos{0.0f, 0.0f};
-      float nearest_rival = kAvoidRadius * (1.0f - bravery / 200.0f);
+      // The base personal-space bubble, bravery-scaled. A NEMESIS (the deepest grudge) widens it by
+      // kNemesisAvoidBoost — the negative twin of the Partner-defend teeth: your worst enemy gets
+      // the widest berth. nearest_d starts at the boosted reach so the whole loop can consider a
+      // distant Nemesis, but each rival is gated by ITS OWN radius (a mere grudge still only backs
+      // off inside base_radius), so a non-Nemesis rival's behaviour is bit-identical.
+      const float base_radius = kAvoidRadius * (1.0f - bravery / 200.0f);
+      float nearest_d = base_radius * kNemesisAvoidBoost;
       for (const Relation& edge : rel->edges) {
         if (edge.affinity > kGrudgeThreshold || !reg.valid(edge.other) ||
             reg.all_of<Downed>(edge.other))
@@ -823,9 +833,12 @@ void steer_npcs(entt::registry& reg) {
                      // that). This also keeps the grudge-holder-won't-rescue behaviour unchanged.
         const Transform* t = reg.try_get<Transform>(edge.other);
         if (t == nullptr) continue;  // a rival with no position (shouldn't happen, cheap to guard)
+        const float radius = edge.affinity <= kBondNemesisAt
+                                 ? base_radius * kNemesisAvoidBoost  // Nemesis
+                                 : base_radius;                      // mere grudge
         const float d = glm::distance(pos, t->position);
-        if (d < nearest_rival) {
-          nearest_rival = d;
+        if (d < radius && d < nearest_d) {
+          nearest_d = d;
           rival = edge.other;
           rival_pos = t->position;
         }

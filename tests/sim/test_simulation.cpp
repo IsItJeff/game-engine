@@ -3003,6 +3003,32 @@ TEST_CASE("a grudge-holder keeps its distance: an idle colonist backs away from 
   REQUIRE(colonist_velocity_x(30) > 0.0f);          // a friend (>= +10) -> bond pull draws it (+x)
 }
 
+TEST_CASE("a Nemesis is given a wider berth: the deepest grudge is avoided from farther", "[sim]") {
+  // The negative twin of the Partner-defend teeth: a NEMESIS (the deepest grudge, affinity <=
+  // kBondNemesisAt) is AVOIDED from kNemesisAvoidBoost× farther than a merely-resented rival — you
+  // keep the widest berth from your worst enemy. The rival sits at 200 (RIGHT): past the base avoid
+  // radius (150), so a mere grudge doesn't back away there; only the Nemesis boost (150*1.6 = 240)
+  // reaches it. Varies ONLY the grudge depth.
+  const auto avoid_vx = [](std::int8_t affinity) {
+    entt::registry reg;
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    reg.emplace<eng::sim::Stats>(colonist);  // content (full needs) -> only the avoid rung can act
+    const entt::entity rival = reg.create();
+    reg.emplace<eng::sim::Transform>(rival,
+                                     eng::Vec2{200.0f, 0.0f});  // RIGHT, past the base radius
+    eng::sim::nudge_affinity(reg, colonist, rival, affinity);   // how it regards the rival
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(avoid_vx(eng::sim::kBondNemesisAt) <
+          0.0f);  // a NEMESIS (-60) at 200 -> backs LEFT (boosted)
+  REQUIRE(avoid_vx(-30) ==
+          Approx(0.0f));  // a mere grudge (-30, resented but not a Nemesis) -> too far
+}
+
 TEST_CASE("loyalty shapes how far a colonist follows a bonded friend", "[sim]") {
   // The SIXTH and last personality axis, read by the bond-pull radius exactly as sociability reads
   // the rally radius (so every acting steer rung now reads a trait, and all six axes are wired).
