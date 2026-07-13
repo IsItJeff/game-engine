@@ -165,8 +165,8 @@ survivor was bonded to at **Friend or above** (`kBondFriendAt`) is slain, `handl
 survivor's **bravery down** a step (`kGriefDrift`) — **grief**, the [morality drift](morality.md#drift-deeds-reshape-character)
 path reaching the *living*, the negative mirror of a Valor deed's bravery-*up*. So a positive tie has
 a price the day it breaks: **permadeath marks those left behind**, not just an empty slot (a rattled
-mourner flees a hazard sooner). Only a real friend-bond grieves — a mere acquaintance, or a dead
-rival, is no loss — the gate that keeps the pre-bond world bit-identical.
+mourner flees a hazard sooner). Only a real friend-bond grieves — a mere acquaintance, or a passing
+rival, is neither mourned nor celebrated — the gate that keeps the pre-bond world bit-identical.
 
 Grief has an **acute** twin. Besides the permanent nerve-slip, the loss **panics** the survivor
 *now*: `handle_deaths` emplaces a `Panicked` marker for `kPanicDuration` (3 s), and while it lasts
@@ -176,6 +176,17 @@ counts the rout down and its nerve returns. So a friend's death both **shakes yo
 drift) and **breaks you for a moment** (the panic) — a mourner may drop its guard and run from the
 very fight that took its friend. No `Panicked` marker (anyone not freshly bereaved) → `steer_npcs` is
 unchanged, so it stays bit-identical.
+
+Death reads a bond **both ways**. The quiet mirror of grief is **vindication**: when a sworn
+**Nemesis** (`affinity ≤ kBondNemesisAt`, a *latched* deep grudge) is slain, `handle_deaths` drifts
+the survivor's **bravery *up*** a step (`kVindicationDrift`, the positive mirror of `kGriefDrift`) —
+the tormentor that cowed it is gone, so it stands a little taller and holds its ground where it used
+to flinch. There is **no acute twin**: a rival's death is a lasting relief, not a shock, so nothing
+like the panic rout fires. Only a true Nemesis vindicates — a passing dislike between the two floors
+stirs nothing — and a Nemesis-tier grudge can't exist at spawn (it takes sustained cruelty to sink an
+edge that low), so the pre-grudge world stays bit-identical. So the same `handle_deaths` pass that
+**shakes** those who loved the fallen **emboldens** those who hated them: a death moves everyone who
+felt strongly about the one who died, in whichever direction they felt.
 
 ## The tradeoffs
 
@@ -225,15 +236,19 @@ standing to choose stances (befriend / protect / exploit).
   at `perform_attack`'s cruel-strike branch, and `bond_witnesses` (camaraderie) at `perform_attack`'s
   AND `advance_projectiles`' killing-blow branches; the bond-pull rung in
   `steer_npcs` (below the hero-rally), the **defend** rung (charge to a bonded friend a creature
-  threatens, just below the downed-rescue), the grudge-veto in both rescue paths, and the
-  affinity-discounted rescue reach on the `steer_npcs` rescue rung.
+  threatens, just below the downed-rescue), the grudge-veto in both rescue paths, the
+  affinity-discounted rescue reach on the `steer_npcs` rescue rung, and — at a death — the **grief**
+  (a fallen Friend+ drifts a survivor's bravery down + `Panicked`) **and vindication** (a slain
+  Nemesis drifts it up, `kVindicationDrift`) drifts in `handle_deaths`.
 - `tests/sim/test_simulation.cpp` — the write-point (find-or-update + clamp), the bond
   wired at a rescue, the bond-pull steering toward a friend (and the range gate), the
   stale-handle guard, the grudge (a cruel strike resents the striker; a grudge-holder
   won't cross to rescue nor haul up the resented), the graded rescue reach (a bond extends the
   trek beyond the base radius, a mild dislike shortens it — isolated from the bond-pull rung), the
-  defend charge (outranking hunger, isolated from bond-follow), and `allies_of` (the incoming-bond
-  count, floor + direction + self-exclusion).
+  defend charge (outranking hunger, isolated from bond-follow), `allies_of` (the incoming-bond
+  count, floor + direction + self-exclusion), and the death-drift pair — **grief** (a fallen friend
+  drifts a mourner's bravery down + panics it; a mere acquaintance is untouched) and its mirror
+  **vindication** (a slain Nemesis lifts a survivor's bravery, no panic; a passing rival is untouched).
 
 ## Go deeper
 
