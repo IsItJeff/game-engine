@@ -277,8 +277,13 @@ grudge against — the active twin of the [relationships](relationships.md) bond
 arm's length as well as [refused a rescue](relationships.md) — long before enough cruelty sinks their
 `standing` and the *whole* colony flees. It reads **bravery** for its keep-away radius (a coward
 recoils from further) and ignores a **downed** target (you don't flee a helpless body), so the
-abandonment rung stays byte-identical. Personal grudge and public reputation now *both* push a cruel
-player away, at two different ranges.
+abandonment rung stays byte-identical. And, like the defend rung above it, it reads the **bond's
+depth**: a **`Nemesis`** ([`affinity ≤ kBondNemesisAt`](relationships.md), the deepest grudge) is
+avoided from `kNemesisAvoidBoost`× farther — you keep the widest berth from your worst enemy, the
+negative twin of the Partner's defend teeth. A merely-resented rival still only backs you off inside
+the base radius, so its behaviour is unchanged; only the latched Nemesis *tier* earns the wider
+berth. Personal grudge and public reputation now *both* push a cruel player away, at two different
+ranges.
 
 Just above the grudge-avoid sits an **avoid-the-cold** rung: an otherwise-idle colonist standing in a
 [`ColdZone`](stats-system.md) drifts **out** of it — radially away from the zone, the shortest way to
