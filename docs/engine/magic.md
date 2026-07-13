@@ -15,6 +15,9 @@ mana, but it does nothing until you have *learned* to cast.
 | **`Cast` command** | the funnel path (press **C**) that runs `magic_bolt` for the player |
 | **`heal_spell`** | the **support** spell — mends the nearest wounded ally, trains `Healing → Wisdom` |
 | **`CastHeal` command** | the funnel path (press **H**) that runs `heal_spell` for the player |
+| **`shield_spell`** | the **defensive** spell — raises a timed `Shielded` barrier on yourself, `Intellect`-scaled |
+| **`CastShield` command** | the funnel path (press **B**) that runs `shield_spell` for the player |
+| **`Shielded` + `tick_shield`** | the first **timed buff** — soaks `absorb` off each blow, aged/reaped each tick |
 
 ## Why it matters
 
@@ -93,12 +96,41 @@ naturally **bolts a threat first** (spending its mana) and only **mends in a lul
 fired — offence-then-support falls out of the schedule order, no priority flag needed. So a colonist
 mage blasts monsters *and* patches up the wounded beside you.
 
+### The defensive spell — `shield_spell`
+
+The third of the trio (press **B**, the `CastShield` command). Where the bolt reaches out to a foe
+and the mend reaches to a friend, the **shield turns inward**: a learned caster raises a timed
+**barrier on itself**. It is the design's **"ward"-role** spell, named *Shield* here so it doesn't
+collide with warded **armour**'s thorns. What sets it apart:
+
+- **It is the game's first *timed buff*** — `Shielded {remaining, absorb}`, the beneficial mirror of
+  the `Poisoned` DoT (same `{timer, magnitude}` shape). While it lasts, **`absorb` is soaked off each
+  creature blow** in `resolve_creature_contacts`, the last line of defence *on top of* armour and VIT.
+  Floored at 0: unlike mitigation's permanent 10% chip floor, a temporary, mana-bought, expiring
+  barrier is allowed to fully eat a weak blow — that's the point of raising it.
+- **`Intellect` thickens it** — `kBaseAbsorb` (6) + a per-`Intellect`-level delta, so the same
+  attribute that sharpens a bolt hardens a shield. Casting it trains `Spellcasting → Intellect`, the
+  same learn-by-doing loop (a dedicated Abjuration/Warding skill is a follow-up).
+- **It spends the same mana** — `kShieldManaCost` (25), an empty bar fizzles like the bolt/mend — and
+  **`tick_shield`** ages the barrier each tick, reaping it when `remaining` runs out. It runs *after*
+  contacts, so a freshly-cast ward still soaks the blows of the tick it's raised (apply-at-cast,
+  use-at-contact, decay-after — poison's rhythm).
+- **It shares the learned gate and the caster-inert guard** — a non-caster can't shield (bit-identical
+  world), and a body at 0 HP can't cast it (like the bolt/mend). On the field it reads as a bright
+  **arcane-cyan ring**, distinct from the guard's steel-blue.
+
+Today only the player casts it (via `CastShield`) — `shield_spell` is **actor-agnostic** like the
+bolt and mend, so an NPC self-ward (`npc_shield`, a threat-triggered cast) is a trivial follow-up,
+there's just no NPC driver yet (Throwing and Guarding began player-only the same way).
+
 ## What's next
 
-This is a seam, not the whole trunk. **Learning**, **NPC casters**, and now **support magic** exist (a
-`Spellbook` you read, a colonist mage that casts beside you, and a mend that heals your allies). Growing
-from here: **more spells** (an area blast, a ward, each its own book), a **dedicated Healing tome** so
-the support skill has its own learn-path (today it rides the Spellcasting gate), NPCs *seeking out*
+This is a seam, not the whole trunk. **Learning**, **NPC casters**, **support magic**, and now a
+**defensive ward** exist (a `Spellbook` you read, a colonist mage that casts beside you, a mend that
+heals your allies, and a barrier that soaks a blow) — the **offence / support / defence** trio is
+complete. Growing from here: **more spells** (an area blast, each its own book), an **NPC self-ward**
+(`npc_shield`) to close the shield's parity, a **dedicated Healing/Abjuration tome** so the support
+and ward skills have their own learn-paths (today they ride the Spellcasting gate), NPCs *seeking out*
 tomes or a **mentor** to teach them, the **Focus / Attunement** skills that govern the mana pool's
 capacity and regen, and the **tech** branch (an Energy battery on gear, the design's twin trunk). Each
 is a small add on this foundation.

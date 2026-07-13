@@ -2875,6 +2875,63 @@ void npc_heal(entt::registry& reg) {
   for (const entt::entity n : healers) heal_spell(reg, n);
 }
 
+void shield_spell(entt::registry& reg, entt::entity caster) {
+  // The DEFENSIVE spell of the trio (bolt = offence, mend = support, shield = defence) — a learned
+  // caster raises a BARRIER on ITSELF, spending the same mana bar, that soaks part of each creature
+  // blow for a few seconds. It's the design's "ward"-role spell, named Shield here so it doesn't
+  // collide with warded ARMOUR's thorns. The game's FIRST timed BUFF: where the bolt reaches out to
+  // a foe and the mend reaches to a friend, the shield turns inward. It shares the bolt's shape
+  // (the learned Spellcasting gate + a mana cost + an INTELLECT-scaled effect trained by casting ->
+  // Spellcasting -> INT) but instead of a Projectile or an ally-heal it (re)emplaces the caster's
+  // own Shielded, which tick_shield ages and resolve_creature_contacts reads. Draws NO RNG. No
+  // Transform needed (a self-ward has no position to aim), unlike the bolt/mend. Actor-agnostic
+  // like the other two, so an NPC self-ward (npc_shield, a threat-triggered cast) is a trivial
+  // follow-up — there's no NPC driver yet, so today only the player's CastShield reaches here
+  // (player-only, like Throwing and Guarding began before their NPC parity landed).
+  constexpr float kShieldDuration = 5.0f;      // seconds the barrier holds (a knob)
+  constexpr float kShieldManaCost = 25.0f;     // the same cost as a bolt/mend (a full 100 bar -> 4)
+  constexpr float kBaseAbsorb = 6.0f;          // damage soaked per blow before Intellect
+  constexpr float kAbsorbPerIntellect = 2.0f;  // each Intellect level past 1 thickens the barrier
+  const Fixed kSpellcastingPerCast = Fixed::from_int(10);
+
+  Attributes* attrs = reg.try_get<Attributes>(caster);
+  Skills* skills = reg.try_get<Skills>(caster);
+  Stats* stats = reg.try_get<Stats>(caster);
+  if (attrs == nullptr || skills == nullptr || stats == nullptr) return;
+
+  // A body at 0 HP is inert — it can't cast (the same caster-guard the bolt/mend carry; a dying NPC
+  // never goes Downed, so guard on health, not the player-only Downed).
+  if (stats->health.current <= 0.0f) return;
+
+  // THE LEARNED GATE: shares Spellcasting with the bolt/mend — no skill, no ward (keeps a
+  // non-caster world bit-identical, a plain colonist can't shield).
+  if (skills->find(SkillId::Spellcasting) == nullptr) return;
+
+  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the bolt/mend.
+  if (stats->mp.current < kShieldManaCost) return;
+  stats->mp.current -= kShieldManaCost;
+
+  // Casting the ward trains Spellcasting -> Intellect (INT is both the bolt's damage AND this
+  // barrier's thickness), so a mage hardens its shield by using it, the learn-by-doing loop the
+  // whole magic tree runs on. Unlike the bolt/mend (which fizzle with no target/patient and grant
+  // no XP), a shield ALWAYS connects — it wards YOU — so this trains every cast. A safe-corner
+  // grind of INT is therefore possible, but MANA-throttled and curve-slowed to the same
+  // self-training shape as sprinting growing Athletics or moving growing Conditioning
+  // (resource-gated, not risk-gated); gate it on a nearby threat if it ever matters — a tuning
+  // knob, not a redesign.
+  CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
+  grant_skill_xp(*skills, *attrs, SkillId::Spellcasting, kSpellcastingPerCast, character);
+
+  // Raise (or refresh) the barrier: base + earned-Intellect delta. get_or_emplace so a RECAST
+  // re-ups the clock and re-reads INT (monotonic, never weaker) rather than stacking a second
+  // component.
+  const float absorb =
+      kBaseAbsorb + static_cast<float>(attrs->intellect.level - 1) * kAbsorbPerIntellect;
+  Shielded& shield = reg.get_or_emplace<Shielded>(caster);
+  shield.remaining = kShieldDuration;
+  shield.absorb = absorb;
+}
+
 void advance_projectiles(entt::registry& reg, float dt) {
   // Fly each in-flight shot toward its homing target; on arrival apply its carried damage and reap
   // the shot. Collect-then-destroy so no view is invalidated mid-iteration (and so an impact that
@@ -4041,6 +4098,21 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       float applied = mitigate(attack_dmg, defence_of(reg, p));
       applied *=
           backstab_multiplier(c_pos, prey.get<Transform>(p).position, reg.try_get<Velocity>(p));
+      // A cast SHIELD soaks the FINAL blow: a barrier (Shielded, from shield_spell) absorbs
+      // `absorb` off the damage that got through armour and the flank — the last line of defence, a
+      // temporary mana-bought buffer on top of static VIT/armour. Floored at 0: unlike mitigate's
+      // PERMANENT 10% chip floor, a timed, mana-costed, EXPIRING barrier is allowed to fully eat a
+      // weak blow — that's the point of raising it, and you paid mana while it ticks away. Read
+      // AFTER the flank so even a backstab is soaked (a barrier doesn't care about the angle).
+      // Unshielded (no Shielded, every existing contact) -> unchanged, bit-identical. The
+      // contact-consequences below (venom, lifesteal, armour-wear, thorns) STILL fire on the LANDED
+      // blow regardless — the shield stops DAMAGE, not CONTACT: the fang still breaks skin, the
+      // plate still scuffs. (A poison-ward that also blocks venom is a separate spell — a
+      // follow-up.)
+      if (const Shielded* shield = reg.try_get<Shielded>(p); shield != nullptr) {
+        applied -= shield->absorb;
+        if (applied < 0.0f) applied = 0.0f;
+      }
       Vital& health = prey.get<Stats>(p).health;
       health.current -= applied;
       if (health.current < 0.0f) health.current = 0.0f;
@@ -4147,6 +4219,25 @@ void tick_poison(entt::registry& reg, float dt) {
     if (venom.remaining <= 0.0f) cured.push_back(e);
   }
   for (const entt::entity e : cured) reg.remove<Poisoned>(e);
+}
+
+void tick_shield(entt::registry& reg, float dt) {
+  // Age each cast barrier and reap it when spent — the BUFF twin of tick_poison's DoT decay (same
+  // collect-then-remove shape: removing a component mid-view-walk invalidates the iterator, the ECS
+  // trap). No exclude<Downed>: a shield on a body that goes Downed just keeps counting down and
+  // lapses harmlessly — a Downed body takes no creature blows anyway (resolve_creature_contacts
+  // excludes it), so the barrier has nothing to soak; letting it expire is cleaner than special-
+  // casing the down. Runs AFTER resolve_creature_contacts, so a barrier still soaks the blows of
+  // the tick it's cast before this ages it (apply-at-cast, use-at-contact, decay-here — poison's
+  // rhythm).
+  std::vector<entt::entity> spent;
+  auto view = reg.view<Shielded>();
+  for (const entt::entity e : view) {
+    Shielded& shield = view.get<Shielded>(e);
+    shield.remaining -= dt;
+    if (shield.remaining <= 0.0f) spent.push_back(e);
+  }
+  for (const entt::entity e : spent) reg.remove<Shielded>(e);
 }
 
 void tick_panic(entt::registry& reg, float dt) {

@@ -132,6 +132,12 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
 // it).
 void tick_poison(entt::registry& reg, float dt);
 
+// Age each cast barrier (Shielded) and reap it when spent — the BUFF twin of tick_poison. MUST run
+// AFTER resolve_creature_contacts so a freshly-cast shield still soaks that tick's blows before
+// this ages it (apply-at-cast, use-at-contact, decay-here — poison's rhythm). Collect-then-remove
+// (a mid-view removal invalidates the iterator). No RNG.
+void tick_shield(entt::registry& reg, float dt);
+
 // Count down the PANIC of every routed colonist (Panicked, emplaced by handle_deaths when a bonded
 // friend falls) and remove it when it lapses — the acute grief reaction wears off and the colonist
 // recovers its nerve. The timer twin of tick_poison; a no-op when nothing is panicked. Draws no
@@ -209,6 +215,16 @@ void magic_bolt(entt::registry& reg, entt::entity caster);
 // bit-identical. Actor- agnostic: the player casts it via the CastHeal command, an NPC via npc_heal
 // (the parity). No RNG.
 void heal_spell(entt::registry& reg, entt::entity caster);
+
+// Cast a SHIELD — the DEFENSIVE spell of the trio (bolt = offence, mend = support). A learned
+// caster (Spellcasting) raises a timed BARRIER on ITSELF: for a few seconds, `absorb` is soaked off
+// each creature blow (resolve_creature_contacts reads it), thickness scaling with INTELLECT and
+// trained by casting -> Spellcasting -> INT. (Re)emplaces the caster's own Shielded
+// (get_or_emplace, so a recast re-ups rather than stacks); tick_shield ages it. A no-op if the
+// caster hasn't learned, is at 0 HP, or the mana bar is empty -> a non-caster world is
+// bit-identical. Actor-agnostic like the bolt/mend, but there's no NPC driver yet (player-only via
+// CastShield today). No RNG.
+void shield_spell(entt::registry& reg, entt::entity caster);
 
 // NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),
 // training Striking -> Strength just as the player does — so NPCs build Strength too,

@@ -170,6 +170,17 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
     if (world.registry().all_of<eng::sim::Downed>(e)) {
       dl->AddCircle(ImVec2{p.x, p.y}, radius + 4.0f, IM_COL32(230, 230, 235, 220), 0, 2.0f);
     }
+
+    // A cast SHIELD reads on the FIELD: a Shielded entity (a barrier up from shield_spell) gets a
+    // bright arcane-cyan RING, so you can SEE who's warded and time your aggression — the field cue
+    // the other statuses all have (guard steel-blue, poison green, downed beacon). Drawn at
+    // radius+5, OUTSIDE the guard (+3) and downed (+4) rings, since a shield can coincide with
+    // either (you can cast a ward then raise a guard, or be warded as you're downed) — three
+    // concentric rings stay legible. Presentation-only: reads Shielded, never sets it; optional
+    // (only the player shields today), so all_of guards it.
+    if (world.registry().all_of<eng::sim::Shielded>(e)) {
+      dl->AddCircle(ImVec2{p.x, p.y}, radius + 5.0f, IM_COL32(90, 235, 220, 235), 0, 2.0f);
+    }
   }
 }
 
@@ -449,6 +460,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool plant_was_down = false;
   bool cast_was_down = false;
   bool heal_was_down = false;
+  bool shield_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -558,6 +570,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::cast_heal(eng::sim::kLocalPlayer)});
     }
     heal_was_down = heal_raw;
+
+    // B, edge-triggered, casts a SHIELD on yourself — the defensive third of the trio (bolt C, mend
+    // H, barrier B). Same mana bar and learned Spellcasting gate; it raises a timed Shielded that
+    // soaks part of each creature blow, so you cast it BEFORE wading in. An empty bar fizzles.
+    const bool shield_raw = keys[SDL_SCANCODE_B];
+    if (shield_raw && !shield_was_down && !imgui_wants_keys) {
+      transport.send(eng::net::Message{eng::sim::cast_shield(eng::sim::kLocalPlayer)});
+    }
+    shield_was_down = shield_raw;
 
     // K, HELD (not edge-triggered), raises a GUARD: incoming creature blows are softened but you
     // move slower. A held stance rather than a one-shot action, so it rides the per-tick MovePlayer

@@ -535,7 +535,9 @@ void World::step() {
   resolve_contacts(registry_);                     // motes shatter on contact
   resolve_creature_contacts(registry_, dt, rng_);  // creatures swing; player may dodge (DEX)
   tick_poison(registry_, dt);                      // venom from a swarmer's bite chips health...
-  tick_panic(registry_, dt);           // ...a routed mourner's panic ebbs (before deaths)
+  tick_shield(registry_, dt);  // ...and a cast barrier ages, expiring when spent (the buff twin,
+                               // after contacts so it still soaks the blows of the tick it's cast)
+  tick_panic(registry_, dt);   // ...a routed mourner's panic ebbs (before deaths)
   creature_spit(registry_, dt);        // ranged creatures launch a spit at a person...
   npc_cast(registry_);                 // ...colonist mages fling a bolt at a hostile...
   npc_heal(registry_);                 // ...or, in a lull, mend a wounded ally (support magic)...
@@ -810,6 +812,19 @@ void World::apply_command(const Command& cmd) {
         if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
         if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't mend
         heal_spell(registry_, a);
+      }
+      break;
+    }
+    case CommandKind::CastShield: {
+      // The DEFENSIVE spell of the trio: the player wards ITSELF (shield_spell), spending MANA and
+      // gated on the same learned Spellcasting skill. Same match-by-player-id and view as Cast;
+      // shield_spell only emplaces/mutates the caster's own Shielded (no spawn), so the iteration
+      // is trivially stable.
+      auto casters = registry_.view<PlayerControlled, Transform, Attributes, Skills, Stats>();
+      for (const entt::entity a : casters) {
+        if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't cast
+        shield_spell(registry_, a);
       }
       break;
     }
