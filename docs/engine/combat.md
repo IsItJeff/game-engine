@@ -642,9 +642,14 @@ colonist leaves nothing.
     An **NPC or creature is never `Downed`** — it permadeaths instead — so for the one window where a
     body chipped to 0 HP mid-tick isn't yet reaped (the blow lands in `resolve_creature_contacts` /
     `tick_poison`, `handle_deaths` sweeps *later* that same tick), the "inert at 0 HP" rule is spelled
-    as a `health <= 0` guard rather than `exclude<Downed>`. Today that's the shared `magic_bolt` /
-    `heal_spell`: a dying colonist mage can't fling a last bolt or mend an ally from beyond the grave —
-    the parity twin of the player, who (guarded on `Downed`) already couldn't.
+    as a `health <= 0` guard rather than `exclude<Downed>`. It guards the spells — the shared
+    `magic_bolt` / `heal_spell`, so a dying colonist mage can't fling a last bolt or mend from beyond
+    the grave (the parity twin of the player, who, guarded on `Downed`, already couldn't) — **and the
+    creature side too**: a **leech's lifesteal** (a leech clamped to 0 by the killing blow can't
+    *drink itself back alive* and dodge the reap) and **`creature_spit`** (a spitter poisoned to 0
+    launches no spit from the grave). The deliberate *exception* is a **melee dying blow**: it's
+    already in motion when the swinger crosses 0, so `resolve_creature_contacts` still lets that last
+    swing land — which is why the leech guard sits on the *drink*, not the swing.
 
 ### Seeing the blows — the hit-flash
 
