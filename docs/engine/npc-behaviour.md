@@ -261,14 +261,20 @@ pre-cruelty world is bit-identical.
 
 The **hero twin** completes the mirror: standing reads *both* ways now. Near the *bottom* of the
 ladder — reached only by a colonist with nothing to flee, rescue, forage, drink, mend, arm toward, or
-avoid — an **idle** colonist drifts *toward* a player whose deeds have earned **`standing ≥ +kKnownAt`**
-(the *Known* line, the exact positive mirror of the *Suspect* villain it flees at the top). The colony
-**gathers around its champion**. It is deliberately a **low** priority (fear is the highest, the
-personal bond below it lower still): a
+avoid — an **idle** colonist drifts *toward* the nearest **renowned entity** whose deeds have earned
+**`standing ≥ +kKnownAt`** (the *Known* line, the exact positive mirror of the *Suspect* villain it
+flees at the top). The colony **gathers around its champion**. And that champion needn't be the
+player: an **NPC** earns positive standing exactly as a player does (Valor on a kill, Charity on a
+rescue — neither is `PlayerControlled`-gated, unlike the Cruelty that only a player can rack up), so a
+famous *colonist* draws a rally the same way a famous player does — the design's *"players are
+symmetric subjects"* cutting both ways. (The one guard the widened rung needs: a renowned colonist
+doesn't rally to its **own** fame — the self-skip — else it would lock onto itself and stall.) It is
+deliberately a **low** priority (fear is the highest, the personal bond below it lower still): a
 hungry or endangered colonist ignores the hero, so rallying never overrides a real need — it only
-fills the idle moments a colonist would otherwise spend drifting. Same guards as fear: player-only,
-and below the *Known* line (a neutral or villain player) it pulls nobody, so that world stays
-bit-identical too. Villainy **repels**, heroism **attracts** — the two faces of one scalar.
+fills the idle moments a colonist would otherwise spend drifting. Below the *Known* line (a neutral
+colonist, or a villain) it pulls nobody, so a world with only a renowned player is bit-identical to
+before the rung learned to see NPCs. Villainy **repels**, heroism **attracts** — the two faces of one
+scalar.
 
 Where the villain-fear reads *public* `standing`, a quieter rung reads *personal* affinity: a new
 **avoid** rung (just above the gather rungs) steers an idle colonist **away** from anyone it holds a
@@ -412,7 +418,7 @@ then act, is what stays.
 
 ## Key files
 
-- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / defend / forage / drink / retreat-to-hearth-or-fire / arm-up / avoid-cold / avoid-grudge / **warrior-hunt** / rally / bond / hearth-gather ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, defend, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius **and** (proportionally) the hearth-gather radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, a **defend** rung (just below the downed-rescue) rushes an idle colonist toward a **bonded friend** a creature is bearing down on (`affinity ≥ kBondPull`, a creature within `kDefendThreatRadius`), an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward a **hero player** — `standing ≥ +kKnownAt` — a **bond** rung (below rally) pulls it toward a bonded friend it likes, and a lowest **hearth-gather** rung ambles a sociable idle colonist to the nearest fire; the ladder's first **proactive** want, an **aspiration** rung (just above rally) that `switch`es on the colonist's `Aspiration` kind — a `Warrior` charges the nearest creature within `kHuntRange` (`npc_attack` lands the blows on arrival), a `Provider` walks to the nearest stocked food plot within `kTendRange` (`npc_harvest` reaps a ripe one into a meal on arrival); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
+- `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / defend / forage / drink / retreat-to-hearth-or-fire / arm-up / avoid-cold / avoid-grudge / **warrior-hunt** / rally / bond / hearth-gather ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, defend, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius **and** (proportionally) the hearth-gather radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, a **defend** rung (just below the downed-rescue) rushes an idle colonist toward a **bonded friend** a creature is bearing down on (`affinity ≥ kBondPull`, a creature within `kDefendThreatRadius`), an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward the nearest **renowned entity** (player OR NPC) — `standing ≥ +kKnownAt`, self-skipped — a **bond** rung (below rally) pulls it toward a bonded friend it likes, and a lowest **hearth-gather** rung ambles a sociable idle colonist to the nearest fire; the ladder's first **proactive** want, an **aspiration** rung (just above rally) that `switch`es on the colonist's `Aspiration` kind — a `Warrior` charges the nearest creature within `kHuntRange` (`npc_attack` lands the blows on arrival), a `Provider` walks to the nearest stocked food plot within `kTendRange` (`npc_harvest` reaps a ripe one into a meal on arrival); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
 - `engine/sim/systems.hpp` / `systems.cpp` — `integrate_motion` folds the **terrain drag**: a mover in a `MireZone` advances at its `slow_factor` this tick via `mire_factor(reg, pos)` (the stickiest overlapping mire wins). It scales the **movement**, not the stored velocity, so an un-re-driven mover (mote / idle loner) crawls through instead of compounding to a frozen stop; no mire → factor `1.0` → bit-identical.
 - `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `Aspiration` + `AspirationKind` (`Warrior`/`Provider`, the proactive drive, default-absent so it's dormant until seeded); `MireZone` (boggy terrain, default-absent scenery). `engine/sim/world.cpp` — `make_npc` sets `Personality` (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`, and a *brave* one is given the `Warrior` `Aspiration`, an *industrious* one the `Provider`); `make_mire` places the bog (one west of centre in `build_scene`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`, which folds the `MireZone` drag), and `npc_equip` (after it).

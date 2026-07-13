@@ -1467,6 +1467,51 @@ TEST_CASE("an idle colonist rallies to a renowned hero: the twin of villain-fear
   REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x < 0.0f);
 }
 
+TEST_CASE("the colony rallies to a renowned NPC hero too not just a player: symmetric subjects",
+          "[sim]") {
+  // The design's "players are symmetric subjects": an NPC earns positive standing exactly as a
+  // player does (Valor on a kill, Charity on a rescue -- neither is PlayerControlled-gated), so a
+  // renowned NPC is a champion the colony rallies to as well. Before, the rally rung's view was
+  // PlayerControlled-only, so an idle colonist ignored an NPC hero however famous. Now it gathers
+  // to the nearest renowned ENTITY, player or NPC. RED before: an NPC hero draws nobody (velocity
+  // 0).
+  entt::registry reg;
+  const entt::entity hero = reg.create();
+  reg.emplace<eng::sim::Transform>(hero, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(
+      hero);                         // a full steer agent; it finds no champion so it stays put
+  reg.emplace<eng::sim::Npc>(hero);  // an NPC, NOT PlayerControlled -- the whole point
+  eng::sim::record_deed(reg, hero, eng::sim::Deed::Valor, 3);  // +15 standing -> "Known"
+  REQUIRE(eng::sim::standing(reg.get<eng::sim::BehaviorLedger>(hero)) >= eng::sim::kKnownAt);
+
+  const entt::entity colonist = reg.create();
+  reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{50.0f, 0.0f});  // within rally radius, idle
+  reg.emplace<eng::sim::Velocity>(colonist);
+  reg.emplace<eng::sim::Npc>(colonist);
+
+  eng::sim::steer_npcs(reg);
+
+  // The colonist steers LEFT (-x), toward the NPC hero at the origin -- exactly as it would toward
+  // a player hero.
+  REQUIRE(reg.get<eng::sim::Velocity>(colonist).value.x < 0.0f);
+
+  // The self-skip has real TEETH: a renowned hero must NOT rally to its OWN fame. If it did, it
+  // would lock onto itself (champion = self, a zero steer) and `continue` PAST the bond rung --
+  // stranding a hero that should be free to follow its friends. Give the hero a bonded friend off
+  // the x-axis and re-steer: with the self-skip the hero finds no OTHER champion, falls through to
+  // the bond-follow, and heads for the friend (+y). Asserting it MOVES toward the friend genuinely
+  // RED-fails if the skip is removed -- unlike "the hero stays put", which the zero-steer guard
+  // would satisfy either way (the tautology this replaces).
+  const entt::entity friend_e = reg.create();
+  reg.emplace<eng::sim::Transform>(friend_e,
+                                   eng::Vec2{0.0f, 40.0f});  // above the hero (+y), off-axis
+  reg.emplace<eng::sim::Npc>(friend_e);
+  eng::sim::nudge_affinity(reg, hero, friend_e, 30);  // a bond the hero follows (>= kBondPull)
+  eng::sim::steer_npcs(reg);
+  REQUIRE(reg.get<eng::sim::Velocity>(hero).value.y >
+          0.0f);  // fell through to bond -> toward friend
+}
+
 TEST_CASE("rally is the lowest priority: a real need overrides the pull of a hero", "[sim]") {
   // Rally never overrides survival. A colonist beside a renowned hero but ALSO within reach of a
   // hazard flees the hazard (priority 1) — it does not drift to the champion while in danger. Both

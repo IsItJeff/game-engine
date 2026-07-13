@@ -965,10 +965,21 @@ void steer_npcs(entt::registry& reg) {
     const float sociability = pers != nullptr ? static_cast<float>(pers->sociability) : 0.0f;
     entt::entity champion = entt::null;
     float nearest_hero = kRallyRadius * (1.0f + sociability / 200.0f);
-    auto heroes = reg.view<PlayerControlled, Transform>();
+    // Any renowned ENTITY is a champion, not just the player: an NPC earns positive standing
+    // exactly as a player does (Valor on a kill, Charity on a rescue -- neither is
+    // PlayerControlled-gated, see perform_attack / handle_deaths), so the design's "players are
+    // symmetric subjects" cuts both ways -- the colony rallies to a famous NPC the same way it
+    // rallies to a famous player. The view is now every ledgered entity (the only ones that CAN be
+    // renowned); the standing < kKnownAt filter below still gates it, so a world with only a
+    // renowned player is bit-identical (an NPC with no ledger or below the Known line was never a
+    // champion and still isn't). The self-skip matters now that the rallier can itself be a hero:
+    // without it a renowned NPC would lock onto its OWN fame (distance 0), stall on the zero-vector
+    // guard, and skip its bond-follow below.
+    auto heroes = reg.view<BehaviorLedger, Transform>();
     for (const entt::entity h : heroes) {
-      const BehaviorLedger* led = reg.try_get<BehaviorLedger>(h);
-      if (led == nullptr || standing(*led) < kKnownAt) continue;  // not a hero worth rallying to
+      if (h == n) continue;  // you don't rally to your own fame
+      if (standing(heroes.get<BehaviorLedger>(h)) < kKnownAt)
+        continue;  // not a hero worth rallying to
       const float d = glm::distance(pos, heroes.get<Transform>(h).position);
       if (d < nearest_hero) {
         nearest_hero = d;
