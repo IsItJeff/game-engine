@@ -4032,6 +4032,80 @@ TEST_CASE(
   REQUIRE(mana_spent(0.0f) == Approx(0.0f));  // a 0-HP body can't cast — no mana spent, no bolt
 }
 
+TEST_CASE("a shield spell wards the caster: learned + mana gated, INT scales the barrier",
+          "[sim]") {
+  // The DEFENSIVE spell of the trio: a learned caster raises a timed barrier on ITSELF, spending
+  // mana. The learned gate keeps a non-caster world bit-identical; a 0-HP body is inert (the shared
+  // caster guard); an empty bar fizzles; and INTELLECT (the bolt's attribute) scales the barrier's
+  // thickness. Returns the barrier's absorb by VALUE (or -1 if no Shielded was raised) — never a
+  // pointer into the local registry, which would dangle past its destruction.
+  const auto ward_absorb = [](bool learned, float caster_hp, float mana, int intellect) {
+    entt::registry reg;
+    const entt::entity caster = reg.create();
+    auto& at = reg.emplace<eng::sim::Attributes>(caster);
+    at.intellect.level = intellect;
+    auto& st = reg.emplace<eng::sim::Stats>(caster);
+    st.health.current = caster_hp;
+    st.mp.current = mana;
+    auto& sk = reg.emplace<eng::sim::Skills>(caster);
+    if (learned) sk.train(eng::sim::SkillId::Spellcasting);
+    eng::sim::shield_spell(reg, caster);
+    const eng::sim::Shielded* s = reg.try_get<eng::sim::Shielded>(caster);
+    return s == nullptr ? -1.0f : s->absorb;
+  };
+  REQUIRE(ward_absorb(true, 100.0f, 100.0f, 1) > 0.0f);  // learned + mana + alive -> a barrier
+  REQUIRE(ward_absorb(false, 100.0f, 100.0f, 1) ==
+          -1.0f);                                        // never learned -> no barrier (the gate)
+  REQUIRE(ward_absorb(true, 0.0f, 100.0f, 1) == -1.0f);  // a 0-HP body is inert -> no barrier
+  REQUIRE(ward_absorb(true, 10.0f, 10.0f, 1) == -1.0f);  // empty bar (< 25 cost) fizzles
+  REQUIRE(ward_absorb(true, 100.0f, 100.0f, 3) >         // a keener INT thickens the barrier...
+          ward_absorb(true, 100.0f, 100.0f, 1));         // ...over the untrained caster's
+
+  // and it SPENDS the mana it costs (a full 100 bar -> 75 after one 25-cost ward).
+  entt::registry reg;
+  const entt::entity caster = reg.create();
+  reg.emplace<eng::sim::Attributes>(caster);
+  const float mana_before = reg.emplace<eng::sim::Stats>(caster).mp.current;
+  reg.emplace<eng::sim::Skills>(caster).train(eng::sim::SkillId::Spellcasting);
+  eng::sim::shield_spell(reg, caster);
+  REQUIRE(reg.get<eng::sim::Stats>(caster).mp.current == Approx(mana_before - 25.0f));
+}
+
+TEST_CASE("a raised shield soaks a creature blow then expires", "[sim]") {
+  // The barrier's PAYOFF: while Shielded, `absorb` is soaked off each creature blow
+  // (resolve_creature_contacts), floored at 0 — a temporary, mana-bought buffer on top of armour.
+  // Varying ONLY the shield (present vs absent, and its absorb) is non-tautological: without the
+  // absorb read every case returns the full 15 and the shielded asserts fail.
+  const auto damage_taken = [](bool shielded, float absorb) {
+    entt::registry reg;
+    // a bare victim: no Attributes -> DEX 1 (never dodges), no defence -> mitigate(raw,0)=raw, so
+    // the blow lands FLAT and any gap is the shield alone. No Velocity -> backstab x1 (standing).
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim).health.current = 100.0f;
+    if (shielded) reg.emplace<eng::sim::Shielded>(victim, eng::sim::Shielded{5.0f, absorb});
+    const entt::entity beast = reg.create();
+    reg.emplace<eng::sim::Transform>(beast, eng::Vec2{0.0f, 0.0f});  // in contact -> it swings
+    reg.emplace<eng::sim::Enemy>(beast).attack_damage = 15.0f;  // a known, full-HP (no enrage) blow
+    reg.emplace<eng::sim::Stats>(beast);
+    std::mt19937 rng{99};
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return 100.0f - reg.get<eng::sim::Stats>(victim).health.current;
+  };
+  REQUIRE(damage_taken(false, 0.0f) == Approx(15.0f));  // a bare victim eats the whole 15 blow
+  REQUIRE(damage_taken(true, 4.0f) == Approx(11.0f));   // a 4-absorb barrier soaks 4 -> 11 lands
+  REQUIRE(damage_taken(true, 100.0f) == Approx(0.0f));  // a thick barrier eats the whole weak blow
+
+  // and it EXPIRES: tick_shield ages the barrier and reaps it when the clock runs out.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Shielded>(e, eng::sim::Shielded{0.02f, 5.0f});  // ~1.2 ticks of life left
+  eng::sim::tick_shield(reg, 1.0f / 60.0f);  // one tick (~0.017s) -> still up
+  REQUIRE(reg.all_of<eng::sim::Shielded>(e));
+  eng::sim::tick_shield(reg, 1.0f / 60.0f);  // a second tick -> past 0 -> reaped
+  REQUIRE_FALSE(reg.all_of<eng::sim::Shielded>(e));
+}
+
 TEST_CASE("a defter thrower's bolt flies faster: dexterity's Speed aspect", "[sim]") {
   // DEX's design "Speed" aspect: a defter thrower launches a FASTER projectile, so it reaches the
   // target sooner and is wasted less often when the target dies mid-flight (advance_projectiles

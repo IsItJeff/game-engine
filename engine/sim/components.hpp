@@ -485,6 +485,17 @@ struct Poisoned {
 inline constexpr float kPoisonDuration = 3.0f;  // how long a fresh envenoming lingers (a knob),
                                                 // shared by the swarmer's bite and a venom weapon
 
+// A cast BARRIER — the game's first TIMED BUFF, Poisoned's beneficial mirror (same {timer,
+// magnitude} shape). While present, `absorb` is soaked off each creature blow before it bites
+// (resolve_creature_contacts), the last line of defence on top of static VIT/armour. Raised by
+// shield_spell (the design's defensive "ward"-role spell, named Shield here so it doesn't collide
+// with warded ARMOUR's thorns), aged and reaped by tick_shield. Absent = unshielded = every
+// existing contact is bit-identical.
+struct Shielded {
+  float remaining = 0.0f;  // seconds of barrier left
+  float absorb = 0.0f;     // damage soaked off each blow while it lasts
+};
+
 // Marks a character holding a GUARD (a raised block). While present, incoming creature blows are
 // softened to kBlockDamageFactor of their damage — but the guarded stance ROOTS you to
 // kGuardMoveScale of your speed, so it's a real trade (plant-and-tank vs move-and-dodge), not free
