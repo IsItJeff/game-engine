@@ -12,7 +12,7 @@ engine skeleton's ECS. It is the worked example of
 - **`Vital`** — a reusable "bar" stat: `current`, `max`, `regen_per_second`.
 - **`Stats`** — one component per entity that holds its vitals (its character sheet).
 - **`regenerate_vitals`** — a system that recovers each *passive* vital (health) toward its cap, faster the higher your Endurance (VIT) **and faster still within a `Hearth`'s warmth**, and **not at all while starving** (or dehydrated or poisoned).
-- **`update_stamina`** — a system that spends stamina while moving and restores it while still — faster the higher your Endurance (VIT) **and faster still within a `Hearth`'s warmth**, but **not** while starving or dehydrated (an empty stomach or canteen gives no second wind, the stamina twin of the heal-gate).
+- **`update_stamina`** — a system that spends stamina while moving and restores it while still — faster the higher your Endurance (VIT) **and faster still within a `Hearth`'s warmth**, but **not** while starving, dehydrated, or freezing (an empty stomach, canteen, or body-warmth gives no second wind — the stamina twin of the heal-gate, which blocks healing on the same three needs).
 - **`drain_hunger`** — a system that lowers the hunger Need over time (the first survival need); at empty it starves health.
 - **`DamagePlayer`** — a command that subtracts from a player's health, applied
   through the funnel (the `H` key in the demo).
@@ -132,12 +132,14 @@ no longer only falls toward a shatter — the base is where you **maintain your 
 reach it's a no-op, so a hearthless world is bit-identical (see [combat](combat.md) for durability and the shatter it staves off).
 
 The same discipline now covers your **second wind**: `update_stamina` skips its resting recovery
-while `hunger <= 0` **or** `water <= 0`, so survival failure drains your stamina reserves too, not
-just your health. Composed with the empty-bar crawl below, this is the design's *escalating
-inefficiency* emerging from the sim's own systems rather than a bespoke debuff — a starver who keeps fleeing
-spends stamina it can no longer recover, tires to a crawl, and can't shake it off until it eats or
-drinks. (`update_stamina` runs just *before* `drain_hunger`/`drain_water`, so it reads last tick's
-need — a one-frame lag that's immaterial for a Need that empties over minutes.)
+while `hunger <= 0` **or** `water <= 0` **or** `warmth <= 0` — the exact three needs
+`regenerate_vitals` blocks *healing* on, so **any** survival failure drains your stamina reserves too,
+not just your health (a freezing rester is as spent as a starving one, not mysteriously catching its
+breath by the cold). Composed with the empty-bar crawl below, this is the design's *escalating
+inefficiency* emerging from the sim's own systems rather than a bespoke debuff — a spent character who keeps fleeing
+spends stamina it can no longer recover, tires to a crawl, and can't shake it off until it eats,
+drinks, or warms up. (`update_stamina` runs just *before* `drain_hunger`/`drain_water`/`drain_warmth`,
+so it reads last tick's need — a one-frame lag that's immaterial for a Need that empties over minutes.)
 
 Stamina isn't only *drained* by moving — it can be **spent for speed**. Hold **SHIFT** to **sprint**:
 the `MovePlayer` command's `sprint` flag sets a `Sprinting` stance (the offensive twin of the `Blocking`
