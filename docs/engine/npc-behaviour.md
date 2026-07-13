@@ -315,12 +315,12 @@ other way too — once it **carries `Spellcasting`** the dream is *fulfilled*, s
 and behaves as any other mage. The knowledge twin of the warrior's hunt and the provider's harvest, and
 the first aspiration that grows a colonist's *abilities*, not just directs its errands.
 
-One honest caveat: unlike the warrior's creatures (which respawn) and the provider's plots (which
-regrow), the Scholar's target — a `Spellbook` — is today a **single, consumable** tome, and the player
-(also a non-caster) usually reads it early. So while the *drive* fires for every Scholar (it walks to a
-tome whenever one exists), the *fulfilment* is currently rare. A **renewable spellbook supply** (a
-periodic or multiple-tome spawn) is the follow-up that makes the dream reliably reachable — the drive is
-here; the world just needs enough books to feed it.
+The Scholar's target renews like the others': the warrior's creatures respawn, the provider's plots
+regrow, and a `Spellbook` is a **permanent library** — [`study_spellbooks`](magic.md) teaches from it
+without consuming it, so the one tome the world seeds stays put and the whole colony can learn from it
+over time. The player reading it no longer "steals" the only book, so a Scholar reliably reaches a tome
+and **becomes a mage**. (Scattering *more* tomes so scholars converge on the nearest, rather than all
+pilgrimaging to one, is a later polish — the supply itself is now unlimited.)
 
 All three dreams sit **above** the idle rally/bond/gather rungs (a colonist chases its dream rather than
 loiter by the fire) but **below** every need and fear — so the drive is **self-limiting**. A hungry,

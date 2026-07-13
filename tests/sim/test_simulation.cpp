@@ -3865,10 +3865,12 @@ TEST_CASE("casting sharpens the bolt: Intellect levels from xp and lifts a bolt'
   REQUIRE(bolt_damage(true) > bolt_damage(false));  // a leveled-up mage's bolt hits harder
 }
 
-TEST_CASE("reading a spellbook teaches Spellcasting and consumes the tome", "[sim]") {
-  // Magic is EARNED, not innate: a player standing on a Spellbook READS it, learns Spellcasting
-  // (and can then cast), and the tome is spent. The found-and-read loop that replaced the starter
-  // cantrip.
+TEST_CASE("reading a spellbook teaches Spellcasting; the tome is a permanent library", "[sim]") {
+  // Magic is EARNED, not innate: a person standing on a Spellbook READS it and learns Spellcasting
+  // (and can then cast). The tome is a PERMANENT LIBRARY, not a one-shot scroll — reading does NOT
+  // consume it, so a whole colony can learn from one book over time (the Scholar aspiration's
+  // supply), and the player no longer "steals" the only tome by reaching it first. One newcomer
+  // studies per tick; the book stays for the next.
   entt::registry reg;
   const entt::entity reader = reg.create();
   reg.emplace<eng::sim::Transform>(reader, eng::Vec2{0.0f, 0.0f});
@@ -3881,28 +3883,39 @@ TEST_CASE("reading a spellbook teaches Spellcasting and consumes the tome", "[si
   REQUIRE(reg.get<eng::sim::Skills>(reader).find(eng::sim::SkillId::Spellcasting) == nullptr);
   eng::sim::study_spellbooks(reg);
   REQUIRE(reg.get<eng::sim::Skills>(reader).find(eng::sim::SkillId::Spellcasting) !=
-          nullptr);                // read it -> learned to cast
-  REQUIRE_FALSE(reg.valid(book));  // ...and the tome is consumed
+          nullptr);          // read it -> learned to cast
+  REQUIRE(reg.valid(book));  // ...and the tome PERSISTS — a library, not a spent scroll
+
+  // A SECOND newcomer at the same tome also learns from it — the permanent-library payoff (with the
+  // old consume-on-read behaviour the book would be gone and this reader could never learn).
+  const entt::entity second = reg.create();
+  reg.emplace<eng::sim::Transform>(second, eng::Vec2{5.0f, 0.0f});  // on the same book
+  reg.emplace<eng::sim::Skills>(second);
+  eng::sim::study_spellbooks(reg);
+  REQUIRE(reg.get<eng::sim::Skills>(second).find(eng::sim::SkillId::Spellcasting) != nullptr);
+  REQUIRE(reg.valid(book));  // still there for the next student
 }
 
-TEST_CASE("a spellbook out of reach or already known is left untouched", "[sim]") {
-  // Two ways a tome is NOT consumed: no reader is close enough, or the only reader already knows
-  // the spell (a book is spent only on a lesson that teaches something).
-  const auto book_survives = [](float reader_x, bool already_knows) {
+TEST_CASE("study's reach gate: only a reader within reach learns from the library", "[sim]") {
+  // The reach gate: a person must be within kStudyReach (15) of the tome to study it — a near
+  // unlearned reader learns, a far one gains nothing — and the library is never consumed either
+  // way. (The already-a-caster skip is exercised by the second reader in the permanent-library test
+  // above: the first reader, now a caster, is passed over when the second studies.)
+  const auto learned = [](float reader_x) {
     entt::registry reg;
     const entt::entity reader = reg.create();
     reg.emplace<eng::sim::Transform>(reader, eng::Vec2{reader_x, 0.0f});
     reg.emplace<eng::sim::PlayerControlled>(reader);
-    eng::sim::Skills& sk = reg.emplace<eng::sim::Skills>(reader);
-    if (already_knows) sk.train(eng::sim::SkillId::Spellcasting);
+    reg.emplace<eng::sim::Skills>(reader);  // unlearned
     const entt::entity book = reg.create();
     reg.emplace<eng::sim::Transform>(book, eng::Vec2{0.0f, 0.0f});
     reg.emplace<eng::sim::Spellbook>(book);
     eng::sim::study_spellbooks(reg);
-    return reg.valid(book);
+    REQUIRE(reg.valid(book));  // the library is never consumed
+    return reg.get<eng::sim::Skills>(reader).find(eng::sim::SkillId::Spellcasting) != nullptr;
   };
-  REQUIRE(book_survives(500.0f, false));  // reader far away -> book untouched...
-  REQUIRE(book_survives(0.0f, true));     // ...or a reader who already knows the spell -> not spent
+  REQUIRE(learned(5.0f));          // within reach (5 < 15) -> learns to cast...
+  REQUIRE_FALSE(learned(500.0f));  // ...far away -> out of reach -> learns nothing
 }
 
 TEST_CASE("a colonist mage casts a bolt at a nearby creature: NPC casting parity", "[sim]") {
@@ -3967,8 +3980,8 @@ TEST_CASE("an NPC learns Spellcasting from a spellbook too: reading is not playe
 
   eng::sim::study_spellbooks(reg);
   REQUIRE(reg.get<eng::sim::Skills>(colonist).find(eng::sim::SkillId::Spellcasting) !=
-          nullptr);                // the colonist read the tome and learned to cast
-  REQUIRE_FALSE(reg.valid(book));  // ...and consumed it, exactly as a player would
+          nullptr);          // the colonist read the tome and learned to cast
+  REQUIRE(reg.valid(book));  // ...from the permanent library (not consumed), exactly as a player
 }
 
 TEST_CASE("a learned caster mends a wounded ally: the heal spell restores health", "[sim]") {

@@ -3989,14 +3989,17 @@ void collect_pickups(entt::registry& reg, float dt) {
 void study_spellbooks(entt::registry& reg) {
   // The design's "magic is LEARNED" made real: a person standing on a Spellbook READS it and gains
   // the Spellcasting skill, so casting is EARNED by finding a tome rather than innate. The learning
-  // twin of collect_pickups (walk over a grounded item to gain from it), and the same collect-then-
-  // destroy so a consumed book never invalidates the view mid-walk. ANY person with a Skills sheet
-  // reads — the player AND an NPC (the player==NPC parity: a colonist that finds a tome becomes a
-  // mage too, which npc_cast then lets cast). Creatures carry no Skills, so they never reach here;
-  // Downed bodies are excluded (an unconscious reader learns nothing). Gated on NOT already knowing
-  // the spell — a book is spent only on a read that actually teaches; a caster leaves the tome.
+  // twin of collect_pickups (walk over a grounded item to gain from it). A Spellbook is a PERMANENT
+  // LIBRARY, not a one-shot scroll: reading it does NOT consume it, so a whole colony can learn
+  // from a single tome over time — the supply the Scholar aspiration needs (every greedy
+  // reinforcement that seeks it can become a mage), and the player no longer "steals" the only book
+  // by reaching it first. ANY person with a Skills sheet reads — the player AND an NPC (the
+  // player==NPC parity: a colonist that finds a tome becomes a mage too, which npc_cast then lets
+  // cast). Creatures carry no Skills, so they never reach here; Downed bodies are excluded. Gated
+  // on NOT already knowing the spell (a caster leaves the tome), so a re-read is a no-op and the
+  // lectern teaches each newcomer once. Mutates only component VALUES (a learned-skill push) and
+  // destroys nothing, so no view is invalidated mid-walk — no collect-then-act needed.
   constexpr float kStudyReach = 15.0f;  // same reach as a pickup grab
-  std::vector<entt::entity> read;       // books consumed after the walk (never destroy mid-view)
   auto books = reg.view<Spellbook, Transform>();
   auto learners = reg.view<Skills, Transform>(entt::exclude<Downed>);
   for (const entt::entity book : books) {
@@ -4006,11 +4009,9 @@ void study_spellbooks(entt::registry& reg) {
       Skills& sk = learners.get<Skills>(p);
       if (sk.find(SkillId::Spellcasting) != nullptr) continue;  // already a caster — leave the tome
       sk.train(SkillId::Spellcasting);                          // READ it: learn to cast
-      read.push_back(book);
-      break;  // one reader consumes the book
+      break;  // one newcomer studies the lectern per tick; the book stays for the next
     }
   }
-  for (const entt::entity book : read) reg.destroy(book);
 }
 
 void resolve_contacts(entt::registry& reg) {
