@@ -3978,6 +3978,60 @@ TEST_CASE("an NPC caster mends a wounded ally too: healing has player==NPC parit
   REQUIRE(reg.get<eng::sim::Stats>(ally).health.current > 30.0f);  // the NPC healer mended its ally
 }
 
+TEST_CASE(
+    "a 0-HP caster is inert: a permadeath-pending NPC neither bolts nor mends (player==NPC parity)",
+    "[sim]") {
+  // The "a body at 0 HP is inert" invariant, applied to CASTERS. An NPC never goes Downed —
+  // handle_deaths permakills it — so in the window between the blow that drops it to 0 HP
+  // (resolve_creature_contacts / tick_poison, earlier in the SAME tick) and handle_deaths reaping
+  // it LATER that tick, npc_cast/npc_heal still walk over the 0-HP body. A player provably can't do
+  // this: a 0-HP player is Downed and the Cast/CastHeal commands guard on Downed, so a 0-HP NPC
+  // still casting is a concrete player==NPC parity break. The guard lives at the shared choke
+  // points (magic_bolt / heal_spell), the root, so it also covers the player path and any future
+  // caller — and every existing cast/mend runs at positive HP, so it's bit-identical. Each lambda
+  // varies ONLY the caster's HP, so the pair is non-tautological: drop the guard and the 0-HP case
+  // behaves like the living control.
+
+  // A dead-man's MEND: does an ally's HP get restored by a healer that itself sits at 0 HP?
+  const auto ally_healed = [](float healer_hp) {
+    entt::registry reg;
+    const entt::entity healer = reg.create();
+    reg.emplace<eng::sim::Npc>(healer);
+    reg.emplace<eng::sim::Transform>(healer, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(healer);
+    reg.emplace<eng::sim::Stats>(healer).health.current = healer_hp;  // full mana either way
+    reg.emplace<eng::sim::Skills>(healer).train(eng::sim::SkillId::Spellcasting);
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Npc>(ally);
+    reg.emplace<eng::sim::Transform>(ally, eng::Vec2{20.0f, 0.0f});  // in heal range
+    reg.emplace<eng::sim::Stats>(ally).health.current = 30.0f;       // wounded (below max)
+    eng::sim::npc_heal(reg);
+    return reg.get<eng::sim::Stats>(ally).health.current;
+  };
+  REQUIRE(ally_healed(100.0f) > 30.0f);         // a LIVING healer mends the ally — the control
+  REQUIRE(ally_healed(0.0f) == Approx(30.0f));  // a 0-HP body can't mend — the ally is untouched
+
+  // A dead-man's BOLT: does a 0-HP mage spend mana and fling a bolt at a hostile?
+  const auto mana_spent = [](float mage_hp) {
+    entt::registry reg;
+    const entt::entity mage = reg.create();
+    reg.emplace<eng::sim::Npc>(mage);
+    reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mage);
+    auto& ms = reg.emplace<eng::sim::Stats>(mage);
+    ms.health.current = mage_hp;  // full mana either way
+    reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{40.0f, 0.0f});  // in bolt range
+    const float mana_before = ms.mp.current;
+    eng::sim::npc_cast(reg);
+    return mana_before - reg.get<eng::sim::Stats>(mage).mp.current;
+  };
+  REQUIRE(mana_spent(100.0f) > 0.0f);         // a LIVING mage casts (spends mana) — the control
+  REQUIRE(mana_spent(0.0f) == Approx(0.0f));  // a 0-HP body can't cast — no mana spent, no bolt
+}
+
 TEST_CASE("a defter thrower's bolt flies faster: dexterity's Speed aspect", "[sim]") {
   // DEX's design "Speed" aspect: a defter thrower launches a FASTER projectile, so it reaches the
   // target sooner and is wasted less often when the target dies mid-flight (advance_projectiles

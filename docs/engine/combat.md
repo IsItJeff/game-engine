@@ -639,6 +639,13 @@ colonist leaves nothing.
     not a valid target — nor an actor — until they're back up.* (The last "dying blow" as you cross 0
     still lands — `Downed` is stamped *after* the damage systems that tick.)
 
+    An **NPC or creature is never `Downed`** — it permadeaths instead — so for the one window where a
+    body chipped to 0 HP mid-tick isn't yet reaped (the blow lands in `resolve_creature_contacts` /
+    `tick_poison`, `handle_deaths` sweeps *later* that same tick), the "inert at 0 HP" rule is spelled
+    as a `health <= 0` guard rather than `exclude<Downed>`. Today that's the shared `magic_bolt` /
+    `heal_spell`: a dying colonist mage can't fling a last bolt or mend an ally from beyond the grave —
+    the parity twin of the player, who (guarded on `Downed`) already couldn't.
+
 ### Seeing the blows — the hit-flash
 
 A fight you can't *see* landing feels dead: dots silently lose health and vanish. So
