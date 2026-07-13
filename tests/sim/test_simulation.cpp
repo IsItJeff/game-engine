@@ -195,6 +195,30 @@ TEST_CASE("a hearth speeds stamina recovery too: catch your breath by the fire",
   REQUIRE(recovered_in_1s(true) > recovered_in_1s(false));  // ...but faster by the fire
 }
 
+TEST_CASE("the Recovery skill speeds the second wind: a practised rester catches its breath faster",
+          "[sim]") {
+  // Recovery's OWN direct effect, beyond the Endurance its resting also feeds: a higher Recovery
+  // level lifts the stamina-recovery rate — the Survivalist pattern (a skill read directly for its
+  // own effect). Both resters share Endurance 1 and the same spent stamina + rest; only the
+  // Recovery skill level differs, so this isolates the skill's own boost from the attribute it
+  // feeds.
+  const auto recovered_in_1s = [](int recovery_level) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Velocity>(e);    // zero velocity -> resting (recovers, not drains)
+    reg.emplace<eng::sim::Attributes>(e);  // Endurance 1 -> the SAME base rate for both
+    auto& sk = reg.emplace<eng::sim::Skills>(e);
+    if (recovery_level > 1) sk.train(eng::sim::SkillId::Recovery).level = recovery_level;
+    reg.emplace<eng::sim::Stats>(e).stamina.current = 10.0f;  // spent, with room to recover
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::update_stamina(reg, dt);  // 1s
+    return reg.get<eng::sim::Stats>(e).stamina.current - 10.0f;
+  };
+  REQUIRE(recovered_in_1s(1) > 0.0f);  // an untrained rester recovers (the base rate)...
+  REQUIRE(recovered_in_1s(6) >
+          recovered_in_1s(1));  // ...a practised one faster (its own second wind)
+}
+
 TEST_CASE("a wounded colonist retreats to a hearth and holds in its warmth", "[sim]") {
   // The retreat rung makes the hearth a USED landmark: a safe but wounded colonist falls back to
   // the nearest fire to mend, then holds inside its radius; a healthy one ignores it. Health max
