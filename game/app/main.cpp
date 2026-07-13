@@ -305,6 +305,8 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   if (const eng::sim::CharacterLevel* cl =
           world.registry().try_get<eng::sim::CharacterLevel>(player)) {
     ImGui::Text("character level: %d", cl->level);  // the slow "veteran" multiplier on earned stats
+    ImGui::Text("rank: %s",
+                eng::sim::veteran_title(*cl));  // the experience title (Novice -> ... -> Grizzled)
   }
   // Morality: the player's standing (climbs with Valor kills / Charity rescues; goes negative once
   // villain deeds land) and its derived title. No BehaviorLedger until the first deed, so try_get
@@ -387,7 +389,8 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
       "them skirmish (and sometimes an NPC fall). Fresh creatures keep arriving — and "
       "fresh colonists wander in over time to replace the fallen, so the war sustains "
       "itself. "
-      "Space: spawn a mote. H: take 15 damage. E: wear the nearest dropped gear — a steel "
+      "Space: spawn a mote. P: take 15 damage (a debug poke). E: wear the nearest dropped gear — a "
+      "steel "
       "weapon (harder hits, slower), a GREEN venom blade (weaker hits that POISON the foe, but "
       "nimble), or bronze armour (more defence, slower stamina regen), each its own slot; "
       "Q: drop the weapon again to shed the heft and move free. "
