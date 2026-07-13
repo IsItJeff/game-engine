@@ -125,12 +125,15 @@ there's just no NPC driver yet (Throwing and Guarding began player-only the same
 
 ## What's next
 
-This is a seam, not the whole trunk. **Learning**, **NPC casters**, **support magic**, and now a
-**defensive ward** exist (a `Spellbook` you read, a colonist mage that casts beside you, a mend that
-heals your allies, and a barrier that soaks a blow) — the **offence / support / defence** trio is
-complete. Growing from here: **more spells** (an area blast, each its own book), an **NPC self-ward**
-(`npc_shield`) to close the shield's parity, a **dedicated Healing/Abjuration tome** so the support
-and ward skills have their own learn-paths (today they ride the Spellcasting gate), NPCs *seeking out*
-tomes or a **mentor** to teach them, the **Focus / Attunement** skills that govern the mana pool's
-capacity and regen, and the **tech** branch (an Energy battery on gear, the design's twin trunk). Each
+This is a seam, not the whole trunk. **Learning**, **NPC casters**, **support magic**, a **defensive
+ward**, and now **NPCs that seek magic out** exist (a `Spellbook` you read, a colonist mage that casts
+beside you, a mend that heals your allies, a barrier that soaks a blow, and a [`Scholar`-aspiration
+colonist](npc-behaviour.md) that walks to a tome to learn) — the **offence / support / defence** trio is
+complete. Growing from here: a **renewable spellbook supply** (today the world seeds a single tome,
+usually read by the player, so a Scholar rarely reaches one — a periodic or multiple-book supply lets
+the dream reliably fulfil as reinforcements arrive), **more spells** (an area blast, each its own book),
+an **NPC self-ward** (`npc_shield`) to close the shield's parity, a **dedicated Healing/Abjuration tome**
+so the support and ward skills have their own learn-paths (today they ride the Spellcasting gate), the
+**Focus / Attunement** skills that govern the mana pool's capacity and regen, and the **tech** branch
+(an Energy battery on gear, the design's twin trunk). Each
 is a small add on this foundation.

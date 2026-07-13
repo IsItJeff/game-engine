@@ -1561,6 +1561,33 @@ TEST_CASE("an idle provider walks to a food plot to work it: the peaceful aspira
   REQUIRE(tend_vx(false) == Approx(0.0f));  // no aspiration -> stays put (the gate)
 }
 
+TEST_CASE("a scholar seeks a spellbook to learn magic: the third aspiration", "[sim]") {
+  // The knowledge twin of the warrior's hunt and the provider's harvest: a colonist that DREAMS of
+  // magic (Aspiration Scholar) and hasn't yet LEARNED to cast walks to the nearest Spellbook to
+  // study it (study_spellbooks teaches Spellcasting on arrival). TWO gates: the Aspiration (no
+  // dream -> stays put) AND not-yet-a-caster (a scholar who already knows magic has fulfilled its
+  // dream -> it stops seeking tomes and behaves as a caster via npc_cast). Returns the colonist's
+  // steer velocity.x.
+  const auto study_vx = [](bool is_scholar, bool already_caster) {
+    entt::registry reg;
+    const entt::entity tome = reg.create();
+    reg.emplace<eng::sim::Transform>(tome, eng::Vec2{200.0f, 0.0f});  // to the RIGHT, in range
+    reg.emplace<eng::sim::Spellbook>(tome);
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    auto& sk = reg.emplace<eng::sim::Skills>(colonist);
+    if (already_caster) sk.train(eng::sim::SkillId::Spellcasting);  // dream already fulfilled
+    if (is_scholar) reg.emplace<eng::sim::Aspiration>(colonist, eng::sim::AspirationKind::Scholar);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(study_vx(true, false) > 0.0f);            // an unlearned scholar heads RIGHT, to the tome
+  REQUIRE(study_vx(false, false) == Approx(0.0f));  // no aspiration -> stays put (the gate)
+  REQUIRE(study_vx(true, true) == Approx(0.0f));    // already a caster -> dream fulfilled, no seek
+}
+
 TEST_CASE("a provider works a ripe plot into a meal: npc_harvest is the NPC farm behaviour",
           "[sim]") {
   // npc_harvest: a Provider-aspiration Npc in reach of a RIPE plot reaps it into a meal — the same
