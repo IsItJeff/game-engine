@@ -4429,6 +4429,47 @@ TEST_CASE("a venom spitter's spit envenoms its target; a plain one doesn't", "[s
   REQUIRE_FALSE(poisoned_after_spit(0.0f));  // ...a plain spit (poison 0, like a throw) does not
 }
 
+TEST_CASE("a leech killed the same tick can't drink itself back alive: 0 HP is inert", "[sim]") {
+  // The schedule trap the leech's lifesteal opened: perform_attack (or a blocking victim's riposte)
+  // can clamp a leech to EXACTLY 0 HP earlier in the tick, but resolve_creature_contacts still lets
+  // a 0-HP creature land its last swing (the intended dying blow) — and without a guard THAT
+  // swing's lifesteal would heal the leech back above 0, so handle_deaths never reaps it and the
+  // kill is undone (the player already got false Valor/vigor credit). A dead body can't drink.
+  // Returns the leech's health after one contact; varies ONLY its starting HP, so it's
+  // non-tautological.
+  const auto leech_hp_after = [](float start_hp) {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);  // no Attributes -> DEX 1 -> the bite always lands
+    const entt::entity leech = reg.create();
+    reg.emplace<eng::sim::Transform>(leech, eng::Vec2{0.0f, 0.0f});  // in contact -> it bites
+    reg.emplace<eng::sim::Enemy>(leech).lifesteal_per_hit = 4.0f;
+    reg.emplace<eng::sim::Stats>(leech, eng::sim::Vital{start_hp, 22.0f, 0.0f});
+    std::mt19937 rng{7};
+    eng::sim::resolve_creature_contacts(reg, 1.0f / 60.0f, rng);
+    return reg.get<eng::sim::Stats>(leech).health.current;
+  };
+  REQUIRE(leech_hp_after(10.0f) == Approx(14.0f));  // a LIVING leech drinks its +4 (the control)
+  REQUIRE(leech_hp_after(0.0f) == Approx(0.0f));    // a leech killed this tick can't drink back
+}
+
+TEST_CASE("a spitter chipped to 0 HP can't spit from the grave: 0 HP is inert", "[sim]") {
+  // The ranged echo of the leech guard: a spitter poisoned/chipped to 0 HP earlier in the tick
+  // (tick_poison, a riposte) is a corpse pending handle_deaths — it must not launch a fresh spit. A
+  // dead spitter fires nothing. Varies ONLY the spitter's HP, so it's non-tautological.
+  const auto spits_launched = [](float spitter_hp) {
+    entt::registry reg;
+    const auto [spitter, victim] = make_spitter_and_person(reg, 100.0f, 7.0f, false);
+    (void)victim;
+    reg.get<eng::sim::Stats>(spitter).health.current = spitter_hp;  // alive, or killed this tick
+    eng::sim::creature_spit(reg, 1.0f / 60.0f);
+    return reg.storage<eng::sim::Projectile>().size();
+  };
+  REQUIRE(spits_launched(25.0f) == 1u);  // a LIVING spitter fires (the control)...
+  REQUIRE(spits_launched(0.0f) == 0u);   // ...a dead one fires nothing from the grave
+}
+
 TEST_CASE("a spitter with no one in range holds its fire", "[sim]") {
   // The range gate: a person past spit_range draws no shot.
   entt::registry reg;

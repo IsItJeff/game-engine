@@ -3052,6 +3052,14 @@ void creature_spit(entt::registry& reg, float dt) {
   for (const entt::entity e : spitters) {
     Enemy& enemy = spitters.get<Enemy>(e);
     if (enemy.spit_range <= 0.0f) continue;  // melee-only creatures never spit
+    // A spitter chipped to 0 HP earlier this tick (tick_poison venom, or a riposte/thorns) is a
+    // corpse pending handle_deaths — it can't fling a fresh spit from the grave. The ranged echo of
+    // the leech's drink guard and the caster spells' 0-HP guard: 0 HP is inert. Every real spitter
+    // carries Stats (make_creature), so try_get is defensive; a positive-HP spitter is unchanged
+    // (bit-identical). Unlike a melee dying blow (already in motion, so it lands), a spit is a NEW
+    // projectile launched here — a corpse launches nothing.
+    if (const Stats* st = reg.try_get<Stats>(e); st != nullptr && st->health.current <= 0.0f)
+      continue;
     if (enemy.spit_timer > 0.0f) {
       enemy.spit_timer -= dt;  // still reloading
       continue;
@@ -4163,9 +4171,15 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // "Procs as data": a non-leech creature (lifesteal_per_hit 0, every archetype today) heals
       // nothing, so an unchanged world is bit-identical. Routes through the creature's own Stats
       // (its own block-scope `cs`, like the thorns/riposte reads); a full-health leech is unchanged
-      // (capped). No RNG.
+      // (capped). No RNG. A DEAD leech can't drink (`health.current > 0`): a leech clamped to
+      // exactly 0 HP earlier this tick — by the player's perform_attack (the tick's top), or a
+      // guard's riposte above (thorns is BELOW this drink, so it can't be the same-swing cause) —
+      // still lands this last dying swing (the intended quirk), but WITHOUT this guard its
+      // lifesteal would heal it back above 0, so handle_deaths (later this tick) would never reap
+      // it and the kill would be undone. 0 HP is inert: the drink is the one creature self-heal, so
+      // this is the one place the wear-down could be reversed from the grave.
       if (enemy.lifesteal_per_hit > 0.0f) {
-        if (Stats* cs = reg.try_get<Stats>(c); cs != nullptr) {
+        if (Stats* cs = reg.try_get<Stats>(c); cs != nullptr && cs->health.current > 0.0f) {
           cs->health.current += enemy.lifesteal_per_hit;
           if (cs->health.current > cs->health.max) cs->health.current = cs->health.max;
         }
