@@ -754,7 +754,12 @@ void World::apply_command(const Command& cmd) {
         eq.strength_bonus = 0;  // clear ONLY the weapon slot; the heft is shed...
         eq.move_penalty = 0.0f;
         eq.weapon_venom = 0.0f;  // ...and the venom with it...
-        eq.crit_bonus = 0.0f;    // ...and a keen blade's crit edge too (drop = undo equip)
+        eq.crit_bonus = 0.0f;    // ...and a keen blade's crit edge too...
+        eq.weapon_durability =
+            0.0f;  // ...and the blade's remaining life (0 = no weapon), so no
+                   // phantom durability lingers for mend_gear to grow back or
+                   // remove_equipped_if_empty to trip on -- matching the shatter
+                   // site, the game's other weapon-slot clear (drop = undo equip)
         // ...and if nothing's left worn (no armour either), drop the now-empty cache entirely
         // so the "wielding" HUD clears and MovePlayer/perform_attack see a bare character.
         if (eq.defence_bonus == 0.0f && eq.stamina_regen_penalty == 0.0f) {
