@@ -1974,7 +1974,24 @@ void teach(entt::registry& reg) {
     // via grant_skill_xp), and the mentor grows TEACHING -> Charisma for passing it on. Note
     // whether the student ALREADY knew the craft, so a first-LEARN this tick can be detected below.
     const bool knew_craft = folk.get<Skills>(student).find(best) != nullptr;
-    grant_skill_xp(folk.get<Skills>(student), folk.get<Attributes>(student), best, kLessonPerTick,
+    // A more PRACTISED teacher imparts a BIGGER lesson: the mentor's own TEACHING level scales the
+    // XP the student gains — the design's "a skill's own level scales its own payoff" (Survivalist
+    // eases the drain it trains, Recovery speeds the wind it trains), finally reading Teaching's
+    // level, until now a pure XP-sink that fed only Charisma. +kTeachBonusPerLevel per Teaching
+    // level past the first, capped at kTeachBonusCap so even a master teacher can't shortcut a
+    // student clean past its own toil. Read BEFORE the mentor's own Teaching grant below, so the
+    // lesson reflects this tick's proficiency. A mentor with Teaching level 1 or none -> bonus 0 ->
+    // the flat kLessonPerTick EXACTLY (x * Fixed::from_int(1) is exact in Q16.16), so a short-run
+    // world (no one past Teaching 1) is bit-identical. All Fixed, no float -> replay-safe.
+    const Fixed kTeachBonusPerLevel =
+        Fixed::from_ratio(1, 10);                     // +10% lesson XP per Teaching level...
+    const Fixed kTeachBonusCap = Fixed::from_int(1);  // ...up to +100% (a x2 ceiling, a knob)
+    const Skill* mentor_teaching = folk.get<Skills>(mentor).find(SkillId::Teaching);
+    const int teach_level = mentor_teaching != nullptr ? mentor_teaching->level : 1;
+    Fixed teach_bonus = Fixed::from_int(teach_level - 1) * kTeachBonusPerLevel;
+    if (teach_bonus > kTeachBonusCap) teach_bonus = kTeachBonusCap;
+    const Fixed lesson = kLessonPerTick * (Fixed::from_int(1) + teach_bonus);
+    grant_skill_xp(folk.get<Skills>(student), folk.get<Attributes>(student), best, lesson,
                    &folk.get<CharacterLevel>(student));
     grant_skill_xp(folk.get<Skills>(mentor), folk.get<Attributes>(mentor), SkillId::Teaching,
                    kTeachingPerTick, &folk.get<CharacterLevel>(mentor));
