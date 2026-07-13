@@ -2945,6 +2945,39 @@ TEST_CASE("a colonist charges to defend a bonded friend from a creature: the PRO
           0.0f);  // ...no threat -> the starving colonist forages RIGHT
 }
 
+TEST_CASE("a lifelong Partner is defended from farther: the deepest bond crosses the field",
+          "[sim]") {
+  // The Partner tier (affinity >= kBondPartnerAt) gets gameplay TEETH in the defend rung: a
+  // colonist charges to defend a PARTNER from a distance a mere friend wouldn't cross (kDefendReach
+  // x kPartnerDefendBoost vs the base reach) — the deepest bond means the most devoted defender.
+  // The friend sits at 380: past the base defend reach (300) AND past the bond-follow radius (220),
+  // so a plain friend neither defends nor drifts there; only the Partner boost (300*1.6 = 480)
+  // reaches it. Varies ONLY the bond depth.
+  const auto defends = [](std::int8_t affinity) {
+    entt::registry reg;
+    const entt::entity friend_e = reg.create();
+    reg.emplace<eng::sim::Transform>(friend_e,
+                                     eng::Vec2{-380.0f, 0.0f});  // far LEFT, past base reach
+    reg.emplace<eng::sim::Npc>(friend_e);
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    reg.emplace<eng::sim::Stats>(colonist);  // content (full needs) -> only the defend rung can act
+    eng::sim::nudge_affinity(reg, colonist, friend_e, affinity);
+    const entt::entity beast = reg.create();
+    reg.emplace<eng::sim::Transform>(beast,
+                                     eng::Vec2{-400.0f, 0.0f});  // bearing down on the friend
+    reg.emplace<eng::sim::Enemy>(beast);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x < 0.0f;  // charged LEFT to the friend?
+  };
+  REQUIRE(
+      defends(eng::sim::kBondPartnerAt));  // a PARTNER (80) at 380 -> defended (the boosted reach)
+  REQUIRE_FALSE(
+      defends(30));  // a mere friend (30, a real bond but < Partner) at 380 -> not defended
+}
+
 TEST_CASE("a grudge-holder keeps its distance: an idle colonist backs away from the resented",
           "[sim]") {
   // The ACTIVE completion of a grudge and the negative twin of the bond pull above: an idle
