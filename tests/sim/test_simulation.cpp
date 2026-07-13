@@ -70,6 +70,55 @@ TEST_CASE("a MovePlayer command moves the player through the funnel", "[sim]") {
   REQUIRE(now_x > start_x);
 }
 
+TEST_CASE("a downed player is inert through the funnel: it cannot attack throw cast or heal",
+          "[sim]") {
+  // The "a Downed body is inert" invariant, enforced on the four combat/magic commands that were
+  // missing the guard the move/equip/drop/harvest/plant commands already had. A crumpled player —
+  // even a learned caster with full mana — can't swing, hurl, bolt, or mend until a revive brings
+  // it back. We measure the player's OWN mana and stamina: no other entity spends them, and a
+  // Downed body gets no regen, so a spend can't be masked or faked — full both means nothing fired.
+  eng::sim::World world;
+  auto& reg = world.registry();
+  const entt::entity player = world.player();
+
+  reg.emplace<eng::sim::Downed>(player);  // helpless...
+  reg.get<eng::sim::Skills>(player).train(
+      eng::sim::SkillId::Spellcasting);  // ...but a learned caster
+  eng::sim::Stats& ps = reg.get<eng::sim::Stats>(player);
+  ps.mp.current = ps.mp.max;            // full mana -> a cast/mend WOULD spend it if it fired
+  ps.stamina.current = ps.stamina.max;  // full stamina -> a swing/throw WOULD spend it if it fired
+  const float mana_max = ps.mp.max;
+  const float stamina_max = ps.stamina.max;
+  const eng::Vec2 pos = reg.get<eng::sim::Transform>(player).position;
+
+  // Give every command a target so an UNGUARDED one WOULD fire (and spend the resource): a mote in
+  // melee reach (Attack), an enemy just past it in bolt/throw range (Throw + Cast), and a wounded
+  // ally in heal range (CastHeal).
+  const entt::entity mote = reg.create();
+  reg.emplace<eng::sim::Transform>(mote, pos + eng::Vec2{20.0f, 0.0f});
+  reg.emplace<eng::sim::Hazard>(mote);
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, pos + eng::Vec2{120.0f, 0.0f});  // past melee, within range
+  reg.emplace<eng::sim::Enemy>(foe);
+  reg.emplace<eng::sim::Stats>(foe);  // a real target the throw/bolt connects on
+  const entt::entity ally = reg.create();
+  reg.emplace<eng::sim::Npc>(ally);
+  reg.emplace<eng::sim::Transform>(ally,
+                                   pos + eng::Vec2{40.0f, 0.0f});  // in heal range, past revive
+  reg.emplace<eng::sim::Stats>(ally).health.current = 30.0f;       // wounded (heal target)
+
+  world.submit(eng::sim::attack(eng::sim::kLocalPlayer));
+  world.submit(eng::sim::hurl(eng::sim::kLocalPlayer));
+  world.submit(eng::sim::cast(eng::sim::kLocalPlayer));
+  world.submit(eng::sim::cast_heal(eng::sim::kLocalPlayer));
+  world.step();
+
+  // Nothing fired: no mana spent (Cast + CastHeal gated) and no stamina spent (Attack + Throw
+  // gated).
+  REQUIRE(reg.get<eng::sim::Stats>(player).mp.current == Approx(mana_max));
+  REQUIRE(reg.get<eng::sim::Stats>(player).stamina.current == Approx(stamina_max));
+}
+
 TEST_CASE("a diagonal input does not exceed the player's move speed", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

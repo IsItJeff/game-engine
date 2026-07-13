@@ -619,15 +619,17 @@ colonist leaves nothing.
     Once you're `Downed` you're not a participant, in *any* direction: you don't self-heal
     (`regenerate_vitals`) or **mend your gear by the fire** (`mend_gear` — and that one *would*
     persist past the down window, since a revive resets vitals and needs but not durability), you
-    can't grab loot (`collect_pickups`) or act on input
-    (`MovePlayer`), an ally rescues you rather than the reverse (`handle_deaths`) — **and the
-    fight ignores you**. Creatures re-target the living instead of camping your corpse
+    can't grab loot (`collect_pickups`) or **act on input at all** — not just movement (`MovePlayer`)
+    but *every* action command (swing / throw / cast / mend / equip / drop / harvest / plant) skips a
+    Downed commander in `apply_command`, an ally rescues you rather than the reverse (`handle_deaths`)
+    — **and the fight ignores you**. Creatures re-target the living instead of camping your corpse
     (`chase_prey`), and neither a creature swing (`resolve_creature_contacts`) nor an ambient
     mote (`resolve_contacts`) lands on you. That last part also closes a real exploit: without
     it, a helpless body still trained Evasion/Toughness/veteran XP from blows it couldn't
     react to — a risk-free grind (go down beside a swarm, farm attributes, revive to full).
-    All of these share one rule, spelled `entt::exclude<..., Downed>` on the view: *a crumpled
-    person is not a valid target until they're back up.* (The last "dying blow" as you cross 0
+    The *system*-side reads share one rule, spelled `entt::exclude<..., Downed>` on the view; the
+    *command*-side ones skip a Downed commander in `apply_command`. Either way: *a crumpled person is
+    not a valid target — nor an actor — until they're back up.* (The last "dying blow" as you cross 0
     still lands — `Downed` is stamped *after* the damage systems that tick.)
 
 ### Seeing the blows — the hit-flash
