@@ -130,7 +130,8 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel, int bravery = 0, 
 // Create one hostile creature from an archetype's numbers: HP (Stats) that attacks
 // whittle down, VIT (Attributes) that softens blows, and the Enemy marker (so
 // chase_prey hunts, resolve_creature_contacts hurts, handle_deaths reaps at 0 HP).
-// No regen — you can wear it down; no Skills/CharacterLevel — it doesn't grow.
+// No regen — you can wear it down (unless an archetype sets `lifesteal_per_hit`, the leech's
+// drink); no Skills/CharacterLevel — it doesn't grow.
 entt::entity make_creature(entt::registry& reg, Vec2 pos, float hp, float chase_speed,
                            float attack_damage, int defence_level, Vec3 color, float radius) {
   const entt::entity e = reg.create();
@@ -146,9 +147,10 @@ entt::entity make_creature(entt::registry& reg, Vec2 pos, float hp, float chase_
   return e;
 }
 
-// The two archetypes. A BRUTE lumbers in: tough (40 HP), well-armoured, hits hard —
-// wear it down and kite it. A SWARMER sprints: fragile (15 HP, ~one strike) and weak,
-// but fast and it comes in numbers, so it's the one that corners you.
+// The archetypes, each just numbers + knobs on `make_creature` (brute / swarmer / sentinel /
+// spitter / leech). A BRUTE lumbers in: tough (40 HP), well-armoured, hits hard — wear it down and
+// kite it. A SWARMER sprints: fragile (15 HP, ~one strike) and weak, but fast and it comes in
+// numbers, so it's the one that corners you.
 entt::entity make_brute(entt::registry& reg, Vec2 pos) {
   const entt::entity e = make_creature(reg, pos, 40.0f, 70.0f, 15.0f, 3, Vec3{0.85f, 0.2f, 0.2f},
                                        9.0f);  // deep red
@@ -197,6 +199,19 @@ entt::entity make_spitter(entt::registry& reg, Vec2 pos) {
   enemy.spit_damage = 7.0f;
   enemy.poison_per_second = 5.0f;      // the spit is venomous — it envenoms on hit (a knob)
   enemy.drop = DropKind::VenomWeapon;  // the poison-build blade's renewable source
+  return e;
+}
+
+// A LEECH: the SUSTAIN threat — a creature that DRINKS. Middling HP (22) and speed, a modest bite
+// (8), but every landed blow HEALS it (lifesteal_per_hit) — the ONLY creature self-heal in the game
+// (creatures otherwise never regen), so it REVERSES the wear-down: chip it slowly and it
+// out-sustains you, feeding on every hit it lands. You must BURST it down or DENY its bites (kite
+// it) rather than stand and trade — a fresh tactical foe, and nasty in a swarm. A dark blood-red
+// dot. ponytail: HP/speed/attack/lifesteal are balance knobs.
+entt::entity make_leech(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = make_creature(reg, pos, 22.0f, 75.0f, 8.0f, 1, Vec3{0.5f, 0.05f, 0.18f},
+                                       7.0f);  // dark blood-red
+  reg.get<Enemy>(e).lifesteal_per_hit = 4.0f;  // heals this per landed bite — the sustain (a knob)
   return e;
 }
 
@@ -448,13 +463,15 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
     if (i == 0) reg.get<Skills>(npc).train(SkillId::Spellcasting);
   }
 
-  // A few hostile creatures at the edges that hunt the nearest person (you or an NPC) — one of each
-  // kind so the archetypes show from the start. Strike them (J) to wear their HP down, or THROW (F)
-  // at range; a stronger Strength kills faster. The violet SPITTER hangs back and plinks you from
-  // afar (close on it or throw back). The spawner keeps a mix coming.
+  // A few hostile creatures at the edges that hunt the nearest person (you or an NPC) so the
+  // archetypes show from the start. Strike them (J) to wear their HP down, or THROW (F) at range; a
+  // stronger Strength kills faster. The violet SPITTER hangs back and plinks you from afar (close
+  // on it or throw back); the blood-red LEECH heals on every bite it lands, so BURST it or kite it
+  // — don't stand and trade. The spawner keeps a mix coming.
   make_brute(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
   make_swarmer(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
   make_spitter(reg, Vec2{kFieldWidth * 0.85f, kFieldHeight * 0.15f});
+  make_leech(reg, Vec2{kFieldWidth * 0.15f, kFieldHeight * 0.85f});
 
   // A couple of armour pieces on the field (dull-bronze dots) — walk onto one and press E to
   // don it for +defence at the cost of a slower second wind, the defensive twin of a weapon.

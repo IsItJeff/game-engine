@@ -461,6 +461,13 @@ struct Enemy {
   float spit_range = 0.0f;
   float spit_damage = 0.0f;
   float spit_timer = 0.0f;
+  // If > 0 this creature DRINKS: every landed attack HEALS it this much (capped at its max), so it
+  // recovers as it feeds — the LEECH archetype, the only creature self-heal in the game (creatures
+  // otherwise never regen). It REVERSES the wear-down: you must burst it or deny its bites, not
+  // chip it. More "procs as data" — a knob, not a creature class. 0 = doesn't drink (every other
+  // archetype — bit-identical). Placed LAST so existing positional `Enemy{...}` initialisers keep
+  // their meaning.
+  float lifesteal_per_hit = 0.0f;
 };
 
 // A lingering damage-over-time left by a venomous blow (resolve_creature_contacts). Unlike a hit,

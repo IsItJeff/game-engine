@@ -4037,6 +4037,21 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // (poison_per_second 0) skip this, so an unpoisoned world is unchanged.
       if (enemy.poison_per_second > 0.0f) apply_venom(reg, p, enemy.poison_per_second);
 
+      // LIFESTEAL: a LEECH archetype DRINKS on a landed blow — it heals lifesteal_per_hit (capped
+      // at its own max), the ONLY creature self-heal in the game (creatures otherwise never regen).
+      // So a leech REVERSES the wear-down: chip it slowly and it out-sustains you, feeding on every
+      // hit it lands, so you must BURST it or DENY its bites (kite it) rather than trade blows.
+      // "Procs as data": a non-leech creature (lifesteal_per_hit 0, every archetype today) heals
+      // nothing, so an unchanged world is bit-identical. Routes through the creature's own Stats
+      // (its own block-scope `cs`, like the thorns/riposte reads); a full-health leech is unchanged
+      // (capped). No RNG.
+      if (enemy.lifesteal_per_hit > 0.0f) {
+        if (Stats* cs = reg.try_get<Stats>(c); cs != nullptr) {
+          cs->health.current += enemy.lifesteal_per_hit;
+          if (cs->health.current > cs->health.max) cs->health.current = cs->health.max;
+        }
+      }
+
       // ARMOUR WEAR: the plate that just softened this blow (defence_of above) wears by one — the
       // defensive twin of a blade dulling on a swing. At 0 it SHATTERS: the armour slot clears and
       // the wearer is bare again (and the cache is dropped if no weapon remains, so an NPC re-seeks
