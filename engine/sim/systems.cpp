@@ -1979,6 +1979,9 @@ void teach(entt::registry& reg) {
 void advance_progression(entt::registry& reg) {
   constexpr float kHealthPerEndurance = 10.0f;  // how much tougher each point makes you
   constexpr float kStaminaPerEndurance = 5.0f;
+  constexpr float kMpPerEndurance =
+      5.0f;  // VIT feeds the mana pool at stamina's rate (HP is the
+             // survival pool, so it grows fastest; MP mirrors stamina)
   // XP earned per tick of activity. The timestep is fixed (1/60 s), so a
   // per-second rate is a constant per-tick Fixed amount — deterministic, no float
   // in the loop (20 XP/sec ÷ 60 ticks).
@@ -2070,6 +2073,11 @@ void advance_progression(entt::registry& reg) {
     Stats& stats = view.get<Stats>(e);
     stats.health.max = stats.health.base + bonus * kHealthPerEndurance * veteran;
     stats.stamina.max = stats.stamina.base + bonus * kStaminaPerEndurance * veteran;
+    // The design's "VIT governs HP/Stamina/MP": the mana pool grows off the SAME shape, so a
+    // hardier caster carries a bigger reserve too — the third pool, no longer the one left flat. A
+    // fresh character (Endurance 1 -> bonus 0) keeps mp.max at its base, so any non-caster and
+    // every existing test is bit-identical (nothing spent MP off a grown pool before).
+    stats.mp.max = stats.mp.base + bonus * kMpPerEndurance * veteran;
   }
 }
 

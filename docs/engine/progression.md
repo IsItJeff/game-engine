@@ -17,10 +17,11 @@ Seventeen strands are wired end to end so far, across all seven attributes:
   **Survivalist** (`tick_fatigue` — drive your fatigue to the edge and you grow the Endurance that
   then *slows* how fast fatigue drains, so hard living lengthens your stamina in the field) — all six
   raise
-  **Endurance**, which grows your **max health and stamina**, speeds how fast
-  stamina comes back, softens the venom you take, *and* lets you **bear armour** better (a hardy body
-  shrugs off part of plate's stamina-recovery bane, `borne_regen_penalty` — the armour twin of
-  Strength's weapon carry);
+  **Endurance**, which grows your **max health, stamina, and mana** (the design's "VIT governs
+  HP/Stamina/MP" — all three pools off the one attribute, so a hardy caster carries a bigger reserve
+  too), speeds how fast stamina comes back, softens the venom you take, *and* lets you **bear armour**
+  better (a hardy body shrugs off part of plate's stamina-recovery bane, `borne_regen_penalty` — the
+  armour twin of Strength's weapon carry);
 - **attacking** trains **Striking**, which mainly raises **Strength** (plus a little
   **Dexterity** — footwork), and Strength lengthens your
   **attack reach**, your **attack damage**, *and* how much of a wielded weapon's **heft** you
@@ -176,7 +177,7 @@ should grow.
 ## What to expect
 
 Move around the demo and watch the panel: the conditioning bar fills, ticks over
-to level 2, `endurance` becomes 1, and the health and stamina bars lengthen as the
+to level 2, `endurance` becomes 1, and the health, stamina, and mana bars lengthen as the
 bigger pools take hold. The NPCs are doing the same thing off to the side — one
 that survives a while is measurably harder to kill than a fresh arrival.
 
