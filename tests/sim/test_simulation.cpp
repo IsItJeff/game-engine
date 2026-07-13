@@ -2095,6 +2095,45 @@ TEST_CASE("sustained activity raises the character level, which compounds the po
   REQUIRE(stats.health.max > endurance_only);
 }
 
+TEST_CASE("Endurance grows the mana pool too not just health and stamina: VIT governs all three",
+          "[sim]") {
+  // The design's "VIT governs HP/Stamina/MP": advance_progression already grew the health and
+  // stamina MAX from Endurance each tick; the mana bar was the one pool left flat. Now a hardier
+  // (higher-Endurance) caster carries a bigger reserve too, off the SAME base + (level-1)*rate *
+  // veteran shape. A fresh character (Endurance 1, bonus 0) is bit-identical: mp.max stays at base.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Skills>(e);
+  reg.emplace<eng::sim::Stats>(e);
+  reg.emplace<eng::sim::Velocity>(e);  // advance_progression's view needs it (the idle-crawl read)
+  reg.emplace<eng::sim::CharacterLevel>(e);
+  auto& attr = reg.emplace<eng::sim::Attributes>(e);
+
+  // Endurance 1 (a fresh character): the pool is untouched -- exactly its base.
+  eng::sim::advance_progression(reg);
+  const float base_mp = reg.get<eng::sim::Stats>(e).mp.base;
+  REQUIRE(reg.get<eng::sim::Stats>(e).mp.max == Approx(base_mp));  // bonus 0 -> bit-identical
+
+  // A hardier VIT (as Toughness/Conditioning would earn over time) grows the mana reserve, off the
+  // same shape as the health/stamina pools. Character level 1 -> veteran multiplier 1.0, so the
+  // growth is the raw endurance bonus: base + bonus(4) * kMpPerEndurance(5, stamina's rate).
+  attr.endurance.level = 5;  // bonus 4
+  eng::sim::advance_progression(reg);
+  const eng::sim::Stats& s = reg.get<eng::sim::Stats>(e);
+  REQUIRE(s.mp.max > base_mp);  // RED before: mp.max was never recomputed, stayed flat at base
+  REQUIRE(s.mp.max ==
+          Approx(base_mp + 4.0f * 5.0f));  // base + bonus * per-Endurance rate (veteran 1)
+
+  // The character level's veteran multiplier compounds the mana pool too, exactly as it does the
+  // health/stamina pools (it scales the EARNED bonus, off the same line): a higher character level
+  // grows the reserve strictly more than the endurance bonus alone.
+  reg.get<eng::sim::CharacterLevel>(e).level =
+      6;  // a veteran -> POWER(5) > 1.0 scales the bonus up
+  eng::sim::advance_progression(reg);
+  REQUIRE(reg.get<eng::sim::Stats>(e).mp.max >
+          base_mp + 4.0f * 5.0f);  // veteran compounds it further
+}
+
 TEST_CASE("taking damage trains Toughness, which feeds Endurance", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

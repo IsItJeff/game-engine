@@ -148,6 +148,8 @@ complete, and a colonist mage now casts all three (`npc_cast` / `npc_heal` / `np
 player==NPC parity. Growing from here: **more spells** (an area blast, each its own book), a
 **dedicated Healing/Abjuration tome**
 so the support and ward skills have their own learn-paths (today they ride the Spellcasting gate), the
-**Focus / Attunement** skills that govern the mana pool's capacity and regen, and the **tech** branch
-(an Energy battery on gear, the design's twin trunk). Each
-is a small add on this foundation.
+**Focus / Attunement** skills that give the mana pool its OWN per-skill capacity and regen (its
+*capacity* already grows with VIT/Endurance like the health and stamina pools — see
+[progression](progression.md) — but a dedicated attunement skill and VIT-scaled regen are still to
+come), and the **tech** branch (an Energy battery on gear, the design's twin trunk). Each is a small
+add on this foundation.
