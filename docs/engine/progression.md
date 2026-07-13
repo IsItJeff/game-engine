@@ -79,6 +79,10 @@ Seventeen strands are wired end to end so far, across all seven attributes:
   mentor grows Teaching → Charisma. So a craft **spreads** through the colony beside its master, not
   only by each hand's own doing. It needs a real skill **gap** to fire (a mentor at level ≥ 3, a
   student well behind), which can't exist at spawn — so it emerges only after a colony has veterans.
+  And **a skilled teacher teaches faster**: the mentor's own **Teaching level scales the lesson XP**
+  (+10% per level past the first, capped at ×2) — the design's *"a skill's own level scales its own
+  payoff"* (like Survivalist easing the drain it trains), so Teaching is no longer a pure XP-sink. A
+  Teaching-1 (or untaught) mentor imparts the flat base rate, so a short-run colony is bit-identical.
 - **mending a wounded ally** (a `heal_spell`, the **H** command) trains **Healing**, a **second**
   feeder of **Wisdom** beside Foraging — the design's WIS support domain. Each level mends more, the
   restorative mirror of casting sharpening a bolt. Like a bolt it's *learned* (it rides the same

@@ -2301,6 +2301,50 @@ TEST_CASE("a skilled colonist teaches a nearby novice: skills spread by mentorsh
   REQUIRE(reg.get<eng::sim::Attributes>(mentor).charisma.xp > eng::Fixed{});  // ...-> Charisma
 }
 
+TEST_CASE("a skilled teacher teaches faster: the mentor's Teaching level scales the lesson",
+          "[sim]") {
+  // The design pattern "a skill's own level scales its own payoff" (Survivalist eases the drain it
+  // trains, Recovery speeds the wind it trains), applied to TEACHING -- until now a pure XP-sink
+  // that fed only Charisma and whose LEVEL was read nowhere. A mentor practised at instruction (a
+  // higher Teaching level) imparts MORE XP per lesson. A Teaching-1 mentor (or one with no Teaching
+  // yet) teaches at the old flat rate -> bit-identical. Vary ONLY the mentor's Teaching level; the
+  // student's gained XP rises with it.
+  const auto lesson_xp = [](int teaching_level) {
+    entt::registry reg;
+    const entt::entity mentor = reg.create();
+    reg.emplace<eng::sim::Npc>(mentor);
+    reg.emplace<eng::sim::Transform>(mentor, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mentor);
+    reg.emplace<eng::sim::CharacterLevel>(mentor);
+    auto& skills = reg.emplace<eng::sim::Skills>(mentor);
+    skills.train(eng::sim::SkillId::Striking).level = 5;               // a veteran craft to pass on
+    skills.train(eng::sim::SkillId::Teaching).level = teaching_level;  // how good a teacher it is
+    const entt::entity student = reg.create();
+    reg.emplace<eng::sim::Npc>(student);
+    reg.emplace<eng::sim::Transform>(student, eng::Vec2{10.0f, 0.0f});  // within the mentor's reach
+    reg.emplace<eng::sim::Attributes>(student);
+    reg.emplace<eng::sim::CharacterLevel>(student);
+    reg.emplace<eng::sim::Skills>(student);  // a novice
+    eng::sim::teach(reg);
+    return reg.get<eng::sim::Skills>(student)
+        .find(eng::sim::SkillId::Striking)
+        ->xp;  // a Fixed value
+  };
+  const eng::Fixed flat = lesson_xp(1);     // a Teaching-1 mentor: the old flat lesson
+  const eng::Fixed skilled = lesson_xp(6);  // a practised teacher (Teaching 6): +50% (10%/level)
+  REQUIRE(flat > eng::Fixed{});             // the novice still learns at the base rate...
+  REQUIRE(skilled > flat);  // ...but a skilled teacher imparts MORE (RED before: equal)
+  // +10% per Teaching level past 1, so Teaching 6 -> 1.5x. A 1% tolerance because from_ratio(1,10)
+  // isn't exactly 0.1 in Q16.16 -- the ratio is 1.5 to within Fixed precision, and 1% still catches
+  // any real change to the 10%/level knob (5%/level would read 1.25x, 15% -> 1.75x).
+  REQUIRE(skilled.to_double() == Approx(flat.to_double() * 1.5).epsilon(0.01));
+  // ...and the cap holds: a master teacher (Teaching 20, past the +100% ceiling at ~11) imparts
+  // exactly DOUBLE, never more -- so even a legend can't shortcut a student clean past its own
+  // toil. Exact (no epsilon): the bonus clamps to from_int(1), so the lesson is kLessonPerTick *
+  // from_int(2).
+  REQUIRE(lesson_xp(20).to_double() == Approx(flat.to_double() * 2.0));
+}
+
 TEST_CASE("mentorship needs a real gap: fresh colonists teach nothing", "[sim]") {
   // The bit-identity gate: a mentor must be well ahead (kMentorLevel) AND have a student in reach
   // who trails it — a fresh colony (everyone level 1) has no such pair, so no one teaches (every
