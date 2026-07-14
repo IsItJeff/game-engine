@@ -32,7 +32,10 @@ the way Strength sharpens a swing.
 ### Mana — the third bar
 
 `Stats.mp` is a `Vital` (`current` / `max` / regen), exactly the shape stamina uses: it is **spent**
-(a cast) and **regenerates** steadily (`regenerate_vitals`). Its regen sits *before* the
+(a cast) and **regenerates** steadily (`regenerate_vitals`), *faster the hardier the caster* —
+Endurance speeds mp regen just as it speeds HP and stamina, so VIT governs the capacity **and** the
+regen of all three resources (it already grows `mp.max`, so a bigger pool now also refills faster
+rather than sustaining worse as you level). Its regen sits *before* the
 starvation/venom gate that suppresses *healing* — a fed-and-clean body mends, but magic energy isn't
 food, so a starving mage still recharges. Everyone has the bar; it just sits full and unused until
 you can cast, so a world with no caster is **bit-identical** to before mana existed.

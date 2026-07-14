@@ -1143,6 +1143,30 @@ TEST_CASE("health regen scales with Endurance (VIT) when fed", "[sim]") {
   REQUIRE(tough_hp < 100.0f);    // and neither hit the cap (so the comparison is real)
 }
 
+TEST_CASE("mana regen scales with Endurance (VIT) too: a hardier caster's pool refills faster",
+          "[sim]") {
+  // The THIRD resource, closing VIT's "capacity AND regen" role. advance_progression already grows
+  // mp.max off Endurance, but the pool refilled at a FLAT rate — so a hardier caster's BIGGER
+  // reserve recharged no faster, and mana sustain got WORSE as VIT grew. Now Endurance speeds mp
+  // regen too, the mirror of health and stamina. Unlike health, mana regen sits BEFORE the
+  // starvation gate (magic energy isn't food), so this holds even for a drained, unfed caster. Two
+  // casters, mp emptied, differing only in Endurance.
+  const auto mp_regained = [](int endurance) {
+    entt::registry reg;
+    const entt::entity mage = reg.create();
+    reg.emplace<eng::sim::Attributes>(mage).endurance.level = endurance;
+    reg.emplace<eng::sim::Stats>(mage).mp.current = 0.0f;  // drained -> room to refill
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::regenerate_vitals(reg, dt);  // 1s
+    return reg.get<eng::sim::Stats>(mage).mp.current;
+  };
+  const float novice = mp_regained(1);        // Endurance 1 -> base rate (boost 1.0)
+  const float veteran = mp_regained(11);      // Endurance 11 -> boost 2.0 (10 levels * 0.10)
+  REQUIRE(novice > 0.0f);                     // the novice still recharges at the base rate...
+  REQUIRE(veteran > novice);                  // ...but the hardier caster recharges strictly faster
+  REQUIRE(veteran == Approx(novice * 2.0f));  // exactly double at the 2.0 boost (well under mp.max)
+}
+
 TEST_CASE("eating a loot orb refills hunger", "[sim]") {
   entt::registry reg;
   const entt::entity player = reg.create();

@@ -1324,6 +1324,13 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   // resources' capacity AND regen" role (it already grows the pool via advance_progression).
   // Kept a SEPARATE knob from stamina's so HP and stamina sustain tune independently.
   constexpr float kHealthRegenPerEndurance = 0.10f;  // ponytail: playtest value
+  // Endurance speeds MANA regen the same way — VIT's "capacity AND regen" role covers all three
+  // resources (HP, Stamina, MP). advance_progression already grows mp.max off Endurance, but the
+  // pool refilled at a FLAT rate, so a hardier caster's BIGGER reserve recharged no faster — mana
+  // sustain got WORSE as VIT grew, the opposite of the intent. A SEPARATE knob from HP/stamina so
+  // the three tune independently. (No hearth boost yet — mana isn't part of the fireside recovery
+  // set; a possible follow-up.)
+  constexpr float kManaRegenPerEndurance = 0.10f;  // ponytail: playtest value
   // A HEARTH multiplies the health regen of anyone resting within its radius — the base-building
   // recovery seed. Modest, and NOT an invincible camp even though chase_prey won't hunt you into
   // the fire: a spitter still lobs venom from range and a beast already on top of you gets its last
@@ -1341,12 +1348,21 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
 
-    // MANA regenerates steadily — the magic bar refilling between casts (magic_bolt spends it). It
-    // sits BEFORE the starvation/venom gate below deliberately: that gate suppresses HEALING (a
-    // fed- and-clean body mends), but magic energy isn't food, so a starving mage still recharges.
-    // No one reads mp unless they can cast, so this is bit-identical for every non-caster. Downed
-    // is already excluded by the view (an unconscious caster doesn't recharge).
-    recover(s.mp, dt);
+    // VIT speeds every resource's regen. Fetched ONCE here — before the starvation gate the mana
+    // recover sits above — and reused for the health boost below. No Attributes -> bonus 0 -> boost
+    // 1.0 (bit-identical for creatures and bare entities).
+    const Attributes* attrs = reg.try_get<Attributes>(e);
+    const float endurance_bonus =
+        attrs != nullptr ? static_cast<float>(attrs->endurance.level - 1) : 0.0f;
+
+    // MANA regenerates steadily — the magic bar refilling between casts (magic_bolt spends it), now
+    // sped by Endurance so a hardier caster's bigger pool actually refills faster (VIT's
+    // capacity-AND- regen role, the mirror of health/stamina). It sits BEFORE the starvation/venom
+    // gate below deliberately: that gate suppresses HEALING (a fed-and-clean body mends), but magic
+    // energy isn't food, so a starving mage still recharges. No one reads mp unless they can cast,
+    // so this is bit-identical for every non-caster (and any Endurance-1 caster). Downed is already
+    // excluded by the view (an unconscious caster doesn't recharge).
+    recover(s.mp, dt, 1.0f + endurance_bonus * kManaRegenPerEndurance);
 
     // No mending on an empty stomach. This gate is load-bearing: drain_hunger runs BEFORE
     // this system in step(), so hunger.current is already this tick's value. Skipping heal
@@ -1372,12 +1388,10 @@ void regenerate_vitals(entt::registry& reg, float dt) {
                  // nets health strictly down like the other needs. Warmth is full unless a ColdZone
                  // exists, so this clause is dormant (bit-identical) in a world without cold.
 
-    // Tougher characters heal faster (VIT). No Attributes -> boost 1.0 (bit-identical to
-    // before), so creatures and bare entities are unchanged. Same shape as update_stamina.
-    const Attributes* attrs = reg.try_get<Attributes>(e);
-    float boost = attrs != nullptr ? 1.0f + static_cast<float>(attrs->endurance.level - 1) *
-                                                kHealthRegenPerEndurance
-                                   : 1.0f;
+    // Tougher characters heal faster (VIT), reusing the endurance_bonus fetched at the loop top. No
+    // Attributes -> bonus 0 -> boost 1.0 (bit-identical), so creatures and bare entities are
+    // unchanged. Same shape as update_stamina and the mana regen above.
+    float boost = 1.0f + endurance_bonus * kHealthRegenPerEndurance;
     // ...and faster still by a HEARTH: a colonist resting within one's radius mends quicker (stacks
     // on the VIT boost). Shares the in_a_hearth reach with chase_prey's ward, so "healed by the
     // fire" and "hidden from the hunt" are the same glow. No hearth in reach (or none exist) ->
