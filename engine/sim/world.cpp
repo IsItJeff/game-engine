@@ -831,7 +831,7 @@ void World::apply_command(const Command& cmd) {
     }
     case CommandKind::Harvest: {
       // Work a ripe food plot in reach into a MEAL at your feet — the food economy's seam, via the
-      // shared harvest_nearest_crop (the same one an NPC farmer will call, so they gather
+      // shared harvest_nearest_crop (the same one the Provider NPC farmer calls, so they gather
       // identically). Match the commanding player, skip a downed one. Collect-then-act like Drop:
       // harvest_nearest_crop spawns a meal (emplacing Transform), which can realloc the pool this
       // view walks, so gather the harvesters first and harvest AFTER the walk.
@@ -847,7 +847,8 @@ void World::apply_command(const Command& cmd) {
     }
     case CommandKind::Plant: {
       // Sow a crop seedling at your feet — the FRONT of the food chain (plant -> grow -> harvest ->
-      // meal), via the shared plant_crop (the same one a future NPC farmer calls). Match the
+      // meal), via the shared plant_crop (the same one the Provider NPC farmer calls, sowing where
+      // the land is barren — see npc_harvest). Match the
       // commanding player, skip a downed one. Collect-then-act like Harvest: plant_crop creates an
       // entity (emplacing Transform), which can realloc the pool this view walks.
       std::vector<entt::entity> planters;

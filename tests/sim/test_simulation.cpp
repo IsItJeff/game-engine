@@ -1954,6 +1954,34 @@ TEST_CASE("a provider works a ripe plot into a meal: npc_harvest is the NPC farm
   REQUIRE(meals_after(false) == 0);  // a plain colonist farmed nothing (the gate)
 }
 
+TEST_CASE("a provider with no plot to tend sows one: the farm behaviour plants not just reaps",
+          "[sim]") {
+  // The design's food chain is plant -> grow -> harvest -> meal, but a Provider only REAPED what
+  // was already sown. Now a Provider standing where it has NO plot to tend (none within its
+  // sow-clear range) SOWS a seedling via the shared plant_crop -- so a colony's food SUPPLY grows,
+  // not just its harvest. The one spacing guard suppresses both redundant path-planting (a provider
+  // en route to a distant plot is within range of it) AND same-spot flooding. RED before:
+  // npc_harvest only reaped, so a provider on barren ground sowed nothing.
+  const auto plots_after = [](bool is_provider, bool a_plot_nearby) {
+    entt::registry reg;
+    if (a_plot_nearby) {
+      const entt::entity plot = reg.create();
+      reg.emplace<eng::sim::Transform>(plot, eng::Vec2{50.0f, 0.0f});  // within the sow-clear range
+      reg.emplace<eng::sim::FoodSource>(plot);                         // default: ripe, radius 60
+    }
+    const entt::entity farmer = reg.create();
+    reg.emplace<eng::sim::Transform>(farmer, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Npc>(farmer);
+    if (is_provider) reg.emplace<eng::sim::Aspiration>(farmer, eng::sim::AspirationKind::Provider);
+    eng::sim::npc_harvest(reg);
+    return reg.view<eng::sim::FoodSource>().size();
+  };
+  REQUIRE(plots_after(true, false) == 1);  // a provider on BARREN ground sows one seedling...
+  REQUIRE(plots_after(false, false) ==
+          0);                             // ...a plain colonist sows nothing (the aspiration gate)
+  REQUIRE(plots_after(true, true) == 1);  // ...and a provider with a plot in range sows NO extra
+}
+
 TEST_CASE("the warrior's hunt is a low want: fear outranks the dream of battle", "[sim]") {
   // The hunt sits BELOW every need and fear, so a warrior in danger tends that first. A creature to
   // the LEFT would draw the charge left; a HAZARD to the left (which the fear rung flees) sends it

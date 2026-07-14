@@ -291,7 +291,8 @@ bool harvest_nearest_crop(entt::registry& reg, entt::entity harvester);
 // Sow a new crop SEEDLING where the planter stands — the FRONT of the food chain (plant -> grow ->
 // harvest -> meal). It is a FoodSource like the wild garden but starts with zero stock, so it feeds
 // no one until the existing regrow (graze) grows it ripe. Returns the new crop entity. Actor-
-// agnostic and public: the one call the player's Plant command and a later NPC farmer both make.
+// agnostic and public: the one call the player's Plant command and the Provider NPC farmer
+// (npc_harvest sows through it where the land is barren) both make.
 entt::entity plant_crop(entt::registry& reg, entt::entity planter);
 
 // Advance progression, the whole "learn by doing" chain in one pass over every

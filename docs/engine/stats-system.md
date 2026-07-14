@@ -377,8 +377,8 @@ patch too bare to bother (`stock` below the harvest cost) yields nothing — no 
 
 Every `Pickup` now carries its own `food` value, so one `collect_pickups` feeds you whether it's an
 orb (50, the old flat rate → bit-identical) or a meal (more). `harvest_nearest_crop` is
-actor-agnostic — the same call an NPC farm behaviour will use later — so the player and the colony
-will harvest identically, the parity every Need keeps.
+actor-agnostic — the same call the Provider NPC farm behaviour uses — so the player and the colony
+harvest identically, the parity every Need keeps.
 
 And a **better cook stretches the crop further**: `harvest_nearest_crop` scales the meal's `food` by
 the harvester's **`Cooking`** skill (each level +10%), and preparing a meal *trains* Cooking → **Intellect**
@@ -398,7 +398,9 @@ crop like the wild garden but starting with **zero stock**, so it feeds no one y
 minute later it has ripened past the harvest cost and **G** turns it into a meal. That closes the
 loop end to end: **plant → grow → harvest → meal**, each step reusing the machinery of the one before
 it — planting is quite literally "spawn a `FoodSource` that starts bare". `plant_crop` is
-actor-agnostic like `harvest_nearest_crop`, so a later NPC farmer sows exactly as you do.
+actor-agnostic like `harvest_nearest_crop`, and a **`Provider` NPC now sows through it** too: a
+provider standing where it has no plot to tend plants one (see [NPC behaviour](npc-behaviour.md)), so
+the colony's food *supply* grows on its own — the NPC farmer this was built for has arrived.
 
 This is the seam of the food economy the three needs pressure you toward. Cooking (better meals from
 raw ones), seed costs and stored larders grow from here; for now planting is free and uncapped — a

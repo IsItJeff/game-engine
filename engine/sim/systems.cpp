@@ -3063,13 +3063,41 @@ void npc_harvest(entt::registry& reg) {
   // Provider- aspiration Npc farms; no Aspiration (every colonist/test today) -> no-op ->
   // bit-identical. Collect-then-harvest: harvest_nearest_crop calls spawn_meal (emplacing a new
   // entity's Transform), so gather the providers FIRST and harvest AFTER, never reallocating the
-  // pool mid-view.
+  // pool mid-view. A Provider also SOWS where the land is barren (below), completing the food
+  // chain.
   std::vector<entt::entity> providers;
   auto folk = reg.view<Npc, Transform, Aspiration>();
   for (const entt::entity n : folk) {
     if (folk.get<Aspiration>(n).kind == AspirationKind::Provider) providers.push_back(n);
   }
   for (const entt::entity n : providers) harvest_nearest_crop(reg, n);
+
+  // SOW where barren: a Provider standing with NO plot within its tending range plants a seedling
+  // (the shared plant_crop — the NPC farmer it was built for, now arrived), so the colony's food
+  // SUPPLY grows, not just its harvest — the FRONT of the design's plant -> grow -> harvest -> meal
+  // chain, now NPC-driven instead of only the player's Plant command. ONE spacing guard (no
+  // FoodSource within kSowClearRange) does double duty: a provider EN ROUTE to a distant ripe plot
+  // is within range of it so it won't sow a redundant one (no path-planting), and a provider beside
+  // a growing or just-reaped plot tends THAT rather than carpeting the field (no flooding). A
+  // barren-standing provider sows ONE, which then sits within range so it won't sow again next
+  // tick; as providers wander, plots settle ~kSowClearRange apart. Runs on a SEPARATE pass over the
+  // already-collected `providers` (never mid-`folk`-view), and each provider's spacing scan
+  // completes BEFORE its plant_crop, so growing the FoodSource/Transform pools is safe. ponytail:
+  // spacing is self-limiting per patch — no global plot cap; add one only if a large provider
+  // population ever tiles the field.
+  constexpr float kSowClearRange =
+      300.0f;  // no plot within this -> sow one (mirrors the tend range)
+  for (const entt::entity n : providers) {
+    const Vec2 at = reg.get<Transform>(n).position;
+    bool a_plot_near = false;
+    for (const entt::entity pl : reg.view<FoodSource, Transform>()) {
+      if (glm::distance(at, reg.get<Transform>(pl).position) <= kSowClearRange) {
+        a_plot_near = true;
+        break;
+      }
+    }
+    if (!a_plot_near) plant_crop(reg, n);
+  }
 }
 
 void heal_spell(entt::registry& reg, entt::entity caster) {
@@ -3592,7 +3620,8 @@ void spawn_meal(entt::registry& reg, Vec2 pos, float food_scale = 1.0f) {
 // chunk of the plot's stock (kHarvestCost) to drop a single MEAL worth more hunger than that stock
 // grazed raw (spawn_meal's kMealFood), so working the land beats grubbing at it. Returns whether
 // anything was harvested. Public and actor-agnostic so it is the ONE definition both the player's
-// Harvest command and (later) an NPC farm behaviour call — the player==NPC parity the design wants.
+// Harvest command and the Provider NPC farm behaviour (npc_harvest) call — the player==NPC parity
+// the design wants.
 // A plot below the cost isn't ripe enough to bother (no half-meals), so a bare or barely-grown
 // patch yields nothing. ponytail: nearest ripe plot only, no "best yield" search — one plot exists
 // and they don't cluster; revisit if crops ever pack in.
