@@ -2347,6 +2347,21 @@ float crit_chance(int luck_level) {
   return chance < kCap ? chance : kCap;
 }
 
+// A LUCKY owner's gear ENDURES — fortune slows durability wear. Each Luck level past 1 shaves the
+// per-hit wear (the design's LUCK "quality/preservation" aspect — LUCK's 3rd effect beside crit and
+// the orb-heal), capped at a HALF floor so even a maxed-Luck fighter's gear still dulls toward a
+// shatter (never immortal — the dodge/crit-style cap). DETERMINISTIC (no RNG, unlike crit): it
+// scales an existing wear amount, so it draws nothing from the combat stream. Level 1 -> full 1.0
+// wear -> bit-identical (every existing durability test is Luck 1). Returns the durability lost
+// this hit.
+float durability_wear(int luck_level) {
+  constexpr float kPreservePerLevel = 0.03f;  // each Luck level past 1 shaves 3% off the wear...
+  constexpr float kPreserveCap = 0.50f;  // ...down to a HALF floor — gear still dulls, just slower
+  float preserve = static_cast<float>(luck_level - 1) * kPreservePerLevel;
+  if (preserve > kPreserveCap) preserve = kPreserveCap;
+  return 1.0f - preserve;
+}
+
 // CAMARADERIE: a shared victory forges a tie. When `killer` (a player or an NPC) fells a hostile,
 // every standing colonist near it gains a little affinity TOWARD the killer — the design's
 // "fighting a common foe" bond (see the kCamaraderie constants). Directed witness->killer so it
@@ -2868,9 +2883,12 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // scope venom/execute/cleave use, and the effect-less cruel strike (which returned earlier) never
   // wears. A bare hand (no Equipped) or a wear-free fixture (weapon_durability 0) is bit-identical,
   // and a fresh blade is unchanged until it actually breaks. Runs AFTER the venom/cleave above, so
-  // the breaking hit still lands its full blow and proc; only the NEXT swing is unarmed.
+  // the breaking hit still lands its full blow and proc; only the NEXT swing is unarmed. The
+  // wielder's LUCK slows the wear (durability_wear — fortune preserves the blade); Luck 1 =
+  // full 1.0 wear, so every existing weapon-durability test is bit-identical. `attrs` is the
+  // attacker's sheet.
   if (gear != nullptr && gear->weapon_durability > 0.0f) {
-    gear->weapon_durability -= 1.0f;
+    gear->weapon_durability -= durability_wear(attrs->luck.level);
     if (gear->weapon_durability <= 0.0f) {  // shattered — clear the weapon slot, keep any armour
       gear->strength_bonus = 0;
       gear->move_penalty = 0.0f;
@@ -4742,7 +4760,10 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
             stamp_flash(reg, c);  // the pricked creature blinks too, so the thorns read
           }
         }
-        pg->armour_durability -= 1.0f;
+        // The wearer's LUCK slows the wear (durability_wear — fortune preserves the plate, the
+        // defensive twin of the blade's luck-wear); Luck 1 = full 1.0 wear, so every existing
+        // armour-durability test is bit-identical. Reuses the victim `p`'s `attrs` fetched above.
+        pg->armour_durability -= durability_wear(attrs != nullptr ? attrs->luck.level : 1);
         if (pg->armour_durability <=
             0.0f) {  // plate shattered — clear the armour slot, keep a weapon
           pg->defence_bonus = 0.0f;
