@@ -45,7 +45,7 @@ flowchart TD
   stam -->|no| winded[winded — the swing fizzles, free]
   stam -->|yes| kind{spend stamina —<br/>a mote or a creature?}
   kind -->|a mote| pop[destroy it outright<br/>+ train Striking]
-  kind -->|a creature| train[train Striking] --> dodge{creature<br/>dodges? DEX}
+  kind -->|a creature| train[train Striking] --> dodge{creature dodges?<br/>its DEX − your aim}
   dodge -->|yes| whiff[no damage — but Striking still trained]
   dodge -->|no| dmg[deal STR-vs-VIT damage to HP]
   dmg --> dead{HP ≤ 0?}
@@ -301,13 +301,19 @@ Dexterity** whether or not it lands — the mirror of Toughness training on the 
 take. Read enough attacks and you start slipping them. The roll is a seeded draw, so a
 replay dodges the same blows every time.
 
-!!!note "Dodge cuts both ways"
+!!!note "Dodge cuts both ways — and aim cuts through it"
     DEX is a two-sided stat. **You** dodge creature blows (above), and **creatures dodge
     your strikes**: `perform_attack` rolls the *same* `dodge_chance` against the target's
     DEX before applying damage, so a slippery swarmer slips ~1 strike in 5 while a brute
-    (DEX 1) never does. The swing still trains your Striking — you learn from a whiff —
-    only the damage is skipped. Creatures don't grow, so their DEX is a fixed archetype
-    trait, not something they train.
+    (DEX 1) never does. But that dodge is a **contest**, not a flat roll: your own **aim** —
+    `accuracy(your DEX)`, the same `(DEX − 1)·0.03` curve capped at 50% — is *subtracted*
+    from the target's dodge, so a keen-eyed attacker lands more reliably (a DEX-18 fighter's
+    50% aim fully cancels a DEX-18 swarmer's 50% dodge — aim and evasion max out even). So DEX
+    is offence *and* defence: **evasion** when you're hit, **aim** when you strike. A DEX-1
+    attacker adds no aim, so the target dodges exactly as before (bit-identical, the same RNG
+    draw). The swing still trains your Striking — you learn from a whiff — only the damage is
+    skipped. Creatures don't grow, so their DEX is a fixed archetype trait (dodge only — a
+    creature's own swing draws no accuracy; that mirror is a later ring).
 
 ### Raising a guard — active block (K)
 
@@ -778,7 +784,7 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 ## Key files
 
 - `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Blocking` (the raised guard) and `Sprinting` (its offensive twin, the SHIFT dash), `Projectile` (a thrown bolt in flight), `Pickup`; `Hazard`.
-- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, *executes* a worn-down foe for bonus damage, *backstabs* a foe whose back is turned, and *cleaves* a fraction of the blow into a second clustered foe), `perform_throw` (the stamina-costed ranged option — launches a `Projectile`), `advance_projectiles` (flies each bolt home and lands it), `creature_spit` (a ranged enemy launches a spit through the same `Projectile`), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, softens a `Blocking` victim's blow, *backstabs* a fleeing victim via the shared `backstab_multiplier`, and lets a cast `Shielded` barrier soak the blow — see [magic](magic.md)), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` (physical, VIT + armour) / `magic_defence_of` (magical, WIS) / `dodge_chance` / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag (and the SHIFT sprint by its `sprint` flag) in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), guard (K), and sprint (SHIFT) inputs come from `game/app/main.cpp`.
+- `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, *executes* a worn-down foe for bonus damage, *backstabs* a foe whose back is turned, and *cleaves* a fraction of the blow into a second clustered foe), `perform_throw` (the stamina-costed ranged option — launches a `Projectile`), `advance_projectiles` (flies each bolt home and lands it), `creature_spit` (a ranged enemy launches a spit through the same `Projectile`), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, softens a `Blocking` victim's blow, *backstabs* a fleeing victim via the shared `backstab_multiplier`, and lets a cast `Shielded` barrier soak the blow — see [magic](magic.md)), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` (physical, VIT + armour) / `magic_defence_of` (magical, WIS) / `dodge_chance` / `accuracy` (the attacker-aim counter to dodge) / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag (and the SHIFT sprint by its `sprint` flag) in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), guard (K), and sprint (SHIFT) inputs come from `game/app/main.cpp`.
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
 - `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` / `make_spitter` / `make_sentinel` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).

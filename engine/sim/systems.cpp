@@ -2303,6 +2303,24 @@ float dodge_chance(int dexterity_level) {
   return chance < kCap ? chance : kCap;
 }
 
+// The ATTACKER's aim, in [0, kCap], from its DEX — the OFFENSIVE half of the design's
+// hit-vs-Evasion contest and the exact counter to dodge_chance: it is SUBTRACTED from the target's
+// dodge at the call site, so a defter attacker slips fewer of its own blows past a slippery foe.
+// Mirrors dodge's curve and cap, so aim and evasion are a fair contest that cancels at the top (a
+// maxed attacker fully negates a maxed dodger, both at 50%). Level 1 = 0 — a fresh attacker adds no
+// accuracy, so the effective dodge equals the target's own dodge_chance and the RNG stream is
+// bit-identical to before accuracy existed (the same "untrained never shifts it" discipline
+// dodge_chance itself keeps).
+// ponytail: the ramp/cap are provisional knobs, cloned from dodge so aim and evasion are an even
+// contest — give accuracy its own curve if playtest wants a maxed dodger to still slip a maxed aim.
+float accuracy(int dexterity_level) {
+  constexpr float kPerLevel =
+      0.03f;                     // +3% accuracy per Dexterity level past the first (dodge's twin)
+  constexpr float kCap = 0.50f;  // caps at half, like dodge — aim and evasion cancel at the top
+  const float chance = static_cast<float>(dexterity_level - 1) * kPerLevel;
+  return chance < kCap ? chance : kCap;
+}
+
 // Chance in [0, kCap] that a strike CRITS (deals extra damage), from the attacker's LCK —
 // the offensive-fortune mirror of dodge_chance. Level 1 = 0 (no head start, and the
 // chance > 0 guard at the call site means an untrained attacker never even draws), each
@@ -2667,7 +2685,16 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // there's no Evasion training on their side; their DEX is a fixed archetype trait.
   std::uniform_real_distribution<float> unit(0.0f, 1.0f);
   const Attributes* target_attrs = reg.try_get<Attributes>(target);
-  const float dodge = dodge_chance(target_attrs != nullptr ? target_attrs->dexterity.level : 1);
+  // The hit-vs-Evasion CONTEST: the target's dodge is REDUCED by the attacker's aim (accuracy),
+  // both DEX-driven — a defter attacker lands more reliably against a slippery foe (the design's
+  // added hit contest, making DEX two-sided: evasion on defence, aim on offence). `attrs` is the
+  // attacker's sheet, non-null here. A DEX-1 attacker has 0 accuracy, so the effective dodge equals
+  // the target's own dodge_chance and the RNG draw is bit-identical to before. Floored at 0: aim
+  // can fully negate evasion (both cap at 50%) but never makes a foe EASIER to hit than a plain
+  // non-dodger.
+  float dodge = dodge_chance(target_attrs != nullptr ? target_attrs->dexterity.level : 1) -
+                accuracy(attrs->dexterity.level);
+  if (dodge < 0.0f) dodge = 0.0f;
   if (dodge > 0.0f && unit(rng) < dodge) return entt::null;  // slipped it — no damage dealt
 
   // An enemy takes STR-vs-VIT damage to its HP — the swing's `raw` (computed above), softened by
