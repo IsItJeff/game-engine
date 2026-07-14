@@ -2260,6 +2260,22 @@ float defence_of(const entt::registry& reg, entt::entity e) {
   return from_vit + (eq != nullptr ? eq->defence_bonus : 0.0f);
 }
 
+// The MAGICAL mitigation — the WISDOM twin of defence_of's VIT/armour, the design's "magical
+// INT-vs-WIS": a bolt is resisted by WISDOM (attunement), NOT physical toughness or worn plate.
+// Deliberately NO armour term — steel stops steel, not spells; that asymmetry IS magic's identity,
+// so a plate-tough but un-attuned foe MELTS to a bolt that a sword only chips. A creature carries
+// VIT (make_creature sets endurance = defence_level) but leaves WISDOM at 1, so magic_defence_of is
+// 0 and mitigate(raw, 0) returns the FULL raw: magic PIERCES the armour that blunts a blade. No
+// Attributes
+// -> 0 -> unchanged (and, since existing magic tests target WIS-1 / defence-0 foes, bit-identical).
+// Same kPerX shape as defence_of so the two mitigations tune in parallel.
+float magic_defence_of(const entt::registry& reg, entt::entity e) {
+  constexpr float kMagicDefencePerWis =
+      3.0f;  // each Wisdom level past 1 wards this much magic (knob)
+  const Attributes* a = reg.try_get<Attributes>(e);
+  return a != nullptr ? static_cast<float>(a->wisdom.level - 1) * kMagicDefencePerWis : 0.0f;
+}
+
 // Chance in [0, kCap] that a blow is dodged entirely, from the victim's DEX. Level 1
 // is 0 — no head start, exactly like every other stat, and (usefully) it means an
 // untrained world never rolls, so the RNG stream stays identical to before evasion
@@ -2970,13 +2986,15 @@ void magic_bolt(entt::registry& reg, entt::entity caster) {
   CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
   grant_skill_xp(*skills, *attrs, SkillId::Spellcasting, kSpellcastingPerCast, character);
 
-  // INT-vs-VIT damage: base + earned-Intellect delta, softened by the target's VIT and scaled by
-  // the same need_efficiency every attack uses (a starving mage casts weaker too — no ranged
-  // loophole). No crit/execute — a bolt is the plain reliable option, like the throw.
+  // INT-vs-WIS damage (the design's magical contest): base + earned-Intellect delta, softened by
+  // the target's WISDOM — not its VIT/armour — so magic PIERCES the plate that blunts a blade (see
+  // magic_defence_of). Scaled by the same need_efficiency every attack uses (a starving mage casts
+  // weaker too — no ranged loophole). No crit/execute — a bolt is the plain reliable option, like
+  // the throw.
   const float raw =
       (kBaseSpellDamage + static_cast<float>(attrs->intellect.level - 1) * kDamagePerIntellect) *
       need_efficiency(*stats);
-  const float applied = mitigate(raw, defence_of(reg, target));
+  const float applied = mitigate(raw, magic_defence_of(reg, target));
 
   // Launch a homing Projectile carrying the (mitigated) damage — the SAME primitive the throw
   // flies, so advance_projectiles delivers it and credits the Valor on arrival with no new

@@ -4560,6 +4560,38 @@ TEST_CASE("a learned mage casts a bolt that chips a creature spends mana and tra
           eng::Fixed{});  // ...training Spellcasting -> Intellect
 }
 
+TEST_CASE("magic is resisted by Wisdom not armour: a bolt pierces the plate that blunts a blade",
+          "[sim]") {
+  // The design's "magical INT-vs-WIS": a bolt is softened by the target's WISDOM (attunement), NOT
+  // its VIT / worn plate. So an attuned (high-WIS) foe takes LESS magic, but a plate-tough
+  // (high-VIT) yet un-attuned (WIS 1) foe takes FULL magic — magic PIERCES the armour that blunts a
+  // sword, its design identity. RED before: magic_bolt mitigated off VIT, so WIS was ignored and
+  // VIT wrongly warded the bolt. Reads the damage magic_bolt bakes into its homing Projectile (the
+  // mitigated value).
+  const auto bolt_damage = [](int foe_wisdom, int foe_endurance) {
+    entt::registry reg;
+    const entt::entity mage = reg.create();
+    reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mage);  // INT 1 -> base bolt
+    reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);  // learned
+    reg.emplace<eng::sim::Stats>(mage);                                          // full mana
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});  // in bolt range
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    reg.emplace<eng::sim::Enemy>(foe);
+    auto& fa = reg.emplace<eng::sim::Attributes>(foe);
+    fa.wisdom.level = foe_wisdom;
+    fa.endurance.level = foe_endurance;
+    eng::sim::magic_bolt(reg, mage);
+    return reg.get<eng::sim::Projectile>(*reg.view<eng::sim::Projectile>().begin()).damage;
+  };
+  const float vs_attuned = bolt_damage(20, 1);  // high WISDOM -> resists the bolt
+  const float vs_dull = bolt_damage(1, 1);      // WIS 1, VIT 1 -> takes it full
+  const float vs_tank = bolt_damage(1, 20);     // plate-tough (high VIT) but un-attuned (WIS 1)
+  REQUIRE(vs_attuned < vs_dull);                // WISDOM softens the bolt...
+  REQUIRE(vs_tank == Approx(vs_dull));  // ...but VIT/armour does NOT — magic pierces the plate
+}
+
 TEST_CASE("an unlearned caster cannot cast: magic is learned not innate", "[sim]") {
   // The LEARNED gate — the design's "magic is taught, not innate". A colonist with a full mana bar
   // but no Spellcasting skill flings nothing: no bolt, no mana spent. This is what keeps a world of
