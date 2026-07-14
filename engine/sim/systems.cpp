@@ -2640,7 +2640,17 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       Vec2& target_pos = reg.get<Transform>(target).position;
       const Vec2 away = target_pos - origin;
       if (const float dist = glm::length(away); dist > 0.0f)
-        target_pos += (away / dist) * kKnockback;
+        // The shove is a position delta, so the MUD grips it too: a foe shoved while standing IN a
+        // MireZone travels less far, dragged by the same mire_factor integrate_motion applies to
+        // every other movement (mud drags everyone). RAW mire_factor, not the agility-eased
+        // waded_mire_factor a self-driven mover earns — a passive shove is a projectile, not the
+        // foe nimbly wading, so no agility relief (the same full-drag bucket a mote/thrown bolt
+        // takes). Sampled ONCE at the foe's current (pre-shove) spot, like a projectile's launch —
+        // a foe shoved IN from dry ground reads firm ground and flies the full distance (a one-shot
+        // jump samples once, where integrate_motion re-samples per tick; a fine ponytail
+        // simplification). No MireZone -> 1.0 -> the full kKnockback, so every existing knockback
+        // (none in mud) is bit-identical.
+        target_pos += (away / dist) * kKnockback * mire_factor(reg, target_pos);
     }
     // The killing blow on a HOSTILE is a Valor deed for the attacker — the SECOND deed through the
     // morality write-point (after a rescue's Charity), proving it generalises across dimensions.

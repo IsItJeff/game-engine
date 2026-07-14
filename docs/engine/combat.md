@@ -84,7 +84,12 @@ flowchart TD
   world units, along the attacker→target line) *after* the damage lands — the one thing in melee that
   repositions a target, so a heavy blow makes room in a swarm or shunts a brute off a cornered ally.
   Same `powered` gate, so an ordinary swing shoves nothing (bit-identical); a foe standing exactly on
-  you has no direction to push and stays put.
+  you has no direction to push and stays put. And the shove is **dragged by the mud**: a foe shoved
+  while standing *in* a [`MireZone`](npc-behaviour.md) travels less far, scaled by the same
+  `mire_factor` that slows every other movement — the *raw* factor, not the agility-eased wade a
+  self-driven mover earns (a passive shove is a projectile, not the foe nimbly picking its way).
+  Sampled once at the foe's current spot, so a foe shoved *in from* dry ground still flies the full
+  `kKnockback` (as does any shove with no mire).
 
 ### The damage contest — Strength vs VIT
 

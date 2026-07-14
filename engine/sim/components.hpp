@@ -1046,8 +1046,9 @@ inline float borne_regen_penalty(float base_penalty, const Attributes* attrs) {
 // is EXACTLY bit-identical -- not merely ~1-ulp-close. That matters: the round-trip `1 - (1 - x)`
 // is NOT the float identity for x < 0.5 (it double-rounds), so a DEX-1 mover routed through the
 // eased path would drift a ulp from the old `mire_factor` value and desync the lockstep/replay
-// gate; the dex <= 1 short-circuit keeps it literally equal. Read in integrate_motion, the one
-// place the mire drag is applied.
+// gate; the dex <= 1 short-circuit keeps it literally equal. Read in integrate_motion, where the
+// EASED wade is applied to self-driven movement — a passive shove (perform_attack's knockback)
+// takes the raw mire_factor instead, no wade.
 inline float waded_mire_factor(float slow_factor, const Attributes* attrs) {
   if (slow_factor >= 1.0f || attrs == nullptr) return slow_factor;  // firm ground, or no agility
   const int dex = attrs->dexterity.level;
