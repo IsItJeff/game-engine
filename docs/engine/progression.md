@@ -50,11 +50,14 @@ Seventeen strands are wired end to end so far, across all seven attributes:
 - **landing a thrown hit** trains **Throwing**, which raises **Dexterity** (aim — plus a little
   **Strength** for hurl power), the ranged mirror of Striking (see [combat](combat.md));
 - **grazing a food plot** trains **Foraging**, which raises **Wisdom**, the first *non-combat*
-  attribute — each level lets you draw **more food per second** from a patch **and** sharpens
-  **danger awareness** (a wider flee sense radius in `steer_npcs`, a distinct source from bravery's
-  nerve). So the design's WIS = *nature + awareness*: a seasoned forager both gathers more and spots
-  trouble sooner. It's the loot loop's survival twin (gather food → Foraging → Wisdom → forage faster
-  *and* stay alert), and Wisdom doesn't grow the pools or a fighter build;
+  attribute — each level lets you draw **more food per second** from a patch, sharpens **danger
+  awareness** (a wider flee sense radius in `steer_npcs`, a distinct source from bravery's nerve),
+  **and now wards MAGIC** — a hostile bolt is softened by the target's Wisdom, *not* its VIT/armour
+  (`magic_defence_of`, the design's magical **INT-vs-WIS**, so magic pierces the plate that blunts a
+  blade). So the design's WIS = *magic-defence + awareness + nature*: a seasoned forager gathers more,
+  spots trouble sooner, and shrugs off a spell. It's the loot loop's survival twin (gather food →
+  Foraging → Wisdom → forage faster *and* stay alert), and Wisdom doesn't grow the pools; its one
+  combat role is that purely **defensive** ward, never offence;
 - **public heroism with allies watching — felling a foe *or* hauling up a downed ally** — trains
   **Leadership**, which raises **Charisma**, the second *non-combat* attribute (the design's **social**
   stat), with **two** effects — depth *and* reach. Each level deepens the **camaraderie** a witness

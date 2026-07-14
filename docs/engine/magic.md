@@ -65,9 +65,13 @@ yellow bolt). What sets it apart:
 
 - **It spends mana, not stamina** — `kSpellManaCost` (25) per cast, so a full bar is ~4 bolts. An
   empty bar **fizzles** (nothing spent, no XP), the magic echo of an exhausted thrower.
-- **Intellect scales it** — `kBaseSpellDamage` (14) + a per-`Intellect`-level delta, softened by the
-  target's VIT and by the same `need_efficiency` every attack uses (a starving mage casts weaker
-  too). No crit, no dodge, no RNG — a plain, reliable bolt, like the throw.
+- **Intellect scales it, Wisdom wards it** — `kBaseSpellDamage` (14) + a per-`Intellect`-level delta,
+  softened by the target's **Wisdom** — *not* its VIT or worn plate (`magic_defence_of`, the WIS twin
+  of `defence_of`). This is the design's magical **INT-vs-WIS** contest, the mirror of physical
+  STR-vs-VIT: a bolt **pierces the armour that blunts a blade**, so a plate-tough but un-attuned brute
+  (high VIT, WIS 1) *melts* to magic while shrugging off steel — magic's identity. Scaled by the same
+  `need_efficiency` every attack uses (a starving mage casts weaker too). No crit, no dodge, no RNG —
+  a plain, reliable bolt, like the throw.
 - **Casting trains it** — a connecting cast grants `Spellcasting → Intellect`, so a mage sharpens
   its bolts by casting them, the learn-by-doing loop that a throw uses for `Throwing → Dexterity`.
   See [progression](progression.md).
