@@ -280,6 +280,12 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::Text(
         "charisma: %d",
         attr->charisma.level - 1);  // from leading kills; more devotion from those who watch
+    ImGui::Text("dexterity: %d",
+                attr->dexterity.level - 1);  // from dodging/throwing; dodge chance + throw damage
+    ImGui::Text("intellect: %d",
+                attr->intellect.level - 1);  // from casting; magic-bolt power + shield absorb
+    ImGui::Text("luck: %d",
+                attr->luck.level - 1);  // from scavenging; crit chance + richer orb finds
   }
   // Gear: a wielded weapon and/or worn armour fold into Equipped, each with its own bane.
   // Show only the slots that are actually filled so the tradeoffs are legible (and an
