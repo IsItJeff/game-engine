@@ -265,17 +265,29 @@ void spawn_creature_if_due(entt::registry& reg, float& timer, std::mt19937& rng,
 // coherent personality presets rather than independent random axes, so each is a recognizable
 // character (a dependable Stalwart, a self-serving Rogue) instead of a random stat-blob. Values
 // span all SIX wired axes (bravery, greed, compassion, industry, sociability, loyalty) in
-// [-100,100]; the design's other archetypes (Schemer, Zealot, Loner, Firebrand) append here once
-// the richer social layer gives more to tell them apart. The opening four keep their hand-authored
-// showcase spread (build_scene) — this is only for the ongoing reinforcements. ponytail: the
-// numbers are tuning knobs.
-constexpr std::array<Personality, 4> kArchetypes{{
+// [-100,100]. The design names EIGHT; the opening four shipped first and the other four (Schemer,
+// Zealot, Loner, Firebrand) waited for the social layer to give each axis a behaviour to tell them
+// apart — now every axis is read (bravery→flee-nerve, greed→forage-threshold, compassion→rescue-
+// speed, industry→arm-reach, sociability→rally-reach, loyalty→bond-follow), so the full eight join.
+// Each new one leans on an axis the first four don't showcase alone: the Zealot's cause-over-people
+// (high LOYALTY + callous), the Loner's deep solitude (the lowest SOCIABILITY), the Schemer's bold
+// self-interest (greedy + disloyal but NOT the Rogue's coward), the Firebrand's rebellious daring
+// (high BRAVERY + fickle). The opening four keep their hand-authored showcase spread (build_scene)
+// — this table is only for the ongoing reinforcements. ponytail: the numbers are tuning knobs.
+constexpr std::array<Personality, 8> kArchetypes{{
     // bravery, greed, compassion, industry, sociability, loyalty
     {70, -40, 50, 60, 60,
      80},  // Stalwart: brave, generous, kind, industrious, companionable, LOYAL
     {-50, 80, -50, -30, -60, -70},  // Rogue: cowardly, greedy, callous, idle, a loner, FICKLE
     {30, -60, 85, 20, 80, 60},      // Kindler: generous, compassionate, sociable, and steadfast
     {-10, 20, -15, 80, -40, 30},    // Drudge: timid, tireless, keeps to itself, quietly dependable
+    {20, 75, -55, 40, 35, -65},  // Schemer: calculating, greedy, callous, works ANGLES not fields
+                                 // (low industry), mingles to exploit, DISLOYAL
+    {80, -35, -25, 70, 25,
+     95},  // Zealot: fearless, self-denying, cause-over-people (callous), tireless, DEVOTED
+    {45, 5, 15, 55, -85, -15},  // Loner: capable, indifferent, mildly kind, self-reliant, SOLITARY
+    {90, 30, -5, 40, 70,
+     -55},  // Firebrand: reckless-brave, a touch self-serving, gregarious agitator, REBELLIOUS
 }};
 
 // How far each axis wobbles off its archetype so two colonists of the same kind aren't clones —
