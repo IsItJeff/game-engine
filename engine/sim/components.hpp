@@ -853,6 +853,15 @@ struct FoodSource {
   float radius = 60.0f;            // how close you must be to graze
 };
 
+// The plot stock a single HARVEST spends to prepare one meal — and, equivalently, the RIPENESS bar
+// a plot must clear to be worth harvesting (no half-meals from a barely-grown patch). Shared so the
+// two sites that care agree on "ripe": harvest_nearest_crop reaps only at/above it, and the
+// Provider steer rung heads a farming NPC ONLY toward a plot this ripe (a nearer under-ripe patch
+// it couldn't actually work must not lure it away from one it can). One threshold, so the seek and
+// the reap can never drift apart. Grazing (the forage rung) is unaffected — you can nibble any
+// stock bite-by-bite.
+inline constexpr float kHarvestCost = 60.0f;
+
 // What a colonist DREAMS of — the design's "Aspirations (hopes/dreams) steer behaviour". Every
 // steer rung wired so far is REACTIVE (flee a threat, forage when hungry, gather when idle); this
 // is the first PROACTIVE one: an idle, safe colonist that carries an Aspiration goes and PURSUES

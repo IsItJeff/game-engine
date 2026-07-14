@@ -1676,6 +1676,35 @@ TEST_CASE("an idle provider walks to a food plot to work it: the peaceful aspira
   REQUIRE(tend_vx(false) == Approx(0.0f));  // no aspiration -> stays put (the gate)
 }
 
+TEST_CASE("a provider walks to a RIPE plot not a nearer unripe one it couldn't harvest", "[sim]") {
+  // The Provider steer rung and harvest_nearest_crop must agree on RIPENESS: harvest only reaps a
+  // plot with stock >= kHarvestCost, so steering a provider to a NEARER unripe plot (0 < stock <
+  // kHarvestCost) would strand it there tending nothing while a ripe plot it could actually work
+  // sits ignored. Both now read the shared kHarvestCost. A near UNRIPE plot (LEFT) and a far RIPE
+  // plot (RIGHT): the provider skips the unripe one and heads for the ripe.
+  entt::registry reg;
+  const entt::entity unripe = reg.create();
+  reg.emplace<eng::sim::Transform>(unripe, eng::Vec2{-50.0f, 0.0f});  // NEARER, to the LEFT
+  auto& u = reg.emplace<eng::sim::FoodSource>(unripe);
+  u.stock = eng::sim::kHarvestCost - 1.0f;  // has stock, but BELOW the harvest bar -> unripe
+  const entt::entity ripe = reg.create();
+  reg.emplace<eng::sim::Transform>(ripe, eng::Vec2{100.0f, 0.0f});  // FARTHER, to the RIGHT
+  reg.emplace<eng::sim::FoodSource>(ripe).stock =
+      eng::sim::kHarvestCost +
+      40.0f;  // clearly ABOVE the bar -> ripe (tracks the knob, not a literal)
+  const entt::entity provider = reg.create();
+  reg.emplace<eng::sim::Transform>(provider, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(provider);
+  reg.emplace<eng::sim::Npc>(provider);
+  reg.emplace<eng::sim::Aspiration>(provider, eng::sim::AspirationKind::Provider);
+
+  eng::sim::steer_npcs(reg);
+
+  // Heads RIGHT toward the ripe plot it can actually harvest -- NOT left to the nearer unripe one.
+  // RED before: it targeted the nearest STOCKED plot (the unripe left one) and steered -x.
+  REQUIRE(reg.get<eng::sim::Velocity>(provider).value.x > 0.0f);
+}
+
 TEST_CASE("a scholar seeks a spellbook to learn magic: the third aspiration", "[sim]") {
   // The knowledge twin of the warrior's hunt and the provider's harvest: a colonist that DREAMS of
   // magic (Aspiration Scholar) and hasn't yet LEARNED to cast walks to the nearest Spellbook to
