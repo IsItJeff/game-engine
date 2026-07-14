@@ -378,7 +378,11 @@ approaching swarm before it reaches you**, not to replace melee, and two rules k
 - **It's plain.** Unlike a swing, a throw draws **no RNG** — no dodge, no crit, no execute, no
   backstab — for a modest, *reliable* `kBaseThrowDamage` (8, less than melee's 12) plus your earned **Dexterity**,
   softened by the target's VIT. Ranged trades melee's burst potential (crits, execute) for range and
-  certainty. It trains **Throwing → Dexterity** (a little Strength too) — the aim-led mirror of a
+  certainty. That earned-Dexterity delta **compounds with your character level** through the same
+  [veteran layer](progression.md) a swing rides (`veteran_mult` — the design's `POWER(char_level)` is
+  a global multiplier on *everything* you earn, not melee alone), so a grinding thrower's aim sharpens
+  with them; only the *earned* part scales, so a fresh thrower is `POWER(0)` = 1.0 — unchanged. It
+  trains **Throwing → Dexterity** (a little Strength too) — the aim-led mirror of a
   swing's Striking → Strength; and a *killing* throw credits **Valor** just like a melee kill, so
   the morality ledger doesn't care which hand felled the foe.
 

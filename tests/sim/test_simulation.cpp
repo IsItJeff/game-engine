@@ -4592,6 +4592,61 @@ TEST_CASE("magic is resisted by Wisdom not armour: a bolt pierces the plate that
   REQUIRE(vs_tank == Approx(vs_dull));  // ...but VIT/armour does NOT — magic pierces the plate
 }
 
+TEST_CASE("a veteran's grind sharpens the throw and the bolt not just the blade", "[sim]") {
+  // The design's POWER(char_level) is a GLOBAL multiplier on EVERYTHING you earn, and a melee swing
+  // already rides it (perform_attack compounds the earned-Strength delta by the veteran layer). A
+  // throw and a bolt did NOT — so a grinding character's ranged/magic damage stayed frozen on the
+  // level-1 curve, quietly punishing an aim or mage build against a bruiser at the same char level.
+  // Now the SAME veteran layer (veteran_mult) scales the earned-DEX / earned-INT delta of a throw
+  // and a bolt too. RED before: no veteran factor, so a level-30 thrower/mage hit exactly as hard
+  // as a level-1 one.
+  //
+  // Each helper reads the damage the attack bakes into its homing Projectile. The foe is VIT 1 /
+  // WIS 1 (defence 0), so mitigate is a no-op and the projectile carries the raw. A fresh (level 1)
+  // actor is POWER(0) = 1.0, so its earned delta is UNSCALED -> bit-identical, which the equality
+  // checks pin (rookie throw = 8 + (5-1)*3 = 20; rookie bolt = 14 + (5-1)*4 = 30).
+  const auto throw_damage = [](int char_level) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).dexterity.level = 5;  // an EARNED delta to scale
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk);
+    reg.emplace<eng::sim::CharacterLevel>(atk).level = char_level;
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});  // in throw range
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(foe);  // VIT 1 -> defence_of 0 -> mitigate no-op
+    reg.emplace<eng::sim::Enemy>(foe);
+    eng::sim::perform_throw(reg, atk);
+    return reg.get<eng::sim::Projectile>(*reg.view<eng::sim::Projectile>().begin()).damage;
+  };
+  const auto bolt_damage = [](int char_level) {
+    entt::registry reg;
+    const entt::entity mage = reg.create();
+    reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mage).intellect.level = 5;  // an EARNED delta to scale
+    reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);  // learned
+    reg.emplace<eng::sim::Stats>(mage);
+    reg.emplace<eng::sim::CharacterLevel>(mage).level = char_level;
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});  // in bolt range
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(foe);  // WIS 1 -> magic_defence_of 0 -> mitigate no-op
+    reg.emplace<eng::sim::Enemy>(foe);
+    eng::sim::magic_bolt(reg, mage);
+    return reg.get<eng::sim::Projectile>(*reg.view<eng::sim::Projectile>().begin()).damage;
+  };
+
+  // A veteran (high char level) throws AND casts harder than a rookie at the SAME earned
+  // attribute...
+  REQUIRE(throw_damage(30) > throw_damage(1));
+  REQUIRE(bolt_damage(30) > bolt_damage(1));
+  // ...and a level-1 actor is unchanged: POWER(0) = 1.0 leaves the earned delta unscaled.
+  REQUIRE(throw_damage(1) == Approx(20.0f));
+  REQUIRE(bolt_damage(1) == Approx(30.0f));
+}
+
 TEST_CASE("an unlearned caster cannot cast: magic is learned not innate", "[sim]") {
   // The LEARNED gate — the design's "magic is taught, not innate". A colonist with a full mana bar
   // but no Spellcasting skill flings nothing: no bolt, no mana spent. This is what keeps a world of

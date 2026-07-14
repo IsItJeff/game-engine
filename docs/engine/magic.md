@@ -69,7 +69,10 @@ yellow bolt). What sets it apart:
   softened by the target's **Wisdom** — *not* its VIT or worn plate (`magic_defence_of`, the WIS twin
   of `defence_of`). This is the design's magical **INT-vs-WIS** contest, the mirror of physical
   STR-vs-VIT: a bolt **pierces the armour that blunts a blade**, so a plate-tough but un-attuned brute
-  (high VIT, WIS 1) *melts* to magic while shrugging off steel — magic's identity. Scaled by the same
+  (high VIT, WIS 1) *melts* to magic while shrugging off steel — magic's identity. That earned-Intellect
+  delta **compounds with the caster's character level** through the same [veteran layer](progression.md)
+  a swing and a throw ride (`veteran_mult`), so a grinding mage's bolt sharpens with them — the earned
+  part only, so a fresh caster is `POWER(0)` = 1.0, unchanged. Scaled by the same
   `need_efficiency` every attack uses (a starving mage casts weaker too). No crit, no dodge, no RNG —
   a plain, reliable bolt, like the throw.
 - **Casting trains it** — a connecting cast grants `Spellcasting → Intellect`, so a mage sharpens

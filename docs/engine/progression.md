@@ -161,10 +161,12 @@ flowchart LR
    by `POWER(character level − 1)`, the same diminishing curve skills use. Level 1
    is `POWER(0)` = 1.0 (no head start); a veteran's earned toughness then compounds
    a little. It multiplies what you *earned*, never the base floor. The **same
-   multiplier scales the earned Strength delta on combat damage** (`perform_attack`),
-   so the veteran layer isn't just bigger bars — a seasoned fighter hits harder too.
-   (Reach is left flat, so a veteran hits harder without changing which targets a
-   swing can reach.) The character level also **wears a rank**: `veteran_title` names
+   multiplier scales the earned attack delta on combat damage** — a swing's earned
+   Strength (`perform_attack`), a throw's earned Dexterity (`perform_throw`), and a
+   bolt's earned Intellect (`magic_bolt`), all through the one `veteran_mult` — so the
+   veteran layer isn't just bigger bars: a seasoned fighter hits harder with blade,
+   throw, and spell alike. (Reach is left flat, so a veteran hits harder without
+   changing which targets a swing can reach.) The character level also **wears a rank**: `veteran_title` names
    it Novice → Seasoned → Veteran → Grizzled in the HUD — the *experience* twin of the
    `standing_title` (how good/bad) and `build_title` (what fighter) derived recognitions,
    a pure query the sim never reads.

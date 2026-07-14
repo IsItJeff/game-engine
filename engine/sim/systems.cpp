@@ -2276,6 +2276,18 @@ float magic_defence_of(const entt::registry& reg, entt::entity e) {
   return a != nullptr ? static_cast<float>(a->wisdom.level - 1) * kMagicDefencePerWis : 0.0f;
 }
 
+// The actor's global "veteran" multiplier: POWER(char_level - 1) — the SAME gentle diminishing
+// curve advance_progression compounds the earned HP/stamina/MP pools with. It scales ONLY what a
+// character EARNED by grinding (the trained-attribute delta of an attack), never the base or gear,
+// so a fighter's levels finally sharpen every attack FORM — a swing, a throw, AND a bolt — not just
+// their bars. Level 1 — and any actor with no CharacterLevel — is POWER(0) = 1.0, so it stays
+// bit-identical until you actually level up. No RNG, pure Fixed LUT math. ONE definition so melee,
+// throw, and cast can never drift apart on the veteran layer (they each folded it inline before,
+// the exact seam a shared helper closes).
+float veteran_mult(const CharacterLevel* character) {
+  return static_cast<float>(power((character != nullptr ? character->level : 1) - 1).to_double());
+}
+
 // Chance in [0, kCap] that a blow is dodged entirely, from the victim's DEX. Level 1
 // is 0 — no head start, exactly like every other stat, and (usefully) it means an
 // untrained world never rolls, so the RNG stream stays identical to before evasion
@@ -2459,12 +2471,11 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // The attacker's global "veteran" multiplier, POWER(level - 1) — the SAME curve and shape
   // advance_progression uses to compound the earned HP/stamina pools. It scales only what you
   // EARNED by grinding — the trained Strength levels — on damage below, so a fighter's grind
-  // finally sharpens their blade, not just their bars. Level 1 — and an attacker with no
-  // CharacterLevel — is POWER(0) = 1.0, so this is bit-identical until you actually level up.
-  // Fetched once here (nullable) and reused at the grant site; no RNG, pure Fixed LUT math.
+  // finally sharpens their blade, not just their bars. `character` is fetched once here (nullable)
+  // and reused at the grant site; veteran_mult carries the null-is-POWER(0)=1.0 rule (bit-identical
+  // until you level up), the ONE definition a throw and a bolt now share.
   CharacterLevel* character = reg.try_get<CharacterLevel>(attacker);
-  const float veteran =
-      static_cast<float>(power((character != nullptr ? character->level : 1) - 1).to_double());
+  const float veteran = veteran_mult(character);
 
   const Vec2 origin = tf->position;
   // Reach is left FLAT (no veteran factor): scaling it would change which target a swing can
@@ -2891,14 +2902,20 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   CharacterLevel* character = reg.try_get<CharacterLevel>(attacker);
   grant_skill_xp(*skills, *attrs, SkillId::Throwing, kThrowingPerHit, character);
 
-  // DEX-vs-VIT damage: base + earned-Dexterity delta, softened by the target's VIT. No gear/veteran
-  // scaling and no crit — a throw is deliberately the simple, reliable option. Scaled by the same
-  // need_efficiency the melee swing uses, so a starving thrower is weakened too (no ranged loophole
-  // around the survival debuff); full needs -> 1.0 -> bit-identical. `stats` is the attacker's
-  // sheet fetched above (non-null here).
-  const float raw =
-      (kBaseThrowDamage + static_cast<float>(attrs->dexterity.level - 1) * kDamagePerDexterity) *
-      need_efficiency(*stats);
+  // DEX-vs-VIT damage: base + earned-Dexterity delta, softened by the target's VIT. No gear and no
+  // crit — a throw is deliberately the simple, RELIABLE option (draws no RNG). But it DOES ride the
+  // global veteran layer now (veteran_mult): the earned-DEX delta compounds with char level exactly
+  // as a melee swing's earned-STR delta does, so a grinding thrower's aim finally sharpens too —
+  // the design's POWER(char_level) is a multiplier on everything you earn, not melee alone. Only
+  // the EARNED delta scales (the base is flat), and a level-1 thrower is POWER(0) = 1.0 ->
+  // bit-identical. Also scaled by the same need_efficiency the melee swing uses, so a starving
+  // thrower is weakened too (no ranged loophole around the survival debuff); full needs -> 1.0.
+  // `stats`/`character` were fetched above (stats non-null here; character nullable, which
+  // veteran_mult treats as level 1).
+  const float veteran = veteran_mult(character);
+  const float raw = (kBaseThrowDamage + static_cast<float>(attrs->dexterity.level - 1) *
+                                            kDamagePerDexterity * veteran) *
+                    need_efficiency(*stats);
   const float applied = mitigate(raw, defence_of(reg, target));
 
   // The hit isn't dealt here — instead we LAUNCH a homing Projectile carrying that (already
@@ -2988,12 +3005,16 @@ void magic_bolt(entt::registry& reg, entt::entity caster) {
 
   // INT-vs-WIS damage (the design's magical contest): base + earned-Intellect delta, softened by
   // the target's WISDOM — not its VIT/armour — so magic PIERCES the plate that blunts a blade (see
-  // magic_defence_of). Scaled by the same need_efficiency every attack uses (a starving mage casts
-  // weaker too — no ranged loophole). No crit/execute — a bolt is the plain reliable option, like
-  // the throw.
-  const float raw =
-      (kBaseSpellDamage + static_cast<float>(attrs->intellect.level - 1) * kDamagePerIntellect) *
-      need_efficiency(*stats);
+  // magic_defence_of). It rides the global veteran layer (veteran_mult) like a swing and a throw:
+  // the earned-INT delta compounds with char level, so a grinding mage's bolt sharpens with them
+  // (only the EARNED delta scales; a level-1 caster is POWER(0) = 1.0 -> bit-identical). Also
+  // scaled by the same need_efficiency every attack uses (a starving mage casts weaker too — no
+  // ranged loophole). No crit/execute — a bolt is the plain reliable option, like the throw.
+  // `character` was fetched above (nullable; veteran_mult treats a missing one as level 1).
+  const float veteran = veteran_mult(character);
+  const float raw = (kBaseSpellDamage + static_cast<float>(attrs->intellect.level - 1) *
+                                            kDamagePerIntellect * veteran) *
+                    need_efficiency(*stats);
   const float applied = mitigate(raw, magic_defence_of(reg, target));
 
   // Launch a homing Projectile carrying the (mitigated) damage — the SAME primitive the throw
