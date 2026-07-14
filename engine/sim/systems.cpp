@@ -1500,7 +1500,8 @@ void drain_hunger(entt::registry& reg, float dt) {
   // ponytail: the only food is still loot orbs (from creature deaths, finite and clustered
   // where kills happen), so a colonist starving in a quiet corner can still die — the full
   // fix is a real food economy (crops/meals), a later survival slice.
-  auto view = reg.view<Stats>(entt::exclude<Enemy>);
+  auto view =
+      reg.view<Stats>(entt::exclude<Enemy, Downed>);  // a Downed body is inert -- no need tick
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
     float drain = kDrainPerSecond;
@@ -1536,7 +1537,8 @@ void drain_water(entt::registry& reg, float dt) {
   constexpr float kDehydrationPerSecond = 12.0f;   // health lost per second once water hits 0
   // Same set as hunger: every person (Stats without Enemy), not creatures. regenerate_vitals gates
   // healing off while water is 0 (as it does for hunger), so dehydration nets health strictly down.
-  auto view = reg.view<Stats>(entt::exclude<Enemy>);
+  auto view =
+      reg.view<Stats>(entt::exclude<Enemy, Downed>);  // a Downed body is inert -- no need tick
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
     float drain = kDrainPerSecond;
@@ -1571,7 +1573,8 @@ void drain_warmth(entt::registry& reg, float dt) {
   constexpr float kWarmRecoverPerSecond =
       6.0f;                                  // ...and how fast a fire mends it (a haven, faster)
   constexpr float kFreezePerSecond = 12.0f;  // health lost per second once warmth hits 0
-  auto view = reg.view<Stats>(entt::exclude<Enemy>);
+  auto view =
+      reg.view<Stats>(entt::exclude<Enemy, Downed>);  // a Downed body is inert -- no need tick
   auto zones = reg.view<ColdZone, Transform>();
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
@@ -1621,7 +1624,8 @@ void tick_fatigue(entt::registry& reg, float dt) {
   constexpr float kHearthFatigueBoost = 2.0f;
   // Every PERSON tires — the player and NPCs (Stats without the Enemy marker), the same set the
   // other needs drain. Creatures are pure combat foes, no fatigue bar.
-  auto view = reg.view<Stats>(entt::exclude<Enemy>);
+  auto view =
+      reg.view<Stats>(entt::exclude<Enemy, Downed>);  // a Downed body is inert -- no need tick
   for (const entt::entity e : view) {
     Stats& s = view.get<Stats>(e);
     const Velocity* v = reg.try_get<Velocity>(e);
