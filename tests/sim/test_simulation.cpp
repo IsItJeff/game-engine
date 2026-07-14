@@ -2659,6 +2659,45 @@ TEST_CASE("a power swing knocks the struck foe back a plain one does not", "[sim
   REQUIRE(foe_x_after(true) > 10.0f);  // ...a power swing shoves it back, away from origin
 }
 
+TEST_CASE("a knockback is dragged by the mire: a foe shoved from within mud goes less far",
+          "[sim]") {
+  // The power-swing shove is a position delta, and a MireZone drags EVERY position delta
+  // (integrate_motion) -- so a foe shoved while standing in mud goes LESS far than one on firm
+  // ground: the mud grips the shove, the same "mud drags everyone" the terrain already enforces on
+  // ordinary movement. This pins the linear scale by slow_factor (the 0.5 mire halves the shove);
+  // the choice of the RAW mire_factor over the agility-eased waded_mire_factor is a code decision
+  // (a passive shove is a projectile, not the foe wading) that a DEX-1 foe here can't distinguish
+  // -- see systems.cpp. No mire -> factor 1.0 -> the full kKnockback, bit-identical to every
+  // existing knockback.
+  const auto shove_distance = [](bool in_mire) {
+    entt::registry reg;
+    std::mt19937 rng{1234};
+    const entt::entity attacker = reg.create();
+    reg.emplace<eng::sim::Transform>(attacker, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(attacker);
+    reg.emplace<eng::sim::Skills>(attacker);
+    reg.emplace<eng::sim::Stats>(attacker);        // full stamina -> affords the power swing
+    reg.emplace<eng::sim::PowerAttack>(attacker);  // a POWER swing -> it shoves
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{10.0f, 0.0f});  // in reach, on the +x side
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Attributes>(foe);  // DEX 1 -> never dodges, so the blow (and shove) lands
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    if (in_mire) {
+      const entt::entity mire = reg.create();
+      reg.emplace<eng::sim::Transform>(mire, eng::Vec2{10.0f, 0.0f});  // centred on the foe
+      reg.emplace<eng::sim::MireZone>(mire, eng::sim::MireZone{100.0f, 0.5f});  // half-drag mud
+    }
+    eng::sim::perform_attack(reg, attacker, rng);
+    return reg.get<eng::sim::Transform>(foe).position.x - 10.0f;  // how far the shove moved it
+  };
+  const float firm = shove_distance(false);  // the full kKnockback shove on firm ground
+  const float mired = shove_distance(true);  // ...dragged to half through a 0.5 mire
+  REQUIRE(firm > 0.0f);                      // a power swing shoves (sanity: the fixture fires)
+  REQUIRE(mired == Approx(firm * 0.5f));     // the 0.5 mire halves the shove (RED before: == firm)
+  REQUIRE(mired < firm);                     // ...so the mired foe is shoved less far
+}
+
 TEST_CASE("a DamagePlayer command reduces health through the funnel", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
