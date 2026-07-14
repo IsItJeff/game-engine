@@ -782,11 +782,24 @@ void World::apply_command(const Command& cmd) {
         droppers.push_back(p);
       }
       for (const entt::entity p : droppers) {
-        // ponytail: a dropped weapon is a PLAIN one — a venom blade loses its proc on the ground
-        // (a full item-identity system would preserve it; the seed drops the def, not the
-        // instance).
-        spawn_weapon(registry_, registry_.get<Transform>(p).position);  // a weapon where you stand
+        // A dropped weapon carries its IDENTITY to the ground — not reset to plain steel.
+        // Reconstruct the wielded blade from the cached (already equip-folded) stats and spawn it
+        // at quality 1.0 so re-equip folds them back WITHOUT re-scaling. So a keen/venom/half-worn
+        // blade dropped to sprint clear of a swarm and re-grabbed later is IDENTICAL — the design's
+        // "items are world entities carrying their {quality, durability, traits}", the instance,
+        // not just the def.
         Equipped& eq = registry_.get<Equipped>(p);
+        Weapon dropped{};
+        dropped.strength_bonus = eq.strength_bonus;  // the already quality-scaled reach/damage...
+        dropped.move_penalty = eq.move_penalty;      // ...its heft...
+        dropped.venom_per_second = eq.weapon_venom;  // ...a venom blade's proc...
+        dropped.crit_bonus = eq.crit_bonus;          // ...a keen blade's crit edge...
+        dropped.durability =
+            eq.weapon_durability;  // ...and how much life it has LEFT (worn, not new)
+        dropped.quality =
+            1.0f;  // stats are already folded/scaled -> quality 1.0 avoids a double-scale
+        spawn_weapon(registry_, registry_.get<Transform>(p).position,
+                     dropped);  // a weapon where you stand
         eq.strength_bonus = 0;  // clear ONLY the weapon slot; the heft is shed...
         eq.move_penalty = 0.0f;
         eq.weapon_venom = 0.0f;  // ...and the venom with it...

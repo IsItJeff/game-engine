@@ -8000,6 +8000,39 @@ TEST_CASE("dropping a keen blade sheds its crit bonus so no phantom crit lingers
   REQUIRE(after.defence_bonus == Approx(6.0f));  // ...while the armour stays worn
 }
 
+TEST_CASE("a dropped weapon keeps its keen edge and its wear: identity survives the ground",
+          "[sim]") {
+  // The design's "items are world entities carrying {quality, durability, traits}": dropping a
+  // wielded blade PRESERVES its identity on the ground — not reset to plain fresh steel — so a
+  // keen, half-worn blade dropped to sprint clear of a swarm and re-grabbed later is the SAME
+  // blade. The two regression tests above prove the WIELDER's cache CLEARS; this proves the DROPPED
+  // WEAPON keeps the traits and wear. RED before: Drop spawned a default plain blade, discarding
+  // the instance.
+  eng::sim::World world;
+  entt::registry& reg = world.registry();
+  const entt::entity player = world.player();
+  const eng::Vec2 ppos = reg.get<eng::sim::Transform>(player).position;
+  eng::sim::Equipped& eq = reg.emplace<eng::sim::Equipped>(player);
+  eq.strength_bonus = eng::sim::kKeenStrength;  // wielding a KEEN blade...
+  eq.move_penalty = 0.25f;
+  eq.crit_bonus = eng::sim::kKeenCritBonus;  // ...its crit edge...
+  eq.weapon_durability = 25.0f;              // ...worn down from the full 40
+
+  world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
+  world.step();
+
+  // The grounded blade at the player's feet (the opening scene seeds others elsewhere) kept its
+  // keen crit AND its worn durability — the identity round-tripped.
+  entt::entity dropped = entt::null;
+  for (const entt::entity e : reg.view<eng::sim::Weapon>())
+    if (glm::distance(reg.get<eng::sim::Transform>(e).position, ppos) < 0.5f) dropped = e;
+  REQUIRE((dropped != entt::null));
+  const eng::sim::Weapon& d = reg.get<eng::sim::Weapon>(dropped);
+  REQUIRE(d.crit_bonus ==
+          Approx(eng::sim::kKeenCritBonus));  // the keen trait survived (not reset)...
+  REQUIRE(d.durability == Approx(25.0f));  // ...and so did its worn life (not reset to a fresh 40)
+}
+
 TEST_CASE("dropping a weapon sheds its durability too so no phantom blade mends by the fire",
           "[sim]") {
   // Regression (bug-hunt find): the Drop command clears the weapon slot, and the blade's remaining

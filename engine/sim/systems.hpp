@@ -422,6 +422,11 @@ int allies_of(const entt::registry& reg, entt::entity e);
 // a slain brute's drop (handle_deaths) and the player's Drop command so both look and behave
 // identically. `quality` scales the item's boon (1.0 = baseline; a tough kill drops finer). No RNG.
 void spawn_weapon(entt::registry& reg, Vec2 pos, float quality = 1.0f);
+// Spawn a weapon on the ground carrying a SPECIFIC identity (the dropped-blade case) — its stat
+// block copied verbatim, so a keen/venom/worn blade is picked back up IDENTICAL rather than reset
+// to plain steel. Used by the Drop command (world.cpp) to preserve item identity across a
+// drop/re-equip.
+void spawn_weapon(entt::registry& reg, Vec2 pos, const Weapon& def);
 
 // Spawn a piece of Armour on the ground at `pos` — the defensive counterpart of spawn_weapon
 // (distinct render colour). Used to seed wearable armour into the opening scene, and dropped
