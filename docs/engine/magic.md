@@ -81,10 +81,14 @@ The first spell that reaches for a **friend**, not a foe — the co-op heart of 
 **heals its own** (press **H**, the `CastHeal` command). It is the bolt's support twin, built on the
 same shape:
 
-- **It mends the nearest wounded ally** — a *person* (not a creature, not a downed body, not the
-  caster itself) whose health is below max, within `kHealRange` (300). A full-health ally is never
-  targeted, so **no mana is wasted** topping up the hale, and there's **no over-heal** (the mend is
-  clamped at max).
+- **It mends the nearest wounded ally** — a *person* (not a creature, not a downed body, **nor a body
+  chipped to 0 HP this very tick**, not the caster itself) whose health is below max, within
+  `kHealRange` (300). A full-health ally is never targeted, so **no mana is wasted** topping up the
+  hale, and there's **no over-heal** (the mend is clamped at max). The 0-HP skip matters at the death
+  seam: `heal_spell` runs *before* `handle_deaths` in the tick, so a body just chipped to 0 (not yet
+  `Downed`) would otherwise be mended back from beyond the grave — resurrecting an NPC that should
+  permadeath. (The `Downed` exclusion only covers a body downed on a *prior* tick; this closes the
+  same-tick window, the patient-side twin of the caster's own 0-HP inert guard.)
 - **It spends the same mana** — `kHealManaCost` (25), an empty bar fizzles like the bolt. It lands
   **instantly** on the ally (a mending word, no flying `Projectile`).
 - **Wisdom scales it, and it trains a new skill** — `kBaseHeal` (18) + a per-`Wisdom`-level delta,

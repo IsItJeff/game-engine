@@ -4317,6 +4317,34 @@ TEST_CASE("a learned caster mends a wounded ally: the heal spell restores health
   REQUIRE(ally_health_after(false) == Approx(30.0f));  // a non-caster can't mend (the learned gate)
 }
 
+TEST_CASE("the mend won't resurrect a 0-HP ally about to be reaped: the patient 0-HP guard",
+          "[sim]") {
+  // The patient-side twin of heal_spell's caster "0 HP is inert" guard. A body chipped to exactly 0
+  // HP THIS tick (by resolve_creature_contacts / tick_poison, both above npc_heal in the schedule)
+  // isn't yet Downed -- handle_deaths reaps it LATER the same tick. Being "wounded" (0 < max) it
+  // would be mended and raised from beyond the grave, RESURRECTING an NPC that should permadeath
+  // before the reap. The view's exclude<Downed> only catches a body Downed on a PRIOR tick; this
+  // catches the same-tick 0-HP window. A merely-wounded (> 0) ally is still mended, so real heals
+  // are unchanged.
+  const auto ally_health_after = [](float ally_hp) {
+    entt::registry reg;
+    const entt::entity caster = reg.create();
+    reg.emplace<eng::sim::Transform>(caster, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(caster);
+    reg.emplace<eng::sim::Stats>(caster);  // mana starts full
+    reg.emplace<eng::sim::Skills>(caster).train(
+        eng::sim::SkillId::Spellcasting);  // learned to mend
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally, eng::Vec2{20.0f, 0.0f});  // within heal range
+    reg.emplace<eng::sim::Stats>(ally).health.current = ally_hp;
+    eng::sim::heal_spell(reg, caster);
+    return reg.get<eng::sim::Stats>(ally).health.current;
+  };
+  REQUIRE(ally_health_after(0.0f) ==
+          Approx(0.0f));  // a 0-HP body is NOT mended -> stays dead (RED before)
+  REQUIRE(ally_health_after(30.0f) > 30.0f);  // a merely-wounded ally is still mended (control)
+}
+
 TEST_CASE("the mend clamps at max and skips a hale ally: no over-heal no wasted mana", "[sim]") {
   entt::registry reg;
   const entt::entity caster = reg.create();

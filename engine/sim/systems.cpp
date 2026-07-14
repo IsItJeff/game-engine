@@ -2975,6 +2975,14 @@ void heal_spell(entt::registry& reg, entt::entity caster) {
   for (const entt::entity a : allies) {
     if (a == caster) continue;  // mend an ALLY, not yourself (self-heal is regenerate_vitals' job)
     const Vital& h = allies.get<Stats>(a).health;
+    if (h.current <= 0.0f)
+      continue;  // a body chipped to 0 HP THIS tick is about to be reaped by
+                 // handle_deaths (NPC permadeath / player Down) — mending it
+                 // now would RESURRECT it from beyond the grave, the
+                 // patient-side twin of the 0-HP caster guard above. The
+                 // exclude<Downed> only skips a body Downed on a PRIOR tick;
+                 // this catches the same-tick 0-HP window before the reap. A
+                 // real patient is always at positive HP, so this is bit-identical.
     if (h.current >= h.max) continue;  // hale — nothing to mend
     const float d = glm::distance(origin, allies.get<Transform>(a).position);
     if (d < nearest) {
