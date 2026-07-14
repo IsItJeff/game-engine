@@ -19,7 +19,7 @@ The moving parts, in one place:
 | **`dodge_chance`** | a DEX-driven roll to slip a blow entirely (trains Evasion) |
 | **the spawners** | `spawn_creature_if_due` keeps creatures coming; `spawn_npc_if_due` refills the colony |
 | **`Pickup`** | a health orb a slain swarmer drops — loot that keeps you fighting |
-| **`Weapon` / `Armour` / `Equipped`** | dropped gear worn in two slots: a weapon (E: +Strength, −speed) or armour (E: +defence, −stamina regen); drop the weapon with Q |
+| **`Weapon` / `Armour` / `Equipped`** | dropped gear worn in two slots: a weapon (E: +Strength, −speed) or armour (E: +defence, −stamina regen, **+cold insulation**); drop the weapon with Q |
 | **`handle_deaths`** | permadeath for creatures/NPCs, respawn for the player |
 
 ## Why it matters
@@ -541,7 +541,9 @@ that bane** (`borne_regen_penalty`, the armour twin of Strength's weapon [carry]
 hardy body **bears** armour better, so its VIT shrinks the stamina penalty up to a **half** floor —
 the same *mastery shrinks a bane but never removes it* rule, now on both gear slots. (Endurance also
 speeds base recovery, so a hardy fighter is resilient two ways: quicker second wind *and* less slowed
-by plate.) So you can be a
+by plate.) Armour also earns a **survival** use beyond the fight: its padding **insulates against the
+cold**, halving a `ColdZone`'s warmth drain (see [the stats system](stats-system.md)) — a reason to
+wear plate into the chill, not just into a fight. So you can be a
 fast glass fighter (weapon), a slow tank (armour), or grind to carry both. The two slots are
 **independent**: `Equipped` is a flat pair-of-pairs and `equip_nearest_gear` writes only the
 grabbed slot, so donning armour never disturbs a wielded weapon. `Drop` (`Q`) is the symmetric

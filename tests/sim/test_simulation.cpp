@@ -946,6 +946,31 @@ TEST_CASE("warmth drains inside a cold zone but holds in the open", "[sim]") {
   REQUIRE(warmth_after(false) == Approx(100.0f));  // ...in the open -> unchanged
 }
 
+TEST_CASE("worn armour insulates against the cold: a plated colonist chills slower", "[sim]") {
+  // Armour earns a SURVIVAL use beyond combat: its padding/layers slow a ColdZone's bite, so a
+  // plated colonist keeps its warmth longer than a bare one in the same chill -- a reason to wear
+  // it into the cold. A bare colonist (no Equipped) takes the full drain -> bit-identical (every
+  // other warmth test is bare). It eases the DRAIN only, not the freeze chip at 0, so armour DELAYS
+  // freezing, never prevents it. RED before: armour was ignored, so both chilled the same.
+  const auto warmth_after = [](bool armoured) {
+    entt::registry reg;
+    const entt::entity zone = reg.create();
+    reg.emplace<eng::sim::Transform>(zone, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::ColdZone>(zone, eng::sim::ColdZone{100.0f});
+    const entt::entity person = reg.create();
+    reg.emplace<eng::sim::Transform>(person, eng::Vec2{0.0f, 0.0f});  // standing in the chill
+    reg.emplace<eng::sim::Stats>(person);                             // warmth full
+    if (armoured)
+      reg.emplace<eng::sim::Equipped>(person).defence_bonus =
+          3.0f;  // ...wearing plate (defence > 0)
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::drain_warmth(reg, dt);  // 1s
+    return reg.get<eng::sim::Stats>(person).warmth.current;
+  };
+  REQUIRE(warmth_after(true) > warmth_after(false));  // the plated colonist kept more warmth...
+  REQUIRE(warmth_after(false) < 100.0f);  // ...and the bare one still chilled (drain works)
+}
+
 TEST_CASE("a hearth re-warms a chilled colonist even in the cold: the fire beats the chill",
           "[sim]") {
   // A Hearth is the inverse of a ColdZone — it REFILLS warmth — and it WINS where the two overlap:
