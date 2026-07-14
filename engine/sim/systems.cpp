@@ -890,17 +890,19 @@ void steer_npcs(entt::registry& reg) {
           break;
         }
         case AspirationKind::Provider: {
-          // Work the land: steer toward the nearest food plot that still has stock to gather (a
-          // bare patch isn't worth the walk); npc_harvest reaps a RIPE one into a meal on arrival,
-          // so a provider FARMS for the colony instead of loitering — the food-economy mirror of
-          // the warrior's hunt. Reuses the `plots` view fetched for the forage rung above.
-          // Self-limiting like the warrior: a hungry/cold/wounded provider tended that need on a
-          // rung above.
+          // Work the land: steer toward the nearest RIPE food plot — one npc_harvest can actually
+          // reap into a meal on arrival — so a provider FARMS for the colony instead of loitering,
+          // the food-economy mirror of the warrior's hunt. Reuses the `plots` view fetched for the
+          // forage rung above. Self-limiting like the warrior: a hungry/cold/wounded provider
+          // tended that need on a rung above.
           entt::entity plot = entt::null;
           float nearest_plot = kTendRange;
           for (const entt::entity pl : plots) {
-            if (plots.get<FoodSource>(pl).stock <= 0.0f)
-              continue;  // a picked-bare patch isn't work
+            if (plots.get<FoodSource>(pl).stock < kHarvestCost)
+              continue;  // not ripe enough to harvest — the SAME bar harvest_nearest_crop uses, so
+                         // a provider never walks to a plot it couldn't reap (a nearer under-ripe
+                         // patch mustn't lure it off a ripe one). Grazing is separate: the forage
+                         // rung above still nibbles ANY stock bite-by-bite.
             const float d = glm::distance(pos, plots.get<Transform>(pl).position);
             if (d < nearest_plot) {
               nearest_plot = d;
@@ -3418,8 +3420,9 @@ void spawn_meal(entt::registry& reg, Vec2 pos, float food_scale = 1.0f) {
 // patch yields nothing. ponytail: nearest ripe plot only, no "best yield" search — one plot exists
 // and they don't cluster; revisit if crops ever pack in.
 bool harvest_nearest_crop(entt::registry& reg, entt::entity harvester) {
-  constexpr float kHarvestCost =
-      60.0f;  // plot stock a harvest spends — a patch must be fairly ripe
+  // kHarvestCost (the stock a harvest spends, and the ripeness bar) is now shared with the Provider
+  // steer rung (components.hpp), so a farming NPC only walks to a plot this harvest can actually
+  // reap.
   const Transform* ht = reg.try_get<Transform>(harvester);
   if (ht == nullptr) return false;
   const Vec2 pos = ht->position;  // capture BEFORE spawn_meal, which reallocates the Transform pool
