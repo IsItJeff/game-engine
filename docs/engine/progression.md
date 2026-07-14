@@ -135,7 +135,15 @@ flowchart LR
    **contributor** attribute a fraction. Moving trains `conditioning` → **`endurance`** (its
    main, no contributors). **Attacking** trains `striking` → **`strength`** (main) **and a
    quarter to `dexterity`** (contributor) — so a pure striker slowly picks up a little
-   footwork, the design's "you are what you do" cross-training. Through that same funnel a
+   footwork, the design's "you are what you do" cross-training. And the **main attribute's
+   *level* speeds the skill's own learning** — the attribute's **third role** (a stat, a
+   skill-domain, *and* a learning-proficiency): a high-**Strength** character banks *more*
+   `striking` XP per swing (the design's "a master-STR miner picks up Smithing faster",
+   compounding domain-transfer), **+5% per main-attr level past the first, capped at ×2**, so
+   specialising snowballs but never runs away — the "checked by the ever-harder law" (`xp_to_next`
+   rises too). Only the *skill*'s XP is sped; the attribute/character shares stay flat (scaling an
+   attribute's XP by its own level would runaway-compound). A fresh character (main-attr level 1) is
+   bit-identical. Through that same funnel a
    **quarter-share** of *every* grant also feeds the global **`CharacterLevel`** — so **all**
    activity grows the veteran layer (moving, resting, striking, enduring blows, looting), not
    just walking. Standing still trains nothing.
@@ -210,7 +218,7 @@ attribute → stat — is what stays as it widens into a full character sheet.
 ## Key files
 
 - `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck, Wisdom, Charisma), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`, `Throwing`, `Foraging`, `Leadership`, `Guarding`, `Resistance`, `Athletics`, `Survivalist`).
-- `engine/sim/systems.cpp` (anon namespace) — the `SkillDef` table, `attr_ref`, and `grant_skill_xp` (the one funnel every skill→attribute XP grant flows through: main + contributors).
+- `engine/sim/systems.cpp` (anon namespace) — the `SkillDef` table, `attr_ref`, and `grant_skill_xp` (the one funnel every skill→attribute XP grant flows through: the skill's XP sped by its **main attribute's level** (learning-proficiency, +5%/level ×2), then flat main + contributor + character shares).
 - `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression` (movement→Conditioning / resting→Recovery), `update_stamina` (Endurance speeds recovery), `train_on_damage` (the damage → Toughness feeder), `perform_attack` (the shared swing resolver) and `npc_attack` (NPCs fight too).
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
 - `game/app/main.cpp` — the endurance/strength/wisdom/charisma/character-level readout, each equipped item's remaining durability (hits/blows left), and the skill XP bars; the `J` = attack key.

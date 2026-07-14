@@ -1923,7 +1923,22 @@ const Fixed kCharLevelShare = Fixed::from_ratio(1, 4);
 void grant_skill_xp(Skills& skills, Attributes& attrs, SkillId id, Fixed base,
                     CharacterLevel* character = nullptr) {
   const SkillDef& def = skill_def(id);
-  skills.train(id).xp += base;
+  // LEARNING-PROFICIENCY: the main Attribute's LEVEL speeds LEARNING of the skills it homes — the
+  // design's third attribute role (stat + skill-domain + learning-proficiency), the "a master-STR
+  // miner picks up Smithing faster" compounding domain-transfer. Only the SKILL's own XP is sped:
+  // the main/contributor Attribute XP and the Character-Level share below stay at the FLAT base
+  // (the design grants those flat, and scaling an attribute's XP by its OWN level would compound
+  // the very thing doing the scaling into a runaway). +kLearnPerLevel per main-attr level past the
+  // first, capped at kLearnCap (+100%, a x2 ceiling) — a master learns ~twice as fast, not
+  // unboundedly, the "checked by the ever-harder law" the design names (xp_to_next rises too). Main
+  // attr level 1 (the spawn default) -> bonus 0 -> base EXACTLY (x * Fixed::from_int(1) is exact in
+  // Q16.16), so a fresh/un-specialised character is bit-identical. All Fixed, no float,
+  // replay-safe.
+  const Fixed kLearnPerLevel = Fixed::from_ratio(1, 20);  // +5% skill XP per main-attr level past 1
+  const Fixed kLearnCap = Fixed::from_int(1);             // ...up to +100% (a x2 ceiling, a knob)
+  Fixed learn_bonus = Fixed::from_int(attr_ref(attrs, def.main).level - 1) * kLearnPerLevel;
+  if (learn_bonus > kLearnCap) learn_bonus = kLearnCap;
+  skills.train(id).xp += base * (Fixed::from_int(1) + learn_bonus);
   attr_ref(attrs, def.main).xp += base;
   for (const Contribution& c : def.contribs) attr_ref(attrs, c.attr).xp += base * c.weight;
   if (character != nullptr) character->xp += base * kCharLevelShare;
@@ -1997,7 +2012,12 @@ void teach(entt::registry& reg) {
     // student clean past its own toil. Read BEFORE the mentor's own Teaching grant below, so the
     // lesson reflects this tick's proficiency. A mentor with Teaching level 1 or none -> bonus 0 ->
     // the flat kLessonPerTick EXACTLY (x * Fixed::from_int(1) is exact in Q16.16), so a short-run
-    // world (no one past Teaching 1) is bit-identical. All Fixed, no float -> replay-safe.
+    // world (no one past Teaching 1) is bit-identical. All Fixed, no float -> replay-safe. (Balance
+    // note: this Teaching-level scale COMPOUNDS inside grant_skill_xp with the STUDENT's own
+    // main-attr learning-proficiency for the taught skill — a master teacher's ×2 times a
+    // specialised student's ×2 tops out at ~×4 on this per-tick trickle. Thematically apt — a
+    // strong hand taught a related craft learns fast — and hard-bounded, but a knob to watch at
+    // balance-tuning.)
     const Fixed kTeachBonusPerLevel =
         Fixed::from_ratio(1, 10);                     // +10% lesson XP per Teaching level...
     const Fixed kTeachBonusCap = Fixed::from_int(1);  // ...up to +100% (a x2 ceiling, a knob)
