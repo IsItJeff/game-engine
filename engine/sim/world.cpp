@@ -101,10 +101,11 @@ entt::entity make_spellbook(entt::registry& reg, Vec2 pos) {
   return e;
 }
 
-// Create one NPC: a wandering non-player character. It has Stats (so it takes
+// Create one NPC: a non-player colonist. It has Stats (so it takes
 // contact damage and could regenerate) and the Npc marker (so handle_deaths
-// destroys it on death rather than respawning it — permadeath). It is otherwise a
-// drifting dot, like a mote, but it is a *person* the world owns, not a hazard.
+// destroys it on death rather than respawning it — permadeath). It spawns with a
+// small wander velocity, but unlike a mote it SETTLES to rest once it has no want
+// (steer_npcs' idle fallthrough) — a *person* the world owns, not a drifting hazard.
 entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel, int bravery = 0, int greed = 0,
                       int compassion = 0, int industry = 0, int sociability = 0, int loyalty = 0) {
   const entt::entity e = reg.create();

@@ -1055,15 +1055,18 @@ void steer_npcs(entt::registry& reg) {
     // neutral, solitary, or Personality-less colonist has a 0-or-negative radius and so NEVER
     // gathers — the indifferent keep to themselves, which is also what keeps the pre-gather world
     // bit-identical. Once AT a fire it HOLDS (velocity 0), the twin of the wounded-retreat rung's
-    // hold: steer_npcs never damps velocity and integrate_motion never decays it, so without the
-    // hold a gathered colonist would carry its inbound velocity straight through the fire and out
-    // the far side, then re-aim and re-enter — a perpetual oscillation that never lets it rest (no
-    // stamina recovery, needs draining at the moving rate). Scaled by move_scale like every rung (a
-    // tired colonist trudges to the fire too); reuses the `hearths` view and kRallySpeed.
+    // hold: velocity only ever changes when a rung SETS it (nothing decays it gradually —
+    // integrate_ motion never does), so without an explicit hold a gathered colonist would carry
+    // its inbound velocity straight through the fire and out the far side, then re-aim and re-enter
+    // — a perpetual oscillation that never lets it rest (no stamina recovery, needs draining at the
+    // moving rate). Scaled by move_scale like every rung (a tired colonist trudges to the fire
+    // too); reuses the `hearths` view and kRallySpeed.
     const float gather_radius = kHearthGatherRadius * (sociability / 100.0f);
+    bool gathered = false;  // did the gather rung claim this colonist? (the last want it can have)
     if (gather_radius > 0.0f) {
       if (in_a_hearth(reg, pos)) {
         npcs.get<Velocity>(n).value = Vec2{0.0f, 0.0f};  // arrived — hold by the fire, don't coast
+        gathered = true;
       } else {
         Vec2 fire_pos{0.0f, 0.0f};
         bool has_fire = false;
@@ -1079,10 +1082,29 @@ void steer_npcs(entt::registry& reg) {
         if (has_fire) {
           const Vec2 toward = fire_pos - pos;
           const float len = glm::length(toward);
-          if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+          if (len > 0.0f) {
+            npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+            gathered = true;
+          }
         }
       }
     }
+    // FALLTHROUGH — NOTHING TO DO: a colonist that matched no want-rung above (no flee, forage,
+    // drink, rescue, defend, rally, bond, work) and isn't gathering (a sociability<=0 loner, or a
+    // sociable one with no fire in reach) COMES TO REST — velocity 0, the very hold the
+    // hearth-gather and wounded-retreat rungs already use. Reaching here means no higher rung fired
+    // (each one continues), so only the gather rung could have set a velocity this tick; `gathered`
+    // guards a fire-bound colonist from being frozen. Before this rung existed nothing touched an
+    // idle NPC's velocity — no rung claimed it, and integrate_motion never decays it (see the note
+    // there) — so it kept whatever stale velocity a PAST rung left and COASTED forever: an idle
+    // loner drifted the toroidal field endlessly, never resting, never recovering stamina/fatigue,
+    // draining every need at the MOVING rate. Now it settles and recovers, as a person with nothing
+    // to do would — the rest half the survival needs always assumed. Only motes (not in this Npc
+    // view) still drift; they're crowd, not colonists. Note this DOES zero a fresh colonist's
+    // random spawn wander (make_npc seeds one) on its first want-less tick — intended (an idle
+    // colonist settles, it doesn't drift aimlessly), and determinism is untouched since we draw no
+    // RNG. An NPC ALREADY at rest (velocity 0) is merely re-zeroed: a no-op for it.
+    if (!gathered) npcs.get<Velocity>(n).value = Vec2{0.0f, 0.0f};
   }
 }
 
@@ -1227,16 +1249,16 @@ void integrate_motion(entt::registry& reg, float dt) {
   // this tick — so people, creatures, AND ambient motes all crawl through the mud (parity: no one
   // is IMMUNE to it; kite a brute through it, or get caught fleeing across it). Crucially the drag
   // scales the MOVEMENT (the position delta), NOT the stored Velocity. That is what makes it safe
-  // for a mover NOTHING re-drives each tick — an ambient mote, or an idle loner steer_npcs left
-  // alone (e.g. a sociability<=0 colonist that matched no want-rung): it keeps its drift velocity
-  // and simply crawls THROUGH the mud and exits, rather than having its velocity multiplied down in
-  // place every tick to a frozen stop it never escapes. (An earlier version scaled the velocity
-  // itself and had to exclude motes to dodge that compounding freeze — but idle loners hit it too;
-  // scaling the delta fixes it for every mover at once.) A RE-driven mover (creature/steered
-  // NPC/commanded player) travels the same distance either way (to within float rounding), and
-  // every velocity-reading system downstream (update_stamina, drain_hunger — both binary
-  // moving/still) sees the true heading, so a mired crawler still counts as MOVING (it's exerting
-  // hard for little ground).
+  // for a mover NOTHING re-drives each tick — an ambient mote or a projectile, outside the `Npc`
+  // view steer_npcs never touches: it keeps its velocity and simply crawls THROUGH the mud and
+  // exits, rather than having its velocity multiplied down in place every tick to a frozen stop it
+  // never escapes. (An idle colonist no longer belongs here: steer_npcs now brings an un-wanting
+  // NPC to REST, so it IS re-driven. An earlier version scaled the velocity itself and had to
+  // exclude motes to dodge that compounding freeze; scaling the delta fixes it for every mover at
+  // once.) A RE-driven mover (creature/steered NPC/commanded player) travels the same distance
+  // either way (to within float rounding), and every velocity-reading system downstream
+  // (update_stamina, drain_hunger — both binary moving/still) sees the true heading, so a mired
+  // crawler still counts as MOVING (it's exerting hard for little ground).
   //
   // AGILITY eases the drag: a nimble (higher-Dexterity) mover WADES the mud faster —
   // waded_mire_factor shrinks the drag by DEX (the movement twin of STR's weapon-carry and VIT's
