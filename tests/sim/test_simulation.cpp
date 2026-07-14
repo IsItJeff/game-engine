@@ -7330,6 +7330,46 @@ TEST_CASE("reinforcement colonists roll varied archetypes, not just bravery", "[
   REQUIRE(any_industry);    // ...nor industry — the archetype roll fills all four axes
 }
 
+TEST_CASE("reinforcements roll the full eight archetypes not just the opening four", "[sim]") {
+  // The kArchetypes table shipped with 4 of the design's 8 personalities; the other four (Schemer,
+  // Zealot, Loner, Firebrand) waited for the social layer to give each axis a distinct behaviour --
+  // now every axis is read, so they join. Proof: a Zealot's signature (high LOYALTY paired with a
+  // CALLOUS streak) sits outside the convex hull of the opening four -- across all eight presets,
+  // even with the +/-15 jitter, ONLY the Zealot pairs loyalty > 50 with compassion < 0 (Stalwart
+  // and Kindler are loyal but KIND; the Drudge's loyalty tops out at 45). So seeing that
+  // combination can only mean a new archetype rolled. RED before they were added: unreachable, so
+  // it never fired.
+  eng::sim::World world;
+  entt::registry& reg = world.registry();
+
+  // Cull the hand-authored openers so only reinforcements are sampled (as the variety test does).
+  std::vector<entt::entity> openers(reg.view<eng::sim::Npc>().begin(),
+                                    reg.view<eng::sim::Npc>().end());
+  for (const entt::entity e : openers) reg.destroy(e);
+
+  // Drive a long deterministic run, culling every colonist each tick so the spawner (which fires
+  // only below kMaxNpcs, every kNpcSpawnInterval) keeps rolling FRESH reinforcements -- a large
+  // sample from the one seeded stream. Early-out the instant the Zealot signature appears; the cap
+  // is a safety ceiling the fixed seed reaches the signature long before.
+  bool saw_new_archetype = false;
+  for (int i = 0; i < 700 * eng::sim::kTicksPerSecond && !saw_new_archetype; ++i) {
+    world.step();
+    std::vector<entt::entity> spawned;
+    for (const entt::entity e : reg.view<eng::sim::Npc, eng::sim::Personality>()) {
+      const eng::sim::Personality& p = reg.get<eng::sim::Personality>(e);
+      if (p.loyalty > 50 && p.compassion < 0) saw_new_archetype = true;  // Zealot-only
+      spawned.push_back(e);
+    }
+    for (const entt::entity e : spawned) reg.destroy(e);  // cull so the next interval rolls another
+    // Keep the field clear so nothing interferes and the long run stays light.
+    std::vector<entt::entity> threats;
+    for (const entt::entity e : reg.view<eng::sim::Enemy>()) threats.push_back(e);
+    for (const entt::entity e : reg.view<eng::sim::Hazard>()) threats.push_back(e);
+    for (const entt::entity e : threats) reg.destroy(e);
+  }
+  REQUIRE(saw_new_archetype);  // a Zealot rolled -- the table grew from four archetypes to eight
+}
+
 TEST_CASE("a slain creature drops a health pickup", "[sim]") {
   entt::registry reg;
   const entt::entity foe = reg.create();

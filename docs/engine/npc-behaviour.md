@@ -219,14 +219,17 @@ sociability the *inverse* of industry (idle-socialites then keen-loners) and loy
 alternation — each a distinct six-axis combo, so the personalities read from frame one.
 
 Ongoing **reinforcements** don't get that hand-authored spread — they follow the design's *"NPCs
-roll an **archetype** + jitter"*. Each arriving colonist picks one of a handful of coherent presets
-(a dependable **Stalwart**, a self-serving **Rogue**, a caring **Kindler**, a tireless **Drudge**)
-and wobbles each axis a little, so the colony stays as varied as the openers — and *coherent* (a
-recognizable character), not a random stat-blob — instead of drifting toward neutral as the first
-four die. The roll is deterministic (the spawner's own isolated RNG stream, draws sequenced) and now
-spans **all six wired axes** (a **Rogue** is a greedy, fickle loner; a **Stalwart** a brave and
-*loyal* backbone). The design's other archetypes (Schemer, Zealot, Loner, Firebrand) join once the
-richer social layer gives more to tell them apart.
+roll an **archetype** + jitter"*. Each arriving colonist picks one of the design's **eight** coherent
+presets and wobbles each axis a little, so the colony stays as varied as the openers — and *coherent*
+(a recognizable character), not a random stat-blob — instead of drifting toward neutral as the first
+four die. The roll is deterministic (the spawner's own isolated RNG stream, draws sequenced) and spans
+**all six wired axes**. The opening four — a dependable **Stalwart**, a self-serving **Rogue**, a
+caring **Kindler**, a tireless **Drudge** — shipped first; the other four join now that every axis
+drives a behaviour to tell them apart, each leaning on the axis the first four don't showcase alone: a
+fervent **Zealot** (high *loyalty* but callous — cause over people), a solitary **Loner** (the lowest
+*sociability*), a scheming **Schemer** (greedy and *disloyal*, but bold where the Rogue is a coward),
+and a rebellious **Firebrand** (reckless *bravery* with a fickle streak). So a **Rogue** is a greedy,
+fickle loner; a **Stalwart** a brave and *loyal* backbone; a **Zealot** a fearless true-believer.
 
 A **sixth axis, `loyalty`**, completes the set — the one the [relationships](relationships.md) seed
 was built to unblock. It scales the bond-pull radius (the personal twin of the hero-rally) the same
