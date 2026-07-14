@@ -3211,11 +3211,21 @@ void shield_spell(entt::registry& reg, entt::entity caster) {
   CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
   grant_skill_xp(*skills, *attrs, SkillId::Spellcasting, kSpellcastingPerCast, character);
 
-  // Raise (or refresh) the barrier: base + earned-Intellect delta. get_or_emplace so a RECAST
-  // re-ups the clock and re-reads INT (monotonic, never weaker) rather than stacking a second
-  // component.
+  // Raise (or refresh) the barrier: base + earned-Intellect delta, scaled by the caster's
+  // need_efficiency — a STARVING (or parched, or freezing) mage wards WEAKER too, no defensive
+  // loophole, matching the bolt/mend/throw/swing that the same debuff already saps. Without it a
+  // starving mage's optimal play is pure full-strength defence while its offence is halved — the
+  // one caster effect that skipped the need debuff. A fed, watered, warm caster
+  // (need_efficiency 1.0 — every existing shield test) is bit-identical. get_or_emplace so a RECAST
+  // re-ups the clock and re-reads INT (monotonic at a fixed need level, never weaker) rather than
+  // stacking a second component. Deliberately OVERWRITE, not raise-only like apply_venom: a recast
+  // reflects the caster's CURRENT power, so a starving mage can't re-up the clock every few seconds
+  // to MAINTAIN a full-strength ward it cast while fed — raise-only would reopen the very starving-
+  // defence loophole this closes. (Venom is the opposite invariant: an adversarial dose keeps its
+  // WORST, so a weak re-bite can't dilute a strong poison you already carry.)
   const float absorb =
-      kBaseAbsorb + static_cast<float>(attrs->intellect.level - 1) * kAbsorbPerIntellect;
+      (kBaseAbsorb + static_cast<float>(attrs->intellect.level - 1) * kAbsorbPerIntellect) *
+      need_efficiency(*stats);
   Shielded& shield = reg.get_or_emplace<Shielded>(caster);
   shield.remaining = kShieldDuration;
   shield.absorb = absorb;

@@ -123,9 +123,12 @@ collide with warded **armour**'s thorns. What sets it apart:
   shielded target (a poison-ward is a separate spell). Floored at 0: unlike mitigation's permanent 10%
   chip floor, a temporary, mana-bought, expiring barrier is allowed to fully eat a weak blow — that's
   the point of raising it.
-- **`Intellect` thickens it** — `kBaseAbsorb` (6) + a per-`Intellect`-level delta, so the same
-  attribute that sharpens a bolt hardens a shield. Casting it trains `Spellcasting → Intellect`, the
-  same learn-by-doing loop (a dedicated Abjuration/Warding skill is a follow-up).
+- **`Intellect` thickens it, but hunger thins it** — `kBaseAbsorb` (6) + a per-`Intellect`-level
+  delta, so the same attribute that sharpens a bolt hardens a shield, then **scaled by the caster's
+  `need_efficiency`** — a starving (or parched, or freezing) mage wards weaker too, the same debuff the
+  bolt and mend already carry, so there is no full-strength-defence loophole under empty needs. Casting
+  it trains `Spellcasting → Intellect`, the same learn-by-doing loop (a dedicated Abjuration/Warding
+  skill is a follow-up).
 - **It spends the same mana** — `kShieldManaCost` (25), an empty bar fizzles like the bolt/mend — and
   **`tick_shield`** ages the barrier each tick, reaping it when `remaining` runs out. It runs *after*
   contacts, so a freshly-cast ward still soaks the blows of the tick it's raised (apply-at-cast,

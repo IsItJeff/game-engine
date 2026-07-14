@@ -4878,6 +4878,30 @@ TEST_CASE("a shield spell wards the caster: learned + mana gated, INT scales the
   REQUIRE(reg.get<eng::sim::Stats>(caster).mp.current == Approx(mana_before - 25.0f));
 }
 
+TEST_CASE("a starving mage wards weaker: need_efficiency saps the shield like every other cast",
+          "[sim]") {
+  // The shield was the ONE caster effect that skipped need_efficiency — a starving mage raised a
+  // FULL-strength barrier while its bolt / mend / throw / swing were all sapped, so its optimal
+  // play under empty needs became pure full-effect defence. Now the ward scales by the same debuff
+  // every sibling carries. A fed caster is unchanged (need_efficiency 1.0 -> bit-identical); a
+  // starving one (empty hunger drops the worst need to 0 -> the kNeedFloor 0.5) wards exactly HALF
+  // as thick.
+  const auto ward_absorb = [](float hunger) {
+    entt::registry reg;
+    const entt::entity caster = reg.create();
+    reg.emplace<eng::sim::Attributes>(caster).intellect.level =
+        5;                                                         // a keen mage -> a clear barrier
+    reg.emplace<eng::sim::Stats>(caster).hunger.current = hunger;  // water + warmth stay full
+    reg.emplace<eng::sim::Skills>(caster).train(eng::sim::SkillId::Spellcasting);
+    eng::sim::shield_spell(reg, caster);
+    return reg.get<eng::sim::Shielded>(caster).absorb;
+  };
+  const float fed = ward_absorb(100.0f);     // full needs -> need_efficiency 1.0
+  const float starving = ward_absorb(0.0f);  // empty hunger -> need_efficiency 0.5 (the floor)
+  REQUIRE(starving < fed);                   // hunger saps the barrier...
+  REQUIRE(starving == Approx(fed * 0.5f));   // ...to exactly the need_efficiency floor (half)
+}
+
 TEST_CASE("a raised shield soaks a creature blow then expires", "[sim]") {
   // The barrier's PAYOFF: while Shielded, `absorb` is soaked off each creature blow
   // (resolve_creature_contacts), floored at 0 — a temporary, mana-bought buffer on top of armour.
