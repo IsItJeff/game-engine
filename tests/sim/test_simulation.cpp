@@ -2461,6 +2461,47 @@ TEST_CASE("a first lesson bonds the student to the mentor: gratitude", "[sim]") 
   REQUIRE(gratitude(1) == 0);   // ...a fresh mentor teaches nothing -> no lesson, no gratitude bond
 }
 
+TEST_CASE("a first lesson also fills the mentor with pride: the mutual twin of gratitude",
+          "[sim]") {
+  // Gratitude (student -> mentor) was ONE-WAY; the mentor formed no bond to the protege it lifted,
+  // even though a shared learning milestone is felt on BOTH sides -- the rescue, the only other
+  // mutual forge-tie, already bonds both ways. Now the tick a student first-learns a craft the
+  // mentor bonds BACK to it with PRIDE: a real Acquaintance tie (>= kBondPull, so the bond-follow
+  // rung acts on it -- a mentor drifts toward its protege), but a touch GENTLER than the student's
+  // gratitude (the giver of a lesson bonds a little less than the receiver of a whole new craft).
+  // Returns the MENTOR's affinity toward the student by VALUE (0 if no edge -- the RED-before
+  // state).
+  const auto pride = [](int mentor_striking) {
+    entt::registry reg;
+    const entt::entity mentor = reg.create();
+    reg.emplace<eng::sim::Npc>(mentor);
+    reg.emplace<eng::sim::Transform>(mentor, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mentor);
+    reg.emplace<eng::sim::CharacterLevel>(mentor);
+    eng::sim::Skills& msk = reg.emplace<eng::sim::Skills>(mentor);
+    if (mentor_striking > 1) msk.train(eng::sim::SkillId::Striking).level = mentor_striking;
+    const entt::entity student = reg.create();
+    reg.emplace<eng::sim::Npc>(student);
+    reg.emplace<eng::sim::Transform>(student, eng::Vec2{10.0f, 0.0f});  // within mentor reach (40)
+    reg.emplace<eng::sim::Attributes>(student);
+    reg.emplace<eng::sim::CharacterLevel>(student);
+    reg.emplace<eng::sim::Skills>(student);  // a novice — learning Striking is the first lesson
+    eng::sim::teach(reg);
+    const auto* rel = reg.try_get<eng::sim::Relationships>(mentor);  // the MENTOR's outgoing edges
+    if (rel == nullptr) return 0;
+    for (const eng::sim::Relation& e : rel->edges)
+      if (e.other == student) return static_cast<int>(e.affinity);
+    return 0;
+  };
+  // teaching a craft -> the mentor's PRIDE, a real bond (RED before: 0). Above kBondPull (> 10, not
+  // AT it) so it survives a decay tick and the bond-follow rung keeps acting on it; and below
+  // gratitude's +12 so it stays the gentler side of the mutual tie -- the two bounds pin the +11
+  // knob.
+  REQUIRE(pride(5) > 10);
+  REQUIRE(pride(5) < 12);
+  REQUIRE(pride(1) == 0);  // a fresh mentor teaches nothing -> no lesson, no pride bond
+}
+
 TEST_CASE("train_on_damage ignores non-finite and non-positive damage", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();

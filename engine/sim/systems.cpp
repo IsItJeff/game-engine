@@ -110,6 +110,15 @@ constexpr std::int8_t kCamaraderieAffinity = 5;
 // lesson is a smaller thing than your life saved). Unlatched, so it fades if the apprenticeship
 // doesn't continue. A knob.
 constexpr std::int8_t kGratitudeAffinity = 12;
+// PRIDE: the mentor's mutual half of the gratitude bond — the tick a student first-learns a craft,
+// the mentor bonds BACK to the protege it lifted. A shared learning milestone is felt on BOTH
+// sides, exactly as a rescue is (the only other mutual forge-tie, which bonds both ways). Set just
+// ABOVE kBondPull (10) — like gratitude, and for the same reason: a value AT the floor would go
+// inert after a SINGLE decay_bonds tick (10 -> 9 < kBondPull), so the mentor's drift toward its
+// protege would barely act; +11 outlasts a couple of decay periods before it lapses. Still a touch
+// GENTLER than the student's gratitude (+12): the giver of a lesson bonds a little less than the
+// receiver of a whole new craft. Unlatched, fades like gratitude. A knob.
+constexpr std::int8_t kPrideAffinity = 11;
 
 // A cruel strike is WITNESSED: nearby colonists who saw it (within kCamaraderieRadius) form a small
 // grudge TOWARD the striker too — the negative mirror of camaraderie, so a reputation for cruelty
@@ -2009,8 +2018,13 @@ void teach(entt::registry& reg) {
     // OUTSIDE the folk view's signature (Skills/Attributes/Transform/CharacterLevel) — the same
     // reason camaraderie/grudge nudge safely mid-system. A world with no first-learn (every
     // short-run fixture) forms no tie -> bit-identical.
-    if (!knew_craft && folk.get<Skills>(student).find(best) != nullptr)
-      nudge_affinity(reg, student, mentor, kGratitudeAffinity);
+    if (!knew_craft && folk.get<Skills>(student).find(best) != nullptr) {
+      nudge_affinity(reg, student, mentor, kGratitudeAffinity);  // the student's gratitude...
+      nudge_affinity(reg, mentor, student, kPrideAffinity);      // ...and the mentor's PRIDE back,
+      // the mutual twin: a shared learning milestone bonds BOTH ways (like a rescue), not just the
+      // student to its mentor. nudge_affinity emplaces the MENTOR's Relationships too — also
+      // outside the folk view's signature, so the second nudge is as view-safe as the first.
+    }
   }
 }
 

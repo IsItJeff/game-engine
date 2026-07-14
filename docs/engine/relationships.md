@@ -18,7 +18,9 @@ affinity-moving events:
   a **rescue** forms a **mutual** bond between rescuer and saved *and* (if witnessed) earns the
   rescuer **admiration** from onlookers, a **cruel strike** forms a grudge, **felling a foe near
   allies** forges *camaraderie* (nearby colonists warm to the hero), and a **first lesson**
-  forges *gratitude* (a student bonds to the mentor who teaches it a new craft).
+  forges a **mutual** mentorship tie — *gratitude* (the student bonds to its mentor) *and* *pride*
+  (the mentor bonds back to the protege, a touch gentler), so mentorship joins the rescue as a
+  both-ways bond.
 
 ## Why it matters
 
@@ -113,10 +115,16 @@ a **discrete** moment like the other three — a skill is *learned once*, so a l
 the per-tick XP trickle `teach` grants every adjacent tick. (Only the first-**learn** is caught, not a
 rank-up: `grant_skill_xp` banks XP, and levels are applied a step later by `advance_progression`, so
 within `teach` the only visible breakthrough is the skill *appearing*.) Unlike the witnessed events
-it's a **direct** tie (student → mentor), not one spread to onlookers. Set just above `kBondPull`, so
-**one** lesson is a real Acquaintance bond the readers act on — the apprentice **clusters toward**,
-**defends**, and is **rescued from farther** by the master who taught it — yet unlatched, so it fades
-if the apprenticeship doesn't continue.
+it's a **direct** tie, not one spread to onlookers — but it is now **mutual**, felt on both sides like
+a rescue: the same first-learn also bonds the **mentor back to the protege** with **pride**
+(`nudge_affinity(mentor, student, kPrideAffinity)`), a touch gentler (`kPrideAffinity` `+11` vs
+gratitude's `+12`) because the giver of a lesson bonds a little less than the receiver of a whole new
+craft — but still *just above* `kBondPull`, like gratitude, so it survives a decay tick and the
+bond-follow rung actually acts on it rather than lapsing after one. Both sides land a real Acquaintance bond the readers act on — the apprentice
+**clusters toward**, **defends**, and is **rescued from farther** by the master who taught it, and the
+master drifts toward the protege it lifted — yet both unlatched, so the tie fades if the
+apprenticeship doesn't continue. (The rescue was the only mutual forge-tie before; mentorship now
+joins it, closing the one-way gap gratitude used to have.)
 
 A witnessed heroic act — a kill *or* a rescue — is scaled by the hero's **Charisma** (see
 [progression](progression.md)) in **two** ways. *How much* devotion each witness feels:
