@@ -251,6 +251,13 @@ void steer_npcs(entt::registry& reg) {
   // the lowest-urgency want. Knobs.
   constexpr float kRallyRadius = 220.0f;
   constexpr float kRallySpeed = 70.0f;
+  // How close counts as ARRIVED at the person you're gathering to (a hero to rally to, or a bonded
+  // friend to follow): within this you HOLD (velocity 0) and rest instead of chasing. Without it, a
+  // colonist chases at kRallySpeed with no stopping distance and OVERSHOOTS its target every tick,
+  // orbiting it forever — never still, so never resting (the same coast the hearth-gather rung
+  // holds against). Comfortably wider than one tick's step (kRallySpeed/60 ~= 1.2u) so there's no
+  // orbit, and loose enough to cluster NEAR the person, not stack on it. Knob.
+  constexpr float kSocialArrivalRadius = 24.0f;
   // Bond pull: the PERSONAL twin of the public hero-rally — an idle colonist with no hero to gather
   // to drifts toward a nearby FRIEND (a positive-affinity Relationship, e.g. the one it rescued).
   // Reuses kRallySpeed. Knobs.
@@ -1001,7 +1008,12 @@ void steer_npcs(entt::registry& reg) {
     if (champion != entt::null) {
       const Vec2 toward = heroes.get<Transform>(champion).position - pos;
       const float len = glm::length(toward);
-      if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+      if (len > kSocialArrivalRadius)
+        npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+      else
+        npcs.get<Velocity>(n).value =
+            Vec2{0.0f, 0.0f};  // arrived at the hero — hold and rest, don't
+                               // orbit it (the gather rung's fireside hold)
       continue;  // gathered to the public hero — the personal-bond pull below is the fallback
     }
 
@@ -1041,7 +1053,11 @@ void steer_npcs(entt::registry& reg) {
       if (friend_e != entt::null) {
         const Vec2 toward = friend_pos - pos;
         const float len = glm::length(toward);
-        if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+        if (len > kSocialArrivalRadius)
+          npcs.get<Velocity>(n).value = (toward / len) * kRallySpeed * move_scale;
+        else
+          npcs.get<Velocity>(n).value = Vec2{0.0f, 0.0f};  // arrived at the friend — hold and rest,
+                                                           // the same as reaching a hero above
         continue;  // following a bonded friend — don't also amble to the hearth below
       }
     }
