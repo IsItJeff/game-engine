@@ -579,6 +579,13 @@ an unbounded one. It reuses the whole shipped armour path: `Armour`/`Equipped` e
 it, and it clears when the plate shatters. A stand-and-tank build — soak a little less, punish the swarm
 for swinging — never pure-upside.
 
+And like the venom/keen blade, warded plate **rolls as loot**: ~15% of a fine **sentinel** armour drop
+now comes out warded, the rest plain — its own *portable* raw `mt19937` draw (`kWardedDropThreshold`)
+off the same dedicated drop stream, the armour twin of the steel trait roll. Until now it was only a
+fixed def that could never actually drop, so the tank build was unreachable in play; now the field
+hands it to you. (One trait, so a single threshold splits warded from plain — no mutually-exclusive
+band like the blade's venom/keen.)
+
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), hardcoded defs (plain
     steel, a venom fang, a plain and a *warded* armour, and two rolled steel variants — *venomous* and
@@ -588,9 +595,10 @@ for swinging — never pure-upside.
     Equipment — NPC armour-*seeking*, the `Item{def, quality, durability, traits[]}` model (`quality`
     scales the boon at equip AND rolls per fine drop; **three named traits** exist — venom via existing
     fields and keen via an added `crit_bonus` on the weapon, warded via a `thorns_per_hit` on the
-    armour; the two *weapon* traits roll on a fine battlefield drop (`handle_deaths`) while *warded* is
-    scene-spawned only for now — wiring a portable draw into the armour-drop branch, so a warded build
-    is renewable like the venom one, is the natural next step; a `traits[]` *list* waits until two
+    armour; all **three** now roll on a fine battlefield drop (`handle_deaths`) — the two *weapon*
+    traits on a steel drop, and *warded* on a **sentinel**'s armour drop (its own portable draw into
+    the armour-drop branch, so a warded build is renewable like the venom one); a `traits[]` *list*
+    waits until two
     traits must STACK on one item, which the mutually-exclusive roll avoids), the `+skill/+aspect`
     bonuses (which ride the
     [SkillDef](progression.md) seam), and wear/repair — layer on top without reworking this plumbing.

@@ -7583,7 +7583,11 @@ TEST_CASE("a sentinel's dropped armour is a real acquisition path: pick it up an
   reg.emplace<eng::sim::Transform>(sentinel, pos);
   reg.emplace<eng::sim::Stats>(sentinel, eng::sim::Vital{0.0f, 60.0f, 0.0f});
   reg.emplace<eng::sim::Enemy>(sentinel).drop = eng::sim::DropKind::Armour;
-  std::mt19937 rng{2024};
+  std::mt19937 rng{
+      2024};  // this seed's armour trait draw rolls PLAIN (>= kWardedDropThreshold), so
+  // the plain-plate defence band below (6*q) holds; a warded roll would be kWardedDefence*q (< 6)
+  // and fail the > 6.0 assert — a heads-up if that threshold is ever retuned past seed 2024's first
+  // draw.
   eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f, rng);
 
   const entt::entity wearer = reg.create();
@@ -7653,6 +7657,30 @@ TEST_CASE("a fine drop's quality is rolled within its band and varies from kill 
 
   std::mt19937 rng_again{777};
   REQUIRE(drop_quality(rng_again) == q1);  // deterministic: the same seed replays the same roll
+}
+
+TEST_CASE("a sentinel's armour drop can roll WARDED: the thorns plate joins the loot table",
+          "[sim]") {
+  // The armour analog of the weapon venomous/keen roll: a fine sentinel-armour drop now rolls its
+  // own named trait — ~15% WARDED (thorns + a paired -defence), the rest plain — off the SAME
+  // dedicated drop stream by one portable raw draw. spawn_warded_armour was fully wired and
+  // unit-tested, but its only spawn was a single hardcoded seed, so warded plate could never appear
+  // as LOOT; now it drops. A sentinel-only kill makes the armour trait roll the FIRST drop-rng draw
+  // (no weapon drop precedes it), so two seeds pin both branches deterministically: seed 7's first
+  // mt19937 output lands in the warded band, seed 1's in the plain band.
+  const auto dropped_thorns = [](unsigned seed) {
+    entt::registry reg;
+    const entt::entity sentinel = reg.create();
+    reg.emplace<eng::sim::Transform>(sentinel, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(sentinel, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // dead
+    reg.emplace<eng::sim::Enemy>(sentinel).drop = eng::sim::DropKind::Armour;
+    std::mt19937 rng{seed};
+    eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f, rng);
+    return reg.get<eng::sim::Armour>(*reg.view<eng::sim::Armour>().begin()).thorns_per_hit;
+  };
+  REQUIRE(dropped_thorns(7) > 0.0f);  // warded band -> a spiked plate that reflects a chip...
+  REQUIRE(dropped_thorns(1) ==
+          0.0f);  // ...plain band -> an ordinary plate (no thorns), today's path
 }
 
 TEST_CASE("venomous steel is a named trait: venom bought with a notch of Strength the heft intact",
