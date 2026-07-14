@@ -5941,6 +5941,30 @@ TEST_CASE("veteran_title names the experience tier from character level", "[sim]
   REQUIRE(rank(25) == "Grizzled");  // and stays there
 }
 
+TEST_CASE("temperament_title names the bravery band: the design's the Coward and Fearless",
+          "[sim]") {
+  // The FIFTH derived recognition (beside standing/build/epithet/veteran): a pure query over the
+  // PERSONALITY bravery axis, the panel-text twin of the personality_tint field cue. Bands: the
+  // Coward (<= -60), Timid (<= -20), Steady (neutral), Bold (>= +20), Fearless (>= +60) --
+  // surfacing the design's named temperaments. Neutral (the spawn default) reads Steady, so an
+  // unshaped world is bit-identical. Pin every band edge so a retuned threshold can't drift
+  // silently.
+  const auto temperament = [](int bravery) {
+    return std::string(eng::sim::temperament_title(static_cast<std::int8_t>(bravery)));
+  };
+  REQUIRE(temperament(0) == "Steady");   // the spawn default -> neutral
+  REQUIRE(temperament(19) == "Steady");  // top of the neutral band
+  REQUIRE(temperament(20) == "Bold");    // crosses into Bold
+  REQUIRE(temperament(59) == "Bold");
+  REQUIRE(temperament(60) == "Fearless");   // crosses into Fearless
+  REQUIRE(temperament(100) == "Fearless");  // and stays there at the axis max
+  REQUIRE(temperament(-19) == "Steady");    // symmetric neutral floor
+  REQUIRE(temperament(-20) == "Timid");     // crosses into Timid
+  REQUIRE(temperament(-59) == "Timid");
+  REQUIRE(temperament(-60) == "the Coward");   // crosses into the design's named deep-coward badge
+  REQUIRE(temperament(-100) == "the Coward");  // the axis min
+}
+
 TEST_CASE("deed_epithet names you by your most-repeated deed once it crosses the threshold",
           "[sim]") {
   // The third derived-recognition axis: standing_title says how good/bad, build_title says what

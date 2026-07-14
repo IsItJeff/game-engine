@@ -1126,4 +1126,24 @@ inline const char* veteran_title(const CharacterLevel& character) {
   return "Grizzled";               // 10+ — lived through it all
 }
 
+// A PERSONALITY-derived TEMPERAMENT title — how BRAVE or COWARDLY a character is, the panel-text
+// twin of the field cue personality_tint (which tints the dot red->green by this SAME bravery
+// axis). The FIFTH derived recognition beside standing_title (how good/bad), build_title (what
+// fighter), deed_epithet (known for), and veteran_title (how experienced) — this one reads the
+// PERSONALITY, surfacing the design's named "the Coward"/"Fearless" (character-systems.md). bravery
+// is the most behaviourally-loaded axis (drifted by every Valor/Violence deed AND by a friend's
+// death — see grief), so this badge shifts as a character is shaped by what it lives through — a
+// title that reads "the war changed him". A pure const char* query: the HUD shows it, the sim never
+// reads it, so it can't touch replay. An ALWAYS-present band like veteran_title (every character
+// has a temperament); neutral bravery — the PLAYER's spawn default (an NPC gets a non-neutral
+// archetype) — reads "Steady", and since nothing in the sim reads this the whole badge is
+// bit-identical to before it existed. Symmetric bands at ±20 / ±60.
+inline const char* temperament_title(std::int8_t bravery) {
+  if (bravery >= 60) return "Fearless";     // +60..+100 — charges what others flee
+  if (bravery >= 20) return "Bold";         // +20..+59 — leans brave
+  if (bravery <= -60) return "the Coward";  // -60..-100 — the design's named deep-coward badge
+  if (bravery <= -20) return "Timid";       // -20..-59 — leans cowardly
+  return "Steady";                          // -19..+19 — neutral, the common case
+}
+
 }  // namespace eng::sim

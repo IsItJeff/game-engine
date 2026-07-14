@@ -232,6 +232,14 @@ are three separate labels. Unlike the always-present band titles it returns noth
 crosses the threshold, so the HUD only shows *known as* once you've truly earned a reputation. The
 richer ones (*Master Smith*, *Dragonslayer* — from specific skills and gear) hang off the same idea.
 
+A further title reads neither deed nor build but **who you ARE**: `temperament_title(bravery)` names how
+brave or cowardly you've become — *Steady* by default, drifting to *Bold* / *Fearless* or *Timid* /
+*the Coward* (the design's named badge) as Valor and Violence deeds and a friend's death (grief)
+reshape your **bravery**. It's the panel-text twin of the `personality_tint` that already warms or
+cools your dot by that same axis, so your temperament now reads in *words* as well as colour — the
+first title off the **personality** axes, orthogonal to the deed/build/repute trio, and it makes the
+design's "the war changed him" legible: an always-present band that shifts as the character is shaped.
+
 The write-point is the whole point: **Violence** just became one more `record_deed` call at the
 lethal-cruelty site (exactly as Cruelty and Loyalty landed), leaving only **Honesty** to wire the day
 a truth/deceit event exists. `standing`'s
@@ -257,9 +265,11 @@ bit-identical to before decay existed.
 
 - `engine/sim/components.hpp` — `Deed` (the six dimensions), `BehaviorLedger` (the
   earned counterpart of `Personality`, plus its `decay_ticks` leak counter), the pure `standing`
-  function, `renown_scale` (the presentation twin of `personality_tint`), and the three derived titles
-  `standing_title` (repute from deeds), `build_title` (from trained attributes), and `deed_epithet`
-  (what you're known for — the dominant single ledger dimension, past `kEpithetAt`).
+  function, `renown_scale` (the presentation twin of `personality_tint`), and the derived recognition
+  titles `standing_title` (repute from deeds), `build_title` (from trained attributes), `deed_epithet`
+  (what you're known for — the dominant single ledger dimension, past `kEpithetAt`), `veteran_title`
+  (how seasoned, from character level), and `temperament_title` (how brave, from the personality
+  bravery axis — the panel-text twin of `personality_tint`).
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point,
   which also **drifts** the actor's matching `Personality` axis via the shared `drift_axis` clamp);
   `decay_standing` (the slow leak toward neutral, run each `step()`); the Charity credit and the
@@ -271,8 +281,9 @@ bit-identical to before decay existed.
   a just-reaped colonist (`kBondFriendAt`-gated) loses a step of bravery.
 - `game/app/main.cpp` — `draw_entities` scales a dot's radius by `renown_scale(standing(...))`
   so standing reads on screen *both ways* (heroes swell, villains shrink), and the debug HUD
-  shows the player's `standing` number and all three titles (`standing_title`, `build_title`, and
-  the `known as` epithet, shown only once a deed kind crosses `kEpithetAt`).
+  shows the player's `standing` number and its titles (`veteran_title` as *rank*, `standing_title`,
+  `build_title`, `temperament_title`, and the `known as` epithet, shown only once a deed kind crosses
+  `kEpithetAt`).
 - `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired deeds with
   player==NPC parity, the lazy no-deed-no-ledger path, `renown_scale`, and `deed_epithet` (threshold,
   dominant-dimension pick, and the fixed tie order).

@@ -332,6 +332,14 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   if (const eng::sim::Attributes* attrs = world.registry().try_get<eng::sim::Attributes>(player)) {
     ImGui::Text("build: %s", eng::sim::build_title(*attrs));
   }
+  // Temperament: how BRAVE or COWARDLY you are — the panel-text twin of the bravery dot-tint above
+  // (draw_entities), naming the design's "the Coward"/"Fearless". A fresh player is "Steady"
+  // (neutral) and drifts as Valor/Violence deeds and a friend's death (grief) reshape its bravery,
+  // so the human earns a visible character arc in words as well as colour. try_get: a
+  // personality-less entity has no temperament to name.
+  if (const eng::sim::Personality* pers = world.registry().try_get<eng::sim::Personality>(player)) {
+    ImGui::Text("temperament: %s", eng::sim::temperament_title(pers->bravery));
+  }
   // Closest bond: the strongest tie the player holds (its highest-affinity valid edge), named by
   // the derived `bond_tier` band. The player builds ties by fighting ALONGSIDE colonists
   // (camaraderie bonds a witness to the killer), so this reads out the co-op camaraderie earned in
