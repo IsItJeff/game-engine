@@ -238,6 +238,16 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::TextColored(ImVec4{0.6f, 0.8f, 1.0f, 1.0f},
                        "GUARDING (blows softened, movement slowed)");
   }
+  // A cast SHIELD (from B): the panel twin of its arcane-cyan field ring, so you can read the
+  // barrier's soak and how long it has left — the panel callout every other player status already
+  // has (DOWNED above, GUARDING). Cyan to match the field ring's hue (as GUARDING's callout matches
+  // its steel-blue ring), NOT the caster-core violet. try_get so it shows only while a barrier is
+  // up (most of the time there's none -> no line).
+  if (const eng::sim::Shielded* sh = world.registry().try_get<eng::sim::Shielded>(player)) {
+    ImGui::TextColored(ImVec4{0.35f, 0.92f, 0.86f, 1.0f},
+                       "SHIELDED — soaks %.0f per blow, %.1fs left",
+                       static_cast<double>(sh->absorb), static_cast<double>(sh->remaining));
+  }
   if (const eng::sim::Stats* stats = world.registry().try_get<eng::sim::Stats>(player)) {
     const eng::sim::Vital& h = stats->health;
     ImGui::Text("health: %.0f / %.0f", static_cast<double>(h.current), static_cast<double>(h.max));
