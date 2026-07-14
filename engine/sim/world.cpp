@@ -510,7 +510,36 @@ void World::step() {
   // 1. Remember where everything was, so the renderer can interpolate.
   snapshot_previous(registry_);
 
-  // 2. Drain the command funnel: apply every queued intent, in order. This is
+  // 2a. STANCE-BEFORE-ACTION: the held PowerAttack stance rides the per-tick MovePlayer command,
+  // but
+  //     the client enqueues an edge Attack command BEFORE that MovePlayer (main.cpp sends the edge
+  //     actions, then the per-tick move), so within one tick's funnel — [Attack, MovePlayer] — the
+  //     Attack's perform_attack would read PowerAttack BEFORE MovePlayer sets it: the power swing
+  //     you asked for the tick you press CTRL lands as a plain BASE swing (and with the natural
+  //     tap-CTRL+J-then-release pattern, EVERY power swing misfires). So pre-apply the power stance
+  //     from every pending MovePlayer here, before any action command drains. ONLY PowerAttack
+  //     needs this: it is the single stance an in-funnel COMMAND (Attack) reads — Blocking and
+  //     Sprinting are read by SYSTEMS that run after the whole drain (§3), so their apply-timing is
+  //     already right. PowerAttack is a pure held flag (no stamina/speed gating, unlike sprint), so
+  //     pre-setting it can never diverge from what MovePlayer re-applies (idempotently) in §2.
+  //     Downed players are skipped, exactly as both MovePlayer and the Attack command already do.
+  //     This is the fresh-stance twin of handle_deaths' stale-stance clear (a crumpled body drops
+  //     its stances): both keep PowerAttack honest across the funnel's fixed drain order. Fixed
+  //     server-side (the one choke point) so every client — the keyboard now, the network later —
+  //     gets it right.
+  for (const Command& cmd : pending_) {
+    if (cmd.kind != CommandKind::MovePlayer) continue;
+    for (const entt::entity e : registry_.view<PlayerControlled>()) {
+      if (registry_.get<PlayerControlled>(e).player != cmd.player) continue;
+      if (registry_.all_of<Downed>(e)) continue;  // downed = helpless, input does nothing
+      if (cmd.power)
+        registry_.emplace_or_replace<PowerAttack>(e);
+      else
+        registry_.remove<PowerAttack>(e);
+    }
+  }
+
+  // 2b. Drain the command funnel: apply every queued intent, in order. This is
   //    the only place the world mutates in response to outside input.
   for (const Command& cmd : pending_) {
     apply_command(cmd);
