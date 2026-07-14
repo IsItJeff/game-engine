@@ -722,6 +722,30 @@ TEST_CASE("exhaustion collapses a player: empty fatigue puts you Downed, a reviv
       Approx(reg.get<eng::sim::Stats>(player).fatigue.max));  // ...and RESTED, so no re-collapse
 }
 
+TEST_CASE("exhaustion reaps an NPC too: empty fatigue permakills a colonist parity with the player",
+          "[sim]") {
+  // The design's "empty fatigue -> Downed -> death, the great equalizer regardless of level; NPCs
+  // run the identical system." The PLAYER collapses (Downed) at 0 fatigue (test above); an NPC has
+  // NO Downed state (NPC -> permadeath), so the identical consequence is DEATH -- the exhaustion
+  // branch of the one-death-path-for-everyone-non-player. Health stays FULL, proving it's
+  // exhaustion, not a mortal blow. RED before: the NPC reap loop checked ONLY health, so an
+  // exhausted-but-unwounded NPC was silently immune to the very need that Downs the player -- a
+  // real player!=NPC parity break.
+  entt::registry reg;
+  const eng::Vec2 centre{640.0f, 360.0f};
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, centre);
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  auto& s = reg.emplace<eng::sim::Stats>(npc);
+  s.fatigue.current = 0.0f;  // worn to exhaustion -- but health stays full
+
+  eng::sim::handle_deaths(reg, centre, 6.0f);  // the 3-arg test wrapper (throwaway drop rng)
+
+  REQUIRE_FALSE(
+      reg.valid(npc));  // exhaustion permakilled it (RED before: health > 0 -> it survived)
+}
+
 TEST_CASE("a trained Survivalist tires slower: the skill lengthens the fatigue timer", "[sim]") {
   // The design's growth source: the Survivalist skill EASES the fatigue drain (eased_bane, never to
   // zero), so a trained survivor lasts longer before exhaustion — the one thing that buffers a
@@ -4098,6 +4122,38 @@ TEST_CASE("a bonded survivor grieves a fallen friend: permadeath shakes the livi
   // (the bystander, no real bond, keeps its composure).
   REQUIRE(reg.all_of<eng::sim::Panicked>(mourner));
   REQUIRE_FALSE(reg.all_of<eng::sim::Panicked>(bystander));
+}
+
+TEST_CASE("an exhaustion death is mourned too: a friend worked to death still shakes the living",
+          "[sim]") {
+  // The grief block keys off WHO DIED (the `dead` set), not a health check — because exhaustion
+  // kills at FULL health (fatigue 0). A health-blind detector would grieve a friend who bled out
+  // but IGNORE one who dropped dead of exhaustion: the same death, two reactions. Here the fallen
+  // dies of EXHAUSTION and the bonded survivor must still grieve (bravery down a step) and rout
+  // (Panicked), exactly as for an HP death. RED before the dead-keyed fold: the mourner's nerve
+  // held and it never panicked, because the corpse's health was still full.
+  entt::registry reg;
+
+  // The fallen: FULL health but 0 fatigue -> handle_deaths reaps it this call (exhaustion
+  // permadeath), the one death that leaves health untouched.
+  const entt::entity fallen = reg.create();
+  reg.emplace<eng::sim::Stats>(fallen).fatigue.current = 0.0f;
+  reg.emplace<eng::sim::Npc>(fallen);
+
+  // The mourner: a living colonist with a real FRIEND bond (affinity 60 >= kBondFriendAt) to the
+  // fallen; bravery +20 so the one-step grief drop is unambiguous.
+  const entt::entity mourner = reg.create();
+  reg.emplace<eng::sim::Stats>(mourner);
+  reg.emplace<eng::sim::Npc>(mourner);
+  reg.emplace<eng::sim::Personality>(mourner).bravery = 20;
+  reg.emplace<eng::sim::Relationships>(mourner).edges.push_back(eng::sim::Relation{fallen, 60});
+
+  eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f);
+
+  REQUIRE_FALSE(reg.valid(fallen));  // exhaustion reaped the fallen NPC (health-blind death)...
+  REQUIRE(reg.get<eng::sim::Personality>(mourner).bravery ==
+          18);                                       // ...the friend grieved (20 -> 18)
+  REQUIRE(reg.all_of<eng::sim::Panicked>(mourner));  // ...and routed, same as any other death
 }
 
 TEST_CASE("a survivor is vindicated by a fallen nemesis: a sworn foe's death emboldens", "[sim]") {

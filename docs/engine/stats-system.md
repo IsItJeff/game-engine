@@ -28,7 +28,10 @@ spent by moving and recovers by resting; running it dry slows the player to a
 crawl. Hunger only ever falls (you refill it by *eating*, not resting) and starves you at
 empty; **water** is its twin — it falls too, you refill it by *drinking* at a pond, and empty it
 dehydrates you. **Fatigue** is the odd third need — it falls as you *exert* and *recovers* as you
-rest — and empty it **collapses** you (`Downed`, ally-rescuable, even at full health). **Warmth** is
+rest — and empty it **collapses** you (`Downed`, ally-rescuable, even at full health). An NPC runs the
+*identical* need but has no `Downed` grace, so empty fatigue **permakills** it outright — the same
+death every other emptied need deals, and the same rule as HP-to-0 below (the great equalizer applies
+to everyone; only the player gets the rescuable crumple). **Warmth** is
 the *localized* need — it drains only inside a cold zone and refills by the fire, freezing you at
 empty; **mana** fuels magic (see [Magic](magic.md)). Death is respawn for
 the player and permadeath — destruction — for NPCs.
@@ -276,8 +279,12 @@ where they stand, **even at full health**, into the exact same `Downed` window a
 `handle_deaths` reuses its whole rescue-or-respawn mechanic, and the revive that brings you back
 resets fatigue along with the other vitals, so you don't drop straight back down. Exhaustion is thus
 a *recoverable* fall (ally-rescuable, or a timed respawn), not a death — the great equalizer the
-design wants. This is player-only for now, mirroring the `Downed` mechanic (an NPC's fatigue just
-sits at 0).
+design wants. The *recoverable* part is player-only, mirroring the `Downed` mechanic: an NPC runs the
+identical fatigue need but has **no `Downed` grace**, so `handle_deaths` reaps it on empty fatigue the
+same way it reaps it on 0 HP — an exhausted colonist **permadies** outright where the player crumples
+and can be hauled back up. The equalizer reaches everyone; only the *rescue* is the player's. (A
+colonist only reaches that brink if it truly cannot rest — with somewhere to be idle it settles and
+recovers first; see [NPC behaviour](npc-behaviour.md).)
 
 Rest is **deepest by the fire**: resting in a `Hearth`'s warmth mends fatigue `kHearthFatigueBoost`
 (2×) faster — the design's "sleep fast" tier realized through the *existing* safe rest spot rather

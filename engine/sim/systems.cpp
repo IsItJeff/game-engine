@@ -1,5 +1,6 @@
 #include "engine/sim/systems.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <random>
@@ -1632,8 +1633,9 @@ void tick_fatigue(entt::registry& reg, float dt) {
   // exertion tiers the other needs use (rest < walk < sprint), but here the base tier is RECOVERY,
   // not a drain: standing still MENDS fatigue, moving spends it, sprinting spends it faster. Gentle
   // knobs so a colonist that mixes moving with resting stays rested, and only sustained exertion
-  // wears it down. Nothing READS fatigue yet — the empty-collapse consequence and the sit/sleep
-  // faster-rest tiers are the next slices; this seam just makes the bar move.
+  // wears it down. The empty-fatigue CONSEQUENCE lives in handle_deaths (empty → the player
+  // crumples Downed, an NPC permadies — the collapse's two branches), and the faster-rest tier is
+  // the hearth boost just below; this seam is what feeds both — it moves the bar they read.
   constexpr float kRestRecoverPerSecond = 0.5f;  // regained per second while standing still...
   constexpr float kMoveDrainPerSecond = 0.4f;    // ...spent per second while moving (walking)...
   constexpr float kSprintDrainPerSecond =
@@ -3992,7 +3994,16 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
   std::vector<Vec2> kit_armour_drops;  // ...and where an ARMOURED one fell — its worn plate
   auto npcs = reg.view<Stats, Npc>();
   for (const entt::entity e : npcs) {
-    if (npcs.get<Stats>(e).health.current > 0.0f) continue;
+    // A colonist dies on HP-to-0 OR fatigue-to-0 (EXHAUSTION) — the design's "NPCs run the
+    // identical system": the same two ways the PLAYER falls at the collapse above (health<=0 ||
+    // fatigue<=0), but with no Downed grace (NPC → permadeath), so an exhausted colonist dies
+    // outright where the player crumples and is rescuable. Fatigue chips no health, so before this
+    // an exhausted-but-unwounded NPC was silently immune to the very need that Downs the player — a
+    // real player!=NPC parity break. A rested NPC (fatigue > 0 — every existing death test, and any
+    // colonist that reaches its idle-rest) is untouched. Enemies below never drain fatigue
+    // (need-drains exclude<Enemy>), so they stay HP-only.
+    const Stats& st = npcs.get<Stats>(e);
+    if (st.health.current > 0.0f && st.fatigue.current > 0.0f) continue;
     dead.push_back(e);
     // A fallen colonist DROPS THE KIT it earned — the gear it was wielding/wearing lands where it
     // fell, so an ally's blade and plate are RECOVERABLE (the equipment economy's death end: gear
@@ -4049,25 +4060,37 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
   // so a death leaves a visible mark on those left behind — the "NPCs are people, and people
   // change" pillar reaching past the one who died, in BOTH directions. Only strong ties stir: a
   // mere acquaintance or a passing rival (between the two floors) is neither mourned nor
-  // celebrated. The corpse must be a PERSON (Npc + health <= 0), never a slain creature — no one
-  // mourns OR gloats over a monster (and creatures never accrue affinity anyway, but the Npc guard
-  // makes it explicit). Runs only on a death tick; pure int math, no RNG. No
+  // celebrated. The corpse must be a PERSON (an Npc in the `dead` set), never a slain creature — no
+  // one mourns OR gloats over a monster (and creatures never accrue affinity anyway, but the Npc
+  // guard makes it explicit). Runs only on a death tick; pure int math, no RNG. No
   // Personality/Relationships, or no strong bond to a fresh corpse, keeps the pre-bond world
   // bit-identical (a Nemesis-tier grudge can't exist at spawn — it takes sustained cruelty to sink
-  // an edge to kBondNemesisAt). ponytail: O(survivors x their few edges) but only when someone
-  // dies; a reverse bond-index is the upgrade if death ticks ever get crowded.
+  // an edge to kBondNemesisAt). ponytail: O(survivors x their few edges), each a linear scan of the
+  // tiny `dead` set, but only when someone dies; a reverse bond-index is the upgrade if death ticks
+  // ever get crowded.
+  //
+  // "Dead this tick" is a membership test against the AUTHORITATIVE `dead` set the reap built
+  // above, NOT a re-derived health check: exhaustion kills a colonist at FULL HP (fatigue 0), so a
+  // health test would miss it and an exhausted friend would fall UNMOURNED (and a nemesis
+  // un-avenged). Keying off `dead` means grief tracks the exact same fact the reap decided, for
+  // every cause — HP wound, starvation, freezing, or exhaustion — and can never drift from it
+  // again.
+  const auto is_dead = [&dead](entt::entity x) {
+    return std::find(dead.begin(), dead.end(), x) != dead.end();
+  };
   auto mourners = reg.view<Personality, Relationships>();
   for (const entt::entity m : mourners) {
-    if (const Stats* ms = reg.try_get<Stats>(m); ms != nullptr && ms->health.current <= 0.0f)
-      continue;  // a corpse (or a mourner falling this same tick) neither grieves nor gloats
+    if (is_dead(m) || reg.all_of<Downed>(m))
+      continue;  // a corpse (falling this same tick), or a helpless Downed player, neither grieves
+                 // nor gloats — a crumpled player carries Personality but is incapacitated, so no
+                 // grief tint on it (the old health<=0 skip caught a Downed player too; keep that)
     for (const Relation& edge : mourners.get<Relationships>(m).edges) {
       if (!reg.valid(edge.other)) continue;  // a stale handle to a reused id
       const bool friend_bond = edge.affinity >= kBondFriendAt;
       const bool nemesis_bond = edge.affinity <= kBondNemesisAt;
       if (!friend_bond && !nemesis_bond) continue;  // a lukewarm tie stirs nothing when it falls
-      const Stats* es = reg.try_get<Stats>(edge.other);
-      if (es == nullptr || es->health.current > 0.0f || !reg.all_of<Npc>(edge.other))
-        continue;  // not a fallen PERSON
+      if (!is_dead(edge.other) || !reg.all_of<Npc>(edge.other))
+        continue;  // not a fallen PERSON (dead this tick AND a colonist, never a slain creature)
       if (friend_bond) {
         drift_axis(mourners.get<Personality>(m).bravery, kGriefDrift);  // a lost friend a blow...
         // ...and an acute ROUT right now: the survivor panics for kPanicDuration seconds
