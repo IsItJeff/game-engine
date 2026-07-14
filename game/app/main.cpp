@@ -287,19 +287,28 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   if (const eng::sim::Equipped* eq = world.registry().try_get<eng::sim::Equipped>(player)) {
     // ...each with its remaining DURABILITY (hits/blows before it shatters and the slot clears), so
     // you can see a blade or plate wearing toward the end and decide whether to keep fighting or go
-    // scavenge a fresh one — the temporal half of the tradeoff, made legible.
+    // scavenge a fresh one — the temporal half of the tradeoff, made legible. The move/stamina
+    // banes shown are the EFFECTIVE ones the sim actually applies — Strength EASES the weapon heft
+    // (carried_move_penalty, in MovePlayer) and Endurance EASES the armour stamina bane
+    // (borne_regen_penalty, in update_stamina), both to a half-floor — so a strong/hardy character
+    // sees the SMALLER penalty it really pays, not the raw item value it would pay untrained
+    // (showing the raw bane overstated the cost). A null Attributes -> the full bane, unchanged.
+    const eng::sim::Attributes* attrs = world.registry().try_get<eng::sim::Attributes>(player);
     if (eq->strength_bonus != 0 || eq->move_penalty != 0.0f) {
-      ImGui::TextColored(ImVec4{0.8f, 0.85f, 1.0f, 1.0f},
-                         "wielding: +%d STR, -%.0f%% speed (%.0f hits left)", eq->strength_bonus,
-                         static_cast<double>(eq->move_penalty * 100.0f),
-                         static_cast<double>(eq->weapon_durability));
+      ImGui::TextColored(
+          ImVec4{0.8f, 0.85f, 1.0f, 1.0f}, "wielding: +%d STR, -%.0f%% speed (%.0f hits left)",
+          eq->strength_bonus,
+          static_cast<double>(eng::sim::carried_move_penalty(eq->move_penalty, attrs) * 100.0f),
+          static_cast<double>(eq->weapon_durability));
     }
     if (eq->defence_bonus != 0.0f || eq->stamina_regen_penalty != 0.0f) {
-      ImGui::TextColored(ImVec4{0.9f, 0.7f, 0.4f, 1.0f},
-                         "armoured: +%.0f DEF, -%.0f%% stamina regen (%.0f blows left)",
-                         static_cast<double>(eq->defence_bonus),
-                         static_cast<double>(eq->stamina_regen_penalty * 100.0f),
-                         static_cast<double>(eq->armour_durability));
+      ImGui::TextColored(
+          ImVec4{0.9f, 0.7f, 0.4f, 1.0f},
+          "armoured: +%.0f DEF, -%.0f%% stamina regen (%.0f blows left)",
+          static_cast<double>(eq->defence_bonus),
+          static_cast<double>(eng::sim::borne_regen_penalty(eq->stamina_regen_penalty, attrs) *
+                              100.0f),
+          static_cast<double>(eq->armour_durability));
     }
   }
   if (const eng::sim::CharacterLevel* cl =
