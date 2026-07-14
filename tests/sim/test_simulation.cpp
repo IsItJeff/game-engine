@@ -2587,6 +2587,40 @@ TEST_CASE("attacking the nearest mote in reach destroys it and trains Striking -
   REQUIRE(world.registry().get<eng::sim::Attributes>(player).strength.xp > eng::Fixed{});
 }
 
+TEST_CASE("a high main-attribute learns its skills faster: the learning-proficiency role",
+          "[sim]") {
+  // The design's THIRD attribute role: an Attribute is a stat, a skill-domain, AND the proficiency
+  // that SPEEDS its skills -- "a master-STR miner picks up Smithing faster" (compounding
+  // domain-transfer). grant_skill_xp scales ONLY the SKILL's XP by the main attribute's level (the
+  // attribute/character XP stay flat -- scaling the very level that does the scaling would
+  // runaway). Striking's main is STRENGTH, so a strong striker banks MORE Striking XP per
+  // connecting swing. A fresh character (STR level 1) is bit-identical. The struck target is a MOTE
+  // (Hazard) so there's no dodge/RNG -- the ONLY difference between the runs is the STR-scaled
+  // learning.
+  const auto striking_xp = [](int str_level) {
+    entt::registry reg;
+    std::mt19937 rng{1};
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).strength.level = str_level;  // Striking's MAIN attribute
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk);  // full stamina -> the swing connects, not a winded fizzle
+    const entt::entity mote = reg.create();
+    reg.emplace<eng::sim::Transform>(mote, eng::Vec2{10.0f, 0.0f});  // in melee reach (< 45)
+    reg.emplace<eng::sim::Hazard>(mote);
+    eng::sim::perform_attack(reg, atk, rng);
+    const eng::sim::Skill* s = reg.get<eng::sim::Skills>(atk).find(eng::sim::SkillId::Striking);
+    return s != nullptr ? s->xp
+                        : eng::Fixed{};  // a Fixed VALUE, never a pointer into the local reg
+  };
+  REQUIRE(striking_xp(1) > eng::Fixed{});  // a connecting swing trains Striking...
+  REQUIRE(striking_xp(10) >
+          striking_xp(1));  // ...and a strong striker learns it FASTER (RED before)
+  // ...but CAPPED at +100% (x2): two legends both well past the cap (which lands ~level 22 with the
+  // Fixed rounding) learn at the SAME doubled rate, never unboundedly -- the "ever-harder law".
+  REQUIRE(striking_xp(50) == striking_xp(30));
+}
+
 TEST_CASE("an NPC strikes a hazard in reach and trains Striking -> Strength", "[sim]") {
   eng::sim::World world;
 
