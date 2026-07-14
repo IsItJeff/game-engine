@@ -262,7 +262,8 @@ TEST_CASE("a wounded colonist retreats to a hearth and holds in its warmth", "[s
     return reg.get<eng::sim::Velocity>(npc).value;
   };
   REQUIRE(steer(40.0f, 200.0f).x < 0.0f);  // wounded + out in the cold (200 > 60) -> heads in (-x)
-  REQUIRE(steer(80.0f, 200.0f).x > 0.0f);  // healthy -> ignores the fire, keeps its drift (+x)
+  REQUIRE(steer(80.0f, 200.0f).x ==
+          0.0f);  // healthy -> no wound-want, so it RESTS (0), not the fire
   const eng::Vec2 held = steer(40.0f, 30.0f);  // wounded + already in the warmth (30 < 60)...
   REQUIRE(held.x == 0.0f);                     // ...holds: velocity zeroed, sits and mends...
   REQUIRE(held.y == 0.0f);
@@ -291,8 +292,8 @@ TEST_CASE("a chilled colonist heads for the fire: warmth drives a hearth-seek li
   };
   REQUIRE(steer(30.0f, 200.0f).x <
           0.0f);  // chilled + out in the cold (200 > 60) -> heads in (-x)...
-  REQUIRE(steer(100.0f, 200.0f).x >
-          0.0f);  // ...fully warm -> ignores the fire, keeps its drift (+x)
+  REQUIRE(steer(100.0f, 200.0f).x ==
+          0.0f);  // ...fully warm -> no seek-want, so it RESTS (0), not the fire
 }
 
 TEST_CASE("an idle colonist steps out of a cold zone before it chills: cold avoidance", "[sim]") {
@@ -317,7 +318,35 @@ TEST_CASE("an idle colonist steps out of a cold zone before it chills: cold avoi
     return reg.get<eng::sim::Velocity>(npc).value.x;
   };
   REQUIRE(steer_vx(-50.0f) < 0.0f);  // inside the zone (west of centre) -> steers OUT, west (-x)...
-  REQUIRE(steer_vx(-500.0f) > 0.0f);  // ...clear of it -> keeps its east drift (+x), no avoid
+  REQUIRE(steer_vx(-500.0f) == 0.0f);  // ...clear of it -> no avoid-want, so it RESTS (0), no drift
+}
+
+TEST_CASE("an idle colonist comes to rest: no want stops the endless coast so it recovers",
+          "[sim]") {
+  // The rest half the survival needs always assumed. A colonist with NO want (nothing to flee,
+  // forage, drink, mend, gather, or rally to) used to keep whatever stale velocity a past rung left
+  // and COAST the toroidal field forever — never still, so never recovering stamina/fatigue and
+  // draining every need at the MOVING rate (the loner that never rests). Now steer_npcs brings an
+  // un-wanting colonist to REST (velocity 0), the very hold the hearth-gather/wounded-retreat rungs
+  // use. Two beats: steer zeroes the drift, and a worn colonist then RECOVERS fatigue at rest
+  // rather than wearing down as it would while coasting.
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc,
+                                   eng::Vec2{500.0f, 500.0f});   // out in the open: no fire, food
+  reg.emplace<eng::sim::Velocity>(npc, eng::Vec2{40.0f, 0.0f});  // a stale drift from a past want
+  reg.emplace<eng::sim::Npc>(npc);
+  auto& s = reg.emplace<eng::sim::Stats>(npc);
+  s.fatigue.current = 50.0f;  // worn, but not out — so recovery at rest is visible
+
+  eng::sim::steer_npcs(reg);
+  REQUIRE(reg.get<eng::sim::Velocity>(npc).value.x == 0.0f);  // the endless coast is stopped...
+  REQUIRE(reg.get<eng::sim::Velocity>(npc).value.y == 0.0f);
+
+  // ...and at rest, tick_fatigue RECOVERS fatigue (it would have DRAINED it while coasting/moving).
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::tick_fatigue(reg, dt);
+  REQUIRE(reg.get<eng::sim::Stats>(npc).fatigue.current > 50.0f);  // rested up, not worn down
 }
 
 TEST_CASE("moving drains the player's stamina", "[sim]") {
@@ -4178,12 +4207,13 @@ TEST_CASE("an NPC ignores a hazard beyond its senses", "[sim]") {
 
   eng::sim::steer_npcs(reg);
 
-  // Out of range: no threat sensed, so the NPC's existing velocity is left
-  // untouched — it drifts on. Asserting the exact prior value (not just "nonzero")
-  // pins the "leave velocity alone" contract: a version that zeroed or otherwise
-  // changed it here would fail, which a start-from-still test could never catch.
+  // Out of range: no threat sensed, so the flee rung stays dormant — it never pushes the NPC away
+  // from the hazard. With no other want either, the NPC is idle and the fallthrough brings it to
+  // REST: velocity exactly 0. This pins the flee-dormancy sharply — a flee that WRONGLY fired would
+  // shove it left (-x, away from the +x hazard), and the old coast-on-forever bug would leave the
+  // +55 drift; only a correctly-dormant flee + idle-rest gives exactly 0.
   const eng::Vec2 vel = reg.get<eng::sim::Velocity>(npc).value;
-  REQUIRE(vel.x == 55.0f);
+  REQUIRE(vel.x == 0.0f);
   REQUIRE(vel.y == 0.0f);
 }
 

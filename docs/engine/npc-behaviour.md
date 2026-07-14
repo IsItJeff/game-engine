@@ -13,7 +13,8 @@ wants, still perception-then-action, still hard-coded leaves:
 3. **Forage** — if hungry, head for the nearest food orb (a `Pickup`).
 4. **Arm up** — if unarmed, head for the nearest dropped `Weapon` (`npc_equip` wields it on
    reach), so colonists loot the battlefield and fight harder — the player==NPC gear parity.
-5. Otherwise **drift**.
+5. Otherwise **come to rest** — no want, so the colonist settles (velocity 0) and recovers,
+   instead of coasting on a stale velocity forever.
 
 Every steer speed is scaled by `(1 - carried_move_penalty(move_penalty, attrs))` when the NPC is
 **armed**, so a wielded weapon's heft slows an NPC exactly as it slows the player — the item's bane
@@ -64,7 +65,7 @@ flowchart TD
   bond -->|yes| gathb[bond: velocity toward the friend]
   bond -->|no| fire{sociable AND<br/>hearth in range?}
   fire -->|yes| gathf[gather: velocity toward the hearth]
-  fire -->|no| drift[drift: leave velocity alone]
+  fire -->|no| rest[rest: velocity 0 — settle and recover]
 ```
 
 The first matching want wins and the NPC commits to it that tick (a `continue`), so a
@@ -271,7 +272,7 @@ symmetric subjects"* cutting both ways. (The one guard the widened rung needs: a
 doesn't rally to its **own** fame — the self-skip — else it would lock onto itself and stall.) It is
 deliberately a **low** priority (fear is the highest, the personal bond below it lower still): a
 hungry or endangered colonist ignores the hero, so rallying never overrides a real need — it only
-fills the idle moments a colonist would otherwise spend drifting. Below the *Known* line (a neutral
+fills the idle moments a colonist would otherwise spend at rest. Below the *Known* line (a neutral
 colonist, or a villain) it pulls nobody, so a world with only a renowned player is bit-identical to
 before the rung learned to see NPCs. Villainy **repels**, heroism **attracts** — the two faces of one
 scalar.
@@ -382,9 +383,9 @@ the weapon-heft and need debuffs already draw.
 
 The key detail is **what** it scales: the mire drags on the **position delta** `integrate_motion`
 applies this tick — `position += velocity · dt · mire_factor` — and **never the stored velocity**. That
-is what makes it safe for a mover *nothing re-drives each tick*: an ambient **mote**, or an **idle
-loner** the steer ladder left alone (a `sociability ≤ 0` colonist that matched no want-rung keeps its
-drift velocity). Such a mover would, if you scaled its *velocity* in place, have it multiplied down
+is what makes it safe for a mover *nothing re-drives each tick*: an ambient **mote** or a
+**projectile** — outside the `Npc` view the steer ladder never touches. Such a mover would, if you
+scaled its *velocity* in place, have it multiplied down
 every tick — `v, 0.4v, 0.16v …` — to a **frozen stop** it never escapes, stuck in the bog. Scaling the
 *movement* instead leaves the velocity whole, so it **crawls steadily through the mud and out the far
 side**. A re-driven mover (creature / steered NPC / commanded player) travels the same distance either
@@ -396,10 +397,10 @@ exactly — a world without mud moves as before, bit-identical.
 
 !!! note "Fixed in the making"
     An earlier version ran a separate `slow_in_mire` that scaled the *velocity* and had to
-    `exclude<Hazard>` to keep **motes** from compounding to a frozen stop — but idle loners hit the
-    same trap (steer_npcs never re-drives a fully-idle `sociability ≤ 0` colonist, so *its* velocity
-    compounded too, and it stuck in the west-of-centre bog). Scaling the movement in `integrate_motion`
-    fixes every un-re-driven mover at once and drops the special-case exclude.
+    `exclude<Hazard>` to keep **motes** from compounding to a frozen stop. Scaling the movement in
+    `integrate_motion` fixes every un-re-driven mover (mote / projectile) at once and drops the
+    special-case exclude. (An idle colonist is no longer such a mover: `steer_npcs` now re-drives an
+    un-wanting NPC to **rest**, so it never coasts into the bog in the first place.)
 
 ## What to expect
 
@@ -432,7 +433,7 @@ then act, is what stays.
 ## Key files
 
 - `engine/sim/systems.hpp` / `systems.cpp` — `steer_npcs` (the flee / rescue / defend / forage / drink / retreat-to-hearth-or-fire / arm-up / avoid-cold / avoid-grudge / **warrior-hunt** / rally / bond / hearth-gather ladder, speeds scaled by the equip bane; `Personality::bravery` scales the flee, rescue, defend, AND avoid radii (and `Attributes::wisdom` widens the flee sense radius too — awareness), `greed` the forage threshold, `compassion` the rescue speed, `industry` the arm-up radius, `sociability` the rally radius **and** (proportionally) the hearth-gather radius, `loyalty` the bond-follow radius; the flee rung also treats a **villain player** — `standing ≤ -kKnownAt` — as a threat, a **defend** rung (just below the downed-rescue) rushes an idle colonist toward a **bonded friend** a creature is bearing down on (`affinity ≥ kBondPull`, a creature within `kDefendThreatRadius`), an **avoid** rung pushes an idle colonist *away* from an entity it resents (`affinity ≤ kGrudgeThreshold`), a low-priority **rally** rung pulls an idle colonist toward the nearest **renowned entity** (player OR NPC) — `standing ≥ +kKnownAt`, self-skipped — a **bond** rung (below rally) pulls it toward a bonded friend it likes, and a lowest **hearth-gather** rung ambles a sociable idle colonist to the nearest fire; the ladder's first **proactive** want, an **aspiration** rung (just above rally) that `switch`es on the colonist's `Aspiration` kind — a `Warrior` charges the nearest creature within `kHuntRange` (`npc_attack` lands the blows on arrival), a `Provider` walks to the nearest **ripe** food plot within `kTendRange` (the shared `kHarvestCost` bar, so it only heads for a plot it can actually reap; `npc_harvest` reaps it into a meal on arrival); `handle_deaths` does the revive at `kReviveDistance`; `npc_equip` + the shared `equip_nearest_gear` do the wield-on-reach.
-- `engine/sim/systems.hpp` / `systems.cpp` — `integrate_motion` folds the **terrain drag**: a mover in a `MireZone` advances at its `slow_factor` this tick via `mire_factor(reg, pos)` (the stickiest overlapping mire wins). It scales the **movement**, not the stored velocity, so an un-re-driven mover (mote / idle loner) crawls through instead of compounding to a frozen stop; no mire → factor `1.0` → bit-identical.
+- `engine/sim/systems.hpp` / `systems.cpp` — `integrate_motion` folds the **terrain drag**: a mover in a `MireZone` advances at its `slow_factor` this tick via `mire_factor(reg, pos)` (the stickiest overlapping mire wins). It scales the **movement**, not the stored velocity, so an un-re-driven mover (mote / projectile) crawls through instead of compounding to a frozen stop; no mire → factor `1.0` → bit-identical.
 - `engine/sim/components.hpp` — `Personality` (the P7 seed; all six axes wired: `bravery` + `greed` + `compassion` + `industry` + `sociability` + `loyalty`); `Aspiration` + `AspirationKind` (`Warrior`/`Provider`, the proactive drive, default-absent so it's dormant until seeded); `MireZone` (boggy terrain, default-absent scenery). `engine/sim/world.cpp` — `make_npc` sets `Personality` (hand-authored spread in `build_scene`; reinforcements roll `kArchetypes` + jitter via `roll_archetype`, and a *brave* one is given the `Warrior` `Aspiration`, an *industrious* one the `Provider`); `make_mire` places the bog (one west of centre in `build_scene`).
 - `engine/sim/world.cpp` — the `steer_npcs` line in `step()` (before `integrate_motion`, which folds the `MireZone` drag), and `npc_equip` (after it).
 - `tests/sim/test_simulation.cpp` — flee / forage / rescue / revive-in-place, steer-to-weapon / NPC-arms-itself / armed-NPC-flees-slower (the equip bane parity), the villain-fear reader (a colonist flees a Suspect+ player; a downed villain is neither feared nor rescued — the villain-veto, in both steer and `handle_deaths`), and its rally twin (an idle colonist gathers to a Known+ hero, a real need overrides it, and below the line nobody is pulled), and `sociability` scaling how far an idle colonist travels to rally, the **warrior-hunt** (an idle `Warrior` charges the nearest creature; without the aspiration it stays put; and fear outranks the hunt), the **provider** (an idle `Provider` walks to the nearest RIPE plot, not a nearer unripe one it couldn't reap; and `npc_harvest` reaps a ripe plot into a meal for a Provider but not a plain colonist), and the **mire** (a mover crawls a fraction of the distance inside a bog but keeps its velocity; overlapping mires apply the stickiest factor once; and an un-re-driven mover crawls through and exits rather than freezing).
