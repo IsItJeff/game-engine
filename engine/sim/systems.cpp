@@ -3932,7 +3932,19 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
       // Just fell: crumple WHERE you are, helpless. NO heal, NO teleport — that free
       // escape-to-safety was the old anti-climax; now you have to survive the window.
       reg.emplace<Downed>(e);
-      reg.remove<Blocking>(e);  // a crumpled body isn't guarding — drop the stance (inert body)
+      // A crumpled body drops ALL its held combat stances, not just the guard — it isn't guarding,
+      // sprinting, OR winding up a power swing. Blocking was already dropped here; Sprinting and
+      // PowerAttack are the other two MovePlayer stances and were being LEFT SET through the down
+      // window. Inert WHILE Downed (every reader excludes it), but they PERSIST past a revive,
+      // which handle_deaths doesn't clear. The live hazard is PowerAttack: it's cleared only by the
+      // MovePlayer command, and the per-tick Attack command drains BEFORE MovePlayer, so the first
+      // post-revive swing would read the stale powered stance (kPowerDamage 1.75x /
+      // kPowerStaminaCost 18) even after you released the key. Dropping all three on collapse
+      // mirrors the Blocking rule and closes it. Each remove is a no-op if that stance isn't held
+      // (bit-identical for a colonist that held none).
+      reg.remove<Blocking>(e);
+      reg.remove<Sprinting>(e);
+      reg.remove<PowerAttack>(e);
       players.get<Velocity>(e).value = Vec2{0.0f, 0.0f};
       continue;
     }

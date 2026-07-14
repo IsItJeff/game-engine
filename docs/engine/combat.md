@@ -638,7 +638,10 @@ colonist leaves nothing.
     sibling `Stats` system does). You can't grab loot (`collect_pickups`) or **act on input at all** —
     not just movement (`MovePlayer`)
     but *every* action command (swing / throw / cast / mend / equip / drop / harvest / plant) skips a
-    Downed commander in `apply_command`, an ally rescues you rather than the reverse (`handle_deaths`)
+    Downed commander in `apply_command`, an ally rescues you rather than the reverse (`handle_deaths`),
+    and your **held combat stances drop as you crumple** (`handle_deaths` clears Blocking, Sprinting,
+    *and* PowerAttack together, so a stale guard, sprint, or power swing can't ride through a revive —
+    each is inert while you're down, but they'd otherwise persist past it)
     — **and the fight ignores you**. Creatures re-target the living instead of camping your corpse
     (`chase_prey`), and neither a creature swing (`resolve_creature_contacts`), an ambient
     mote (`resolve_contacts`), an **in-flight venom spit** (`advance_projectiles` — a spitter's shot
