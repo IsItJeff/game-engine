@@ -687,12 +687,18 @@ recovered as plain steel, not the instance. A bare, unarmed colonist leaves noth
     `tick_poison`, `handle_deaths` sweeps *later* that same tick), the "inert at 0 HP" rule is spelled
     as a `health <= 0` guard rather than `exclude<Downed>`. It guards the spells — the shared
     `magic_bolt` / `heal_spell`, so a dying colonist mage can't fling a last bolt or mend from beyond
-    the grave (the parity twin of the player, who, guarded on `Downed`, already couldn't) — **and the
-    creature side too**: a **leech's lifesteal** (a leech clamped to 0 by the killing blow can't
-    *drink itself back alive* and dodge the reap) and **`creature_spit`** (a spitter poisoned to 0
-    launches no spit from the grave). The deliberate *exception* is a **melee dying blow**: it's
-    already in motion when the swinger crosses 0, so `resolve_creature_contacts` still lets that last
-    swing land — which is why the leech guard sits on the *drink*, not the swing.
+    the grave (the parity twin of the player, who, guarded on `Downed`, already couldn't) — the
+    **ranged kill vigor** in `advance_projectiles` (a thrower or caster chipped to 0 HP *before* its
+    in-flight shot lands earns no on-kill heal, so its own kill can't heal it back above 0 and dodge
+    the reap — `advance_projectiles` runs *after* `resolve_creature_contacts`/`tick_poison`, so that
+    0-HP window is real) — **and the creature side too**: a **leech's lifesteal** (a leech clamped to
+    0 by the killing blow can't *drink itself back alive* and dodge the reap) and **`creature_spit`**
+    (a spitter poisoned to 0 launches no spit from the grave). The deliberate *exception* is a
+    **melee dying blow**: it's already in motion when the swinger crosses 0, so
+    `resolve_creature_contacts` still lets that last swing land — which is why the leech guard (and
+    the melee kill vigor) sits on the action, not behind a health gate — and it's why the *ranged*
+    vigor needs the guard the melee one doesn't (`npc_attack` runs before any same-tick damage, so a
+    melee killer is always alive; a projectile launched earlier can land after its owner falls).
 
 ### Seeing the blows — the hit-flash
 

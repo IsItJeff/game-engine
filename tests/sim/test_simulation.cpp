@@ -5822,6 +5822,38 @@ TEST_CASE("a ranged kill grants vigor too: a killing throw heals the thrower", "
           50.0f);  // ...and the kill healed the thrower
 }
 
+TEST_CASE("a ranged kill can't heal a dead thrower: kill vigor is inert at 0 HP", "[sim]") {
+  // The "0 HP is inert" invariant at the RANGED kill site -- the leech-drink / caster mirror. A
+  // shot launched while alive can LAND on a later tick, and advance_projectiles runs AFTER
+  // resolve_creature_contacts / tick_poison in the schedule, so its owner may have been chipped to
+  // 0 HP THIS tick (a creature blow, or venom) BEFORE the shot lands. Without a guard, the landing
+  // kill's vigor (+kKillVigor) heals the 0-HP owner back above 0, so handle_deaths (later this
+  // tick) never reaps it -- the owner cheats death and the kill is undone (an NPC survives
+  // permadeath; a player skips going Downed, breaking "survive the window"). Mirrors the
+  // leech-drink guard exactly. RED before the guard: the vigor healed the dead thrower back to 8.
+  entt::registry reg;
+  const entt::entity atk = reg.create();
+  reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(atk).dexterity.level = 20;  // throws hard enough to one-shot
+  reg.emplace<eng::sim::Skills>(atk);
+  reg.emplace<eng::sim::Stats>(atk).health.current = 50.0f;  // ALIVE when it throws (max 100)
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{100.0f, 0.0f});  // in throw range
+  reg.emplace<eng::sim::Stats>(foe,
+                               eng::sim::Vital{2.0f, 2.0f, 0.0f});  // frail -> dies to the shot
+  reg.emplace<eng::sim::Attributes>(foe).endurance.level = 1;
+  reg.emplace<eng::sim::Enemy>(foe);
+
+  eng::sim::perform_throw(reg,
+                          atk);  // launch while alive (the real order: throw, THEN get chipped)
+  reg.get<eng::sim::Stats>(atk).health.current = 0.0f;  // ...chipped to 0 before the shot lands
+  eng::sim::advance_projectiles(reg, 1.0f);             // the shot flies home and fells the foe
+
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == 0.0f);  // the foe still fell...
+  REQUIRE(reg.get<eng::sim::Stats>(atk).health.current ==
+          0.0f);  // ...but a DEAD thrower earns NO vigor -- it stays 0, so handle_deaths reaps it
+}
+
 TEST_CASE("a badly wounded fighter hits harder: berserk mirrors a creature's enrage", "[sim]") {
   // The player/NPC-side mirror of enrage — drop below 30% of your max HP and your blows land 1.5x.
   // Two identical swings differing only in the attacker's health: the cornered one deals more. A
