@@ -135,8 +135,8 @@ collide with warded **armour**'s thorns. What sets it apart:
   the point of raising it.
 - **`Intellect` thickens it, but hunger thins it** — `kBaseAbsorb` (6) + a per-`Intellect`-level
   delta, so the same attribute that sharpens a bolt hardens a shield, then **scaled by the caster's
-  `need_efficiency`** — a starving (or parched, or freezing) mage wards weaker too, the same debuff the
-  bolt and mend already carry, so there is no full-strength-defence loophole under empty needs. Casting
+  `need_efficiency`** — a starving (or parched, freezing, or exhausted) mage wards weaker too, the same
+  debuff the bolt and mend already carry, so there is no full-strength-defence loophole under empty needs. Casting
   it trains `Spellcasting → Intellect`, the same learn-by-doing loop (a dedicated Abjuration/Warding
   skill is a follow-up).
 - **It spends the same mana** — `kShieldManaCost` (25), an empty bar fizzles like the bolt/mend — and

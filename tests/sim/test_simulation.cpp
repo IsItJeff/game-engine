@@ -5647,6 +5647,39 @@ TEST_CASE("a freezing colonist fights weaker too: warmth joins hunger and water 
           Approx(0.5f));  // min picks the worst: hunger, not cold
 }
 
+TEST_CASE("a bone-tired colonist fights weaker too: fatigue is the fourth need in the debuff",
+          "[sim]") {
+  // The design's fatigue path is "empty -> escalating inefficiency debuff -> Downed", but fatigue
+  // used to jump STRAIGHT from full strength to the lethal collapse (handle_deaths at 0) with NO
+  // graded bite between. Now fatigue joins hunger/water/warmth in need_efficiency's worst-of, so a
+  // tiring colonist swings/throws/casts/moves weaker BEFORE it drops -- the missing escalating
+  // debuff. Fatigue defaults full and only falls while exerting, so a rested colony is
+  // bit-identical; the RED demonstrator is that, before this, a bone-tired but fed/watered/warm
+  // colonist wrongly returned 1.0, ignoring the exhaustion entirely.
+  using eng::sim::need_efficiency;
+  using eng::sim::Stats;
+  Stats s;  // defaults: hunger, water, warmth, AND fatigue 100/100
+  REQUIRE(need_efficiency(s) == Approx(1.0f));  // fed, watered, warm, rested -> full power
+
+  s.fatigue.current = 0.0f;                     // bone-tired, but still fed, watered, and warm
+  REQUIRE(need_efficiency(s) == Approx(0.5f));  // RED before: fatigue ignored -> 1.0; now the floor
+
+  s.fatigue.current = 25.0f;  // exactly the threshold: the last quarter hasn't bitten
+  REQUIRE(need_efficiency(s) == Approx(1.0f));
+
+  s.fatigue.current = 12.5f;  // midway into the last quarter -> midway to the floor
+  REQUIRE(need_efficiency(s) == Approx(0.75f));
+
+  // Fatigue is BINDING only when it is the WORST need: an exhaustion that bites (12.5% -> 0.75
+  // alone) under a hunger that bites HARDER (0% -> the 0.5 floor alone) still reads the deeper need
+  // -- the worst governs, so the result is 0.5, not 0.75, and exhaustion neither double-counts nor
+  // lifts a harsher penalty.
+  Stats tired_and_hungry;
+  tired_and_hungry.hunger.current = 0.0f;    // starving (alone -> 0.5 floor) governs...
+  tired_and_hungry.fatigue.current = 12.5f;  // ...over a milder but STILL-BITING weariness
+  REQUIRE(need_efficiency(tired_and_hungry) == Approx(0.5f));  // min picks the worst: hunger
+}
+
 TEST_CASE("need_pallor tracks the combat debuff: a starving colonist looks as gaunt as it fights",
           "[sim]") {
   // The presentation cue is DERIVED from need_efficiency, so the sallow look can never drift from

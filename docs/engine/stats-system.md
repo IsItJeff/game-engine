@@ -154,21 +154,23 @@ crawl**, not a free faster pace. Gated two ways: an exhausted player (0 stamina)
 bit-identical, exactly like the guard.
 
 A **third** consequence closes the loop into combat: `need_efficiency(stats)` saps how hard you
-*hit*. It stays `1.0` while all three needs sit at or above a quarter-full — so a fed, watered, warm
-colony (and every full-fed combat test) fights bit-identically — then ramps **linearly to a half** as
-the *worst* of hunger/water/**warmth** falls to empty, scaling both the swing's `raw`
-(`perform_attack`, shared across its hostile/cruel/cleave branches) and the throw's own `raw` — no
-ranged loophole. A starving, parched, or freezing fighter is weakened, never toothless (a floor, like
-`mitigate`'s 10% chip); reading the *binding* need means topping off only one doesn't lift it — you
-must keep the colony **fed, watered, and warm** to keep its blows at full strength. So an empty Need
-now costs you a third way (softer hits), alongside the stalled heal and the drained second wind — the
-design's escalating inefficiency, all of it emergent from the shared `Vital`/`Stats` sheet. (Warmth is
-the localized need — see below; it feeds this same curve, so cold weakens the blow before it freezes.)
+*hit*. It stays `1.0` while all four needs sit at or above a quarter-full — so a fed, watered, warm,
+rested colony (and every full-fed combat test) fights bit-identically — then ramps **linearly to a
+half** as the *worst* of hunger/water/**warmth**/**fatigue** falls to empty, scaling both the swing's
+`raw` (`perform_attack`, shared across its hostile/cruel/cleave branches) and the throw's own `raw` —
+no ranged loophole. A starving, parched, freezing, or **exhausted** fighter is weakened, never
+toothless (a floor, like `mitigate`'s 10% chip); reading the *binding* need means topping off only one
+doesn't lift it — you must keep the colony **fed, watered, warm, and rested** to keep its blows at
+full strength. So an empty Need now costs you a third way (softer hits), alongside the stalled heal
+and the drained second wind — the design's escalating inefficiency, all of it emergent from the shared
+`Vital`/`Stats` sheet. (Warmth is the localized need — see below; it feeds this same curve, so cold
+weakens the blow before it freezes. **Fatigue** is the latest to join: exhaustion used to jump
+straight from full strength to the lethal collapse — this is the graded bite it was missing.)
 
 A **fourth** reaches the *legs*: the same `need_efficiency` scales **move speed** — in `steer_npcs`
 (folded into the shared `move_scale` every steer rung uses, beside the exhaustion crawl) and in the
-player's `MovePlayer` (`world.cpp`), so a starving, parched, or freezing character **trudges** toward
-whatever it wants. It's applied *uniformly*, even on the way to the food or water that would lift it — a weak body
+player's `MovePlayer` (`world.cpp`), so a starving, parched, freezing, or **exhausted** character
+**trudges** toward whatever it wants. It's applied *uniformly*, even on the way to the food or water that would lift it — a weak body
 is sluggish everywhere — but the same `0.5` floor means it never freezes, so you can always limp to
 the meal. Full needs → `1.0` → the colony moves exactly as before (bit-identical). So an empty Need
 now bites **four** ways: two *threshold* gates that snap on at empty (a stalled heal in
@@ -176,8 +178,8 @@ now bites **four** ways: two *threshold* gates that snap on at empty (a stalled 
 `need_efficiency` curve (a softer hit and, now, a heavier step).
 
 And now it **shows**: `need_pallor(stats)` — a renderer-only cue *derived from* `need_efficiency`
-(one source of truth, so the look can never drift from the penalty) — wastes a starving, parched, or
-freezing dot toward a **sallow grey**, by exactly how much the debuff is biting. A well-fed colonist draws
+(one source of truth, so the look can never drift from the penalty) — wastes a starving, parched,
+freezing, or exhausted dot toward a **sallow grey**, by exactly how much the debuff is biting. A well-fed colonist draws
 unchanged; one running on empty visibly gaunts, so you can read *who's about to fight weak* across
 the field at a glance, not just off the HUD bars. Presentation only — the sim never reads it.
 
@@ -274,6 +276,11 @@ So the sprint you already pay for in stamina (seconds) now also costs in fatigue
 can't run forever" pressure, on a slow background timescale. It clamps to `[0, max]` (a rester never
 overflows full).
 
+And as it drains it **saps you gradually** first: fatigue is the fourth need in `need_efficiency`
+(above), so in its last quarter a bone-tired colonist swings, throws, casts, and **moves** weaker —
+the design's *escalating inefficiency debuff* on the way down, the graded warning that exhaustion used
+to skip. (Full or above a quarter → `1.0` → bit-identical, so a rested colony is unchanged.)
+
 And empty it **collapses** you — the design's *"empty → Downed"*. At 0 fatigue a player crumples
 where they stand, **even at full health**, into the exact same `Downed` window a mortal blow opens:
 `handle_deaths` reuses its whole rescue-or-respawn mechanic, and the revive that brings you back
@@ -314,8 +321,9 @@ the cold. At 0 it **freezes**, chipping health through the same death path as st
 dehydrating (and `regenerate_vitals` gates healing off while frozen, so cold nets health strictly
 down like the other needs). And *before* that lethal chip, warmth is now a full member of the
 **need-efficiency debuff** (`need_efficiency`): a **chilled** colonist — warmth in its last quarter —
-swings, throws, casts, heals, and moves **weaker**, exactly as a starving or parched one does, since
-the debuff reads the *worst* of hunger/water/warmth. So cold bites in two stages: a graded
+swings, throws, casts, heals, and moves **weaker**, exactly as a starving, parched, or exhausted one
+does, since the debuff reads the *worst binding need* (hunger, water, warmth, or fatigue). So cold
+bites in two stages: a graded
 weakening as you chill, then the health chip at empty (and a chilled colonist also visibly wastes,
 `need_pallor` tracking the same binding need). So instead of a "feed me" clock it's a **"flee the
 cold, huddle by the fire"** pressure — and it turns the hearth from a mere field-hospital into a place

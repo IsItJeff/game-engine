@@ -760,36 +760,42 @@ struct Stats {
   Vital warmth{100.0f, 100.0f, 0.0f};  // holds in the open, drains in cold, refills at a fire
 };
 
-// How hard a character can fight given how FED, WATERED, and WARM it is — the design's "an empty
-// Need is an escalating inefficiency debuff", made concrete on the one number both a swing and a
-// throw already scale: raw damage. Efficiency stays 1.0 while ALL THREE needs sit above
-// kNeedPenaltyBelow of their max (the common case — and every full-fed combat test — so combat is
-// bit-identical there), then ramps down LINEARLY to kNeedFloor as the WORST (most-depleted) of
-// hunger/water/warmth falls to empty. The floor mirrors mitigate's 10% chip: a starving OR freezing
-// fighter is weakened, never toothless. Reads the BINDING need (whichever is worse), so topping off
-// only one doesn't lift the debuff — you must keep the colony fed, watered AND warm to keep it at
-// full strength. Warmth is cold's FIRST graded bite (a chilled colonist swings and moves weaker),
-// sitting below the lethal freeze chip drain_warmth deals at 0; and since warmth holds full in the
-// open (draining only in a ColdZone), a world without cold is bit-identical. Pure (no RNG, no sim
-// state beyond the sheet), so combat stays deterministic and this is unit-testable like standing.
+// How hard a character can fight given how FED, WATERED, WARM, and RESTED it is — the design's "an
+// empty Need is an escalating inefficiency debuff", made concrete on the one number a swing, throw,
+// bolt, and stride already scale: raw damage and move speed. Efficiency stays 1.0 while ALL FOUR
+// needs sit above kNeedPenaltyBelow of their max (the common case — and every full-fed combat test
+// — so combat is bit-identical there), then ramps down LINEARLY to kNeedFloor as the WORST
+// (most-depleted) of hunger/water/warmth/FATIGUE falls to empty. The floor mirrors mitigate's 10%
+// chip: a starving, freezing, OR exhausted fighter is weakened, never toothless. Reads the BINDING
+// need (whichever is worse), so topping off only one doesn't lift the debuff — you must keep the
+// colony fed, watered, warm AND rested to keep it at full strength. Fatigue is the LATEST need to
+// join: exhaustion used to jump straight from full strength to the lethal collapse (handle_deaths
+// at 0 fatigue) with no graded bite, so this is the missing "escalating debuff" before the fall — a
+// bone-tired colonist swings and moves weaker, its FIRST graded consequence short of dropping.
+// Fatigue holds full at rest and only falls while exerting, so a rested colony is bit-identical
+// (like warmth, which only drains in a ColdZone). Pure (no RNG, no sim state beyond the sheet), so
+// combat stays deterministic and this is unit-testable like standing.
 inline float need_efficiency(const Stats& s) {
   constexpr float kNeedPenaltyBelow = 0.25f;  // penalty bites only in the last quarter of a need
   constexpr float kNeedFloor = 0.5f;          // bone-empty still swings at half strength, never 0
   const float hunger_frac = s.hunger.max > 0.0f ? s.hunger.current / s.hunger.max : 1.0f;
   const float water_frac = s.water.max > 0.0f ? s.water.current / s.water.max : 1.0f;
   const float warmth_frac = s.warmth.max > 0.0f ? s.warmth.current / s.warmth.max : 1.0f;
+  const float fatigue_frac = s.fatigue.max > 0.0f ? s.fatigue.current / s.fatigue.max : 1.0f;
   float worst = hunger_frac < water_frac ? hunger_frac : water_frac;
   if (warmth_frac < worst)
     worst = warmth_frac;  // cold is a Need too: a chilled colonist is weakened
+  if (fatigue_frac < worst)
+    worst = fatigue_frac;  // and EXHAUSTION: a bone-tired colonist is weakened before it collapses
   if (worst >= kNeedPenaltyBelow)
     return 1.0f;  // comfortable — bit-identical to the pre-debuff world
   return kNeedFloor + (1.0f - kNeedFloor) * (worst / kNeedPenaltyBelow);  // linear kNeedFloor..1.0
 }
 
-// How WORN-DOWN a character LOOKS (starved, parched, OR freezing), in [0, 1] — a renderer-only cue
-// that EXACTLY tracks the combat debuff, so a colonist that fights weaker also visibly wastes. It
-// follows whichever need is binding (need_efficiency reads the worst), so a chilled colonist wastes
-// too, from the same source of truth. Derived straight from
+// How WORN-DOWN a character LOOKS (starved, parched, freezing, OR bone-tired), in [0, 1] — a
+// renderer-only cue that EXACTLY tracks the combat debuff, so a colonist that fights weaker also
+// visibly wastes. It follows whichever need is binding (need_efficiency reads the worst), so a
+// chilled or exhausted colonist wastes too, from the same source of truth. Derived straight from
 // need_efficiency (the one source of truth, so the look and the penalty can never drift apart):
 // need_efficiency runs [kNeedFloor .. 1.0], so 2*(1 - eff) maps that to [0 .. 1] — 0 while a
 // colonist is fed (no pallor, an unchanged draw) up to 1 at empty. The renderer mixes the dot

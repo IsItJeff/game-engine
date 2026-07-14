@@ -111,12 +111,14 @@ dealt = max( raw² / (raw + def),  0.1 × raw )
     blade (see [magic](magic.md)).
 
 An **empty belly saps the blow** before mitigation: `raw` is scaled by `need_efficiency` — `1.0`
-while hunger, water, **and warmth** all sit at or above a quarter-full (so a fed, watered, warm fighter
-is bit-identical), ramping down to a **half** as the *worst* of the three needs empties. A starving,
-parched, **or freezing** fighter hits softer (a floor, never zero), and a **throw scales by the same
-factor** — no ranged loophole — so keeping the colony fed, watered, and **warm** is a combat concern,
-not just a survival one. (Cold's graded bite lands *before* its lethal freeze chip — chill a colonist
-and it fights weaker; freeze it and it dies.) See [the stats system](stats-system.md).
+while hunger, water, warmth, **and fatigue** all sit at or above a quarter-full (so a fed, watered,
+warm, rested fighter is bit-identical), ramping down to a **half** as the *worst* of the four needs
+empties. A starving, parched, freezing, **or exhausted** fighter hits softer (a floor, never zero),
+and a **throw and a bolt scale by the same factor** — no ranged loophole — so keeping the colony fed,
+watered, warm, and **rested** is a combat concern, not just a survival one. (Cold's graded bite lands
+*before* its lethal freeze chip — chill a colonist and it fights weaker; freeze it and it dies. So too
+exhaustion: a **bone-tired** colonist fights weaker before it collapses at 0 fatigue.) See
+[the stats system](stats-system.md).
 
 ### Lucky strikes — crits (Luck)
 

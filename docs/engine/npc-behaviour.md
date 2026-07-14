@@ -106,10 +106,11 @@ down while the NPC is armed — the weapon's heft slows it, so the buff it wield
 for exactly as the player pays (the item's bane bites both) — **and** by exhaustion: a colonist
 that has drained its stamina to 0 by moving crawls at `kExhaustedMoveScale`, the same tireless-no-more
 rule the player pays, since NPCs drain and recover stamina through the identical `update_stamina`.
-**And** by STARVATION: a hungry or parched colonist trudges too — `need_efficiency` (the same debuff
-that saps its swing, floored at half) scales the very same `move_scale`, so a weak body is sluggish on
-every rung, even on its way to the food that would lift it (see [the stats system](stats-system.md)).
-A tired, armed, starving colonist really trudges — all three factors stack into `move_scale`.
+**And** by STARVATION: a hungry, parched, cold, or **bone-tired** colonist trudges too —
+`need_efficiency` (the same debuff that saps its swing, floored at half, now reading fatigue as its
+fourth need) scales the very same `move_scale`, so a weak body is sluggish on every rung, even on its
+way to the food that would lift it (see [the stats system](stats-system.md)). A tired, armed, starving
+colonist really trudges — all three factors stack into `move_scale`.
 
 Two details carry the whole idea:
 
