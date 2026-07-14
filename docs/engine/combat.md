@@ -631,8 +631,12 @@ colonist leaves nothing.
 !!! note "A Downed body is inert — one invariant across every people-facing system"
     Once you're `Downed` you're not a participant, in *any* direction: you don't self-heal
     (`regenerate_vitals`) or **mend your gear by the fire** (`mend_gear` — and that one *would*
-    persist past the down window, since a revive resets vitals and needs but not durability), you
-    can't grab loot (`collect_pickups`) or **act on input at all** — not just movement (`MovePlayer`)
+    persist past the down window, since a revive resets vitals and needs but not durability), nor do
+    your **survival needs tick** — a crumpled body doesn't get hungrier, thirstier, or colder
+    (`drain_hunger` / `drain_water` / `drain_warmth`), and `tick_fatigue` doesn't read its stillness
+    as *rest* and recover its fatigue (the four need-drains now carry the same `exclude<Downed>` every
+    sibling `Stats` system does). You can't grab loot (`collect_pickups`) or **act on input at all** —
+    not just movement (`MovePlayer`)
     but *every* action command (swing / throw / cast / mend / equip / drop / harvest / plant) skips a
     Downed commander in `apply_command`, an ally rescues you rather than the reverse (`handle_deaths`)
     — **and the fight ignores you**. Creatures re-target the living instead of camping your corpse

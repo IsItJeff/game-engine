@@ -602,6 +602,44 @@ TEST_CASE("fatigue falls while exerting and recovers at rest (the third need)", 
           Approx(100.0f));  // a rester at full CLAMPS, never overflows max
 }
 
+TEST_CASE("a downed body is inert to the four survival need-drains too", "[sim]") {
+  // Closing the LAST holes in the "a Downed body is inert" invariant: drain_hunger / drain_water /
+  // drain_warmth / tick_fatigue were the only per-tick Stats systems still missing exclude<Downed>
+  // (every sibling -- regenerate_vitals, update_stamina, mend_gear, collect_pickups, drink, graze,
+  // advance_progression -- already excludes it). So a crumpled body kept getting
+  // hungrier/thirstier/ colder, and tick_fatigue (reading its zeroed velocity as RESTING) even
+  // RECOVERED its fatigue -- all mutating a body the invariant freezes. Masked in a full step
+  // (revive resets these on wake), but a real system-level hole. Every need starts mid-range so a
+  // drain OR a recovery would move it.
+  entt::registry reg;
+  const entt::entity body = reg.create();
+  reg.emplace<eng::sim::Transform>(body, eng::Vec2{0.0f, 0.0f});  // sits inside the cold zone below
+  reg.emplace<eng::sim::Velocity>(body);  // stationary (tick_fatigue reads it)
+  reg.emplace<eng::sim::Downed>(body);    // helpless
+  auto& stats = reg.emplace<eng::sim::Stats>(body);
+  stats.hunger.current = 50.0f;
+  stats.water.current = 50.0f;
+  stats.warmth.current = 50.0f;
+  stats.fatigue.current = 50.0f;
+  // A cold zone ON the body, so drain_warmth WOULD chip its warmth if it ran (proving the exclude
+  // acts, not merely a no-cold no-op).
+  const entt::entity cold = reg.create();
+  reg.emplace<eng::sim::Transform>(cold, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::ColdZone>(cold, eng::sim::ColdZone{100.0f});  // radius covers the body
+
+  const float dt = 10.0f;  // a big step so any drain/recovery would be unmistakable
+  eng::sim::drain_hunger(reg, dt);
+  eng::sim::drain_water(reg, dt);
+  eng::sim::drain_warmth(reg, dt);
+  eng::sim::tick_fatigue(reg, dt);
+
+  const eng::sim::Stats& s = reg.get<eng::sim::Stats>(body);
+  REQUIRE(s.hunger.current == Approx(50.0f));   // no hunger drain (RED before: it fell)
+  REQUIRE(s.water.current == Approx(50.0f));    // no thirst drain
+  REQUIRE(s.warmth.current == Approx(50.0f));   // no cold drain, even sitting in a ColdZone
+  REQUIRE(s.fatigue.current == Approx(50.0f));  // no fatigue RECOVERY (a downed body isn't resting)
+}
+
 TEST_CASE("resting by a hearth recovers fatigue faster than resting in the open", "[sim]") {
   // The "sleep fast" tier via the EXISTING hearth (no new stance): a colonist resting in the fire's
   // warmth mends fatigue faster than one resting alone in the field — the fatigue twin of the
