@@ -119,6 +119,31 @@ TEST_CASE("a downed player is inert through the funnel: it cannot attack throw c
   REQUIRE(reg.get<eng::sim::Stats>(player).stamina.current == Approx(stamina_max));
 }
 
+TEST_CASE("a downed player is inert to DamagePlayer too: no chip no training while helpless",
+          "[sim]") {
+  // The SAME "downed is inert through the funnel" invariant, extended to the LAST funnel command
+  // that lacked the guard: DamagePlayer (the debug-hurt path). A crumpled body must not take a chip
+  // OR train Toughness -> Endurance from a hit, exactly as it can't swing/cast (the sibling test
+  // above) and takes no creature contact damage (resolve_creature_contacts excludes Downed). We
+  // measure the player's OWN health and Endurance XP: while Downed nothing else touches them (no
+  // regen, no leveling), so a chip or an XP gain can only come from an UNGUARDED DamagePlayer.
+  eng::sim::World world;
+  auto& reg = world.registry();
+  const entt::entity player = world.player();
+  reg.emplace<eng::sim::Downed>(player);                    // helpless
+  reg.get<eng::sim::Stats>(player).health.current = 80.0f;  // a known health so a chip would show
+  const eng::Fixed endurance_xp0 = reg.get<eng::sim::Attributes>(player).endurance.xp;
+
+  world.submit(eng::sim::damage_player(eng::sim::kLocalPlayer, 15.0f));
+  world.step();
+
+  // RED before: the unguarded command chipped it to 65 and trained Toughness (endurance.xp > 0).
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current ==
+          Approx(80.0f));  // no chip on a downed body
+  REQUIRE(reg.get<eng::sim::Attributes>(player).endurance.xp ==
+          endurance_xp0);  // and it grew no tougher
+}
+
 TEST_CASE("a diagonal input does not exceed the player's move speed", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

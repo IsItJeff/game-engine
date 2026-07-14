@@ -664,6 +664,12 @@ void World::apply_command(const Command& cmd) {
       auto view = registry_.view<PlayerControlled, Stats>();
       for (const entt::entity e : view) {
         if (view.get<PlayerControlled>(e).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(e))
+          continue;  // a crumpled body is inert — no chip, and no
+                     // train_on_damage below (the "downed is inert
+                     // through the funnel" invariant every sibling
+                     // command and the contact-damage paths uphold;
+                     // this debug-hurt command was the lone gap)
         Vital& health = view.get<Stats>(e).health;
         health.current -= cmd.amount;
         if (health.current < 0.0f) health.current = 0.0f;
