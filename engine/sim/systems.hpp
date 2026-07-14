@@ -354,6 +354,17 @@ inline constexpr std::uint32_t
 inline constexpr int kKeenStrength = 3;  // steel's +4 down one notch — the paired -STR trade
 inline constexpr float kKeenCritBonus = 0.15f;  // +15% crit chance while wielded (a knob)
 
+// The ARMOUR analog of the two weapon traits: a fine sentinel-armour drop can roll WARDED — thorns
+// that reflect a chip onto an attacker, bought with a reduced defence (`spawn_warded_armour`,
+// already wired through the equip fold -> `Equipped.armour_thorns` -> `resolve_creature_contacts`,
+// and unit-tested). Its only spawn was a single hardcoded seed, so warded plate could never appear
+// as loot — this lets it drop like the weapon traits do. Rolled off the SAME dedicated drop stream
+// by ONE portable raw draw; ~15% warded, the rest plain. Only ARMOUR rolls this (steel rolls
+// venomous/keen instead), and it's a SINGLE trait, so one threshold splits warded from plain — no
+// mutually-exclusive band like the weapon's venom/keen. Knobs.
+inline constexpr std::uint32_t kWardedDropThreshold =  // ~15% of mt19937's full 2^32 output range
+    static_cast<std::uint32_t>(0.15 * 4294967296.0);
+
 // React to death. A player at 0 health goes DOWNED — helpless where they fell for a
 // timer (`dt` counts it down); a living ally within reach revives them in place, else on
 // expiry they respawn at `respawn_point`. An NPC or creature at 0 health is destroyed —

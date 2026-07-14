@@ -4187,8 +4187,9 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
   // stdlib, unlike the quality band. ~15% become a heavy poison blade (spawn_venomous_steel:
   // +venom, -1 Strength) and another ~15% a razor-keen blade (spawn_keen_steel: +crit, -1
   // Strength); the rest are plain. Both reuse shipped mechanics (venom -> Poisoned; the Luck crit),
-  // so equip/combat need almost nothing new. Only STEEL rolls a trait — the fang is already
-  // venomous, orb/armour are other kinds.
+  // so equip/combat need almost nothing new. STEEL rolls venomous/keen and ARMOUR rolls WARDED
+  // (below, its own trait via the same raw-draw shape) — the fang is already venomous, the orb is
+  // another kind.
   std::uniform_real_distribution<float> fine_quality{kFineQualityMin, kFineQualityMax};
   for (const entt::entity e : dead) reg.destroy(e);
   for (const Vec2& pos : orb_drops) spawn_pickup(reg, pos);  // swarmer sustain
@@ -4213,7 +4214,21 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
     else
       spawn_weapon(reg, pos, q);  // plain steel (today's path)
   }
-  for (const Vec2& pos : armour_drops) spawn_armour(reg, pos, fine_quality(rng));  // rolled defence
+  for (const Vec2& pos : armour_drops) {
+    // Armour rolls its own named trait, mirroring the weapon loop above: a raw PORTABLE draw first
+    // (bit-identical on every stdlib, unlike the uniform_real quality that follows), off the same
+    // dedicated drop stream. ~15% roll WARDED (thorns, paired -defence); the rest are plain. A
+    // SINGLE trait, so one threshold splits warded from plain — no mutually-exclusive band like
+    // steel's venom/keen. Drawn after the weapon loop in fixed order, so the sequence replays
+    // identically.
+    const auto roll = rng();
+    const float q = fine_quality(rng);  // then the rolled quality (band-tested, not exact)
+    if (roll < kWardedDropThreshold)
+      spawn_warded_armour(reg, pos,
+                          q);  // thorns plate (-defence, reflects a chip onto an attacker)
+    else
+      spawn_armour(reg, pos, q);  // plain plate (today's path)
+  }
   for (const Vec2& pos : venom_drops) spawn_venom_weapon(reg, pos);  // poison build (baseline)
   // A fallen colonist's KIT — a PLAIN blade / plate at baseline quality (1.0), no rng draw:
   // recovered gear is the ordinary kind, not the finer loot a tough KILL rolls. Spawned after the
