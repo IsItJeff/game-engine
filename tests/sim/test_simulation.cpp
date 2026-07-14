@@ -2701,6 +2701,37 @@ TEST_CASE("an unrescued downed player respawns whole at the centre on expiry", "
   REQUIRE(reg.get<eng::sim::Transform>(player).position.x == Approx(centre.x));  // ...at the centre
 }
 
+TEST_CASE("an unrescued respawn moves PrevTransform too so the dot snaps not streaks", "[sim]") {
+  // The renderer interpolates PrevTransform -> Transform. The respawn teleports Transform to the
+  // centre; if PrevTransform stays at the fallen spot the blue dot slides across the whole map for
+  // a frame (or several on a >60Hz monitor). EVERY other teleport/spawn in the engine sets BOTH to
+  // the same value (make_*/spawn_*/the projectile emplaces) -- the unrescued respawn was the lone
+  // one that didn't. A Downed body is stationary (velocity zeroed), so snapshot_previous pins its
+  // PrevTransform at the fallen spot through the whole window, making the mismatch guaranteed.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{10.0f, 10.0f});  // far off-centre...
+  reg.emplace<eng::sim::PrevTransform>(player,
+                                       eng::Vec2{10.0f, 10.0f});  // ...pinned at the fallen spot
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Velocity>(player);
+  reg.emplace<eng::sim::Stats>(player).health.current = 0.0f;  // dead
+
+  const eng::Vec2 centre{640.0f, 360.0f};
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);  // 1st call: goes Downed (no ally near)
+  REQUIRE(reg.all_of<eng::sim::Downed>(player));
+  eng::sim::handle_deaths(reg, centre, 6.0f);  // a fat dt expires the 5s timer -> respawn
+
+  REQUIRE_FALSE(reg.all_of<eng::sim::Downed>(player));
+  // Transform teleports to centre (existing behaviour)...
+  REQUIRE(reg.get<eng::sim::Transform>(player).position.x == Approx(centre.x));
+  // ...and PrevTransform must follow, so prev == curr and the renderer SNAPS instead of sliding.
+  REQUIRE(reg.get<eng::sim::PrevTransform>(player).position.x ==
+          Approx(centre.x));  // RED before: 10
+  REQUIRE(reg.get<eng::sim::PrevTransform>(player).position.y ==
+          Approx(centre.y));  // RED before: 10
+}
+
 TEST_CASE("a living ally revives a downed player in place", "[sim]") {
   // A rescuer within reach hauls the player up WHERE they fell (not teleported to centre) —
   // the co-op payoff that beats waiting out the respawn timer.

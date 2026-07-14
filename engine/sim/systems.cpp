@@ -3897,6 +3897,14 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
       // whole at the field centre. A DELAYED, earned-back respawn, not the old instant one.
       revive(e, s, players.get<Velocity>(e));
       players.get<Transform>(e).position = respawn_point;
+      // Move PrevTransform to the same spot: the renderer interpolates PrevTransform -> Transform,
+      // and a Downed body sat STATIONARY through its whole window (velocity zeroed), so
+      // snapshot_previous pinned PrevTransform at the fallen spot. Without this the respawn tick
+      // leaves prev at the fallen spot and curr at the centre, so the blue dot SLIDES across the
+      // map for a frame instead of snapping. Every other teleport/spawn sets both; this was the
+      // lone one that didn't. try_get because PrevTransform isn't in the `players` view (the real
+      // player has it; a PrevTransform-less unit-test player simply skips this, staying valid).
+      if (auto* pt = reg.try_get<PrevTransform>(e)) pt->position = respawn_point;
       reg.remove<Downed>(e);
     }
   }
