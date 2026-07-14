@@ -327,7 +327,11 @@ bites in two stages: a graded
 weakening as you chill, then the health chip at empty (and a chilled colonist also visibly wastes,
 `need_pallor` tracking the same binding need). So instead of a "feed me" clock it's a **"flee the
 cold, huddle by the fire"** pressure — and it turns the hearth from a mere field-hospital into a place
-you *return* to.
+you *return* to. **Worn armour also insulates**: its padding **halves** the `ColdZone` drain (any
+`Equipped` with `defence_bonus > 0`), so a plated colonist chills slower than a bare one — a survival
+reason to wear gear beyond its defence. It eases only the *drain*, never the freeze chip at 0, so
+armour **delays** freezing but never prevents it. *ponytail:* a flat halving for any armour, not a
+per-piece insulation trait yet — add one if playtest wants warmer vs colder plate.
 The bit-identity gate is spatial: with **no `ColdZone`** in the world nobody ever chills, so warmth
 stays full and untouched. Creatures don't have it drained (the same person-not-monster set), and a
 revive restores it (else you'd wake still freezing).

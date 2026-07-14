@@ -1626,6 +1626,8 @@ void drain_warmth(entt::registry& reg, float dt) {
   constexpr float kWarmRecoverPerSecond =
       6.0f;                                  // ...and how fast a fire mends it (a haven, faster)
   constexpr float kFreezePerSecond = 12.0f;  // health lost per second once warmth hits 0
+  constexpr float kArmourInsulation =
+      0.5f;  // worn armour's padding/layers halve the chill (a survival use for gear beyond combat)
   auto view =
       reg.view<Stats>(entt::exclude<Enemy, Downed>);  // a Downed body is inert -- no need tick
   auto zones = reg.view<ColdZone, Transform>();
@@ -1645,7 +1647,16 @@ void drain_warmth(entt::registry& reg, float dt) {
         }
       }
       if (cold) {
-        s.warmth.current -= kColdDrainPerSecond * dt;
+        // Worn ARMOUR insulates: its padding/layers slow the chill, so a plated colonist keeps its
+        // warmth longer — a survival reason to wear armour beyond combat. Equipped.defence_bonus >
+        // 0 means a plate is worn (a weapon-only Equipped, or a bare/empty one, is 0). No Equipped
+        // or no armour -> full drain -> bit-identical (every existing warmth test is bare). Only
+        // the DRAIN is eased, not the freeze chip below, so armour DELAYS freezing, never prevents
+        // it.
+        const Equipped* eq = reg.try_get<Equipped>(e);
+        const float insulation =
+            (eq != nullptr && eq->defence_bonus > 0.0f) ? kArmourInsulation : 1.0f;
+        s.warmth.current -= kColdDrainPerSecond * insulation * dt;
         if (s.warmth.current < 0.0f) s.warmth.current = 0.0f;  // never below empty
       }
     }
