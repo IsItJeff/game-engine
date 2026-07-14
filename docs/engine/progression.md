@@ -34,11 +34,12 @@ Seventeen strands are wired end to end so far, across all seven attributes:
   but a weapon *always* costs some speed, on the player and NPCs alike;
 - **facing a creature's swing** trains **Evasion**, and **sprinting** (a burst of speed) trains
   **Athletics** — both raise **Dexterity**, your
-  chance to **dodge** a blow entirely (and creatures dodge yours — see
+  chance to **dodge** a blow entirely (and creatures dodge yours, but your **aim** now cuts through
+  their dodge — DEX is a hit-vs-Evasion contest both ways — see
   [combat](combat.md#slipping-the-blow-evasion-dexterity)). Athletics is Conditioning's *burst* twin:
-  steady movement builds Endurance, a **sprint** builds the agility (DEX) that sharpens dodge *and*
-  throw-aim — so a kiter who dashes a lot becomes genuinely harder to hit (player-triggered, like
-  Throwing, since only the player sprints). Agility also **wades a mire's mud faster**
+  steady movement builds Endurance, a **sprint** builds the agility (DEX) that sharpens dodge, **melee
+  aim** (accuracy), *and* throw-aim — so a kiter who dashes a lot becomes genuinely harder to hit AND
+  connects more reliably (player-triggered, like Throwing, since only the player sprints). Agility also **wades a mire's mud faster**
   (`waded_mire_factor`) — the *movement twin* of Strength's weapon-carry and Endurance's armour-bear,
   the same `eased_bane` half-floor so mud always still slows;
 - **collecting loot** trains **Scavenging**, which raises **Luck** — fortune with *two* effects: your

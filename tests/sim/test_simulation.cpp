@@ -6249,6 +6249,38 @@ TEST_CASE("a slippery high-Dexterity creature dodges some of your strikes", "[si
   REQUIRE(hits > 0);    // ...but couldn't dodge them all
 }
 
+TEST_CASE("a keen-eyed attacker's aim beats evasion: Dexterity accuracy lands more strikes",
+          "[sim]") {
+  // The design's hit-vs-Evasion CONTEST: dodge is the DEFENDER's DEX, accuracy the ATTACKER's -- a
+  // defter attacker negates some of a slippery foe's dodge, so it lands more reliably. Two
+  // attackers swing at the SAME slippery foe (DEX 18, at the 50% dodge cap) with the SAME seed;
+  // only their own Dexterity differs. RED before: dodge read only the target's DEX, so a novice and
+  // a master were dodged equally and landed the same count.
+  const auto hits_over_40 = [](int attacker_dex) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).dexterity.level = attacker_dex;  // the attacker's aim
+    reg.emplace<eng::sim::Skills>(atk);  // no Stats -> swings freely
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});  // inside base reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(foe).dexterity.level = 18;  // a slippery foe at the 50% cap
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};
+    int hits = 0;
+    for (int i = 0; i < 40; ++i) {
+      reg.get<eng::sim::Stats>(foe).health.current = 40.0f;  // reset so a hit always shows
+      eng::sim::perform_attack(reg, atk, rng);
+      if (reg.get<eng::sim::Stats>(foe).health.current < 40.0f) ++hits;
+    }
+    return hits;
+  };
+  // A keen-eyed attacker (DEX 18, 50% accuracy) fully cancels the foe's 50% dodge and lands every
+  // strike; a novice (DEX 1, no accuracy) is slipped half the time. So aim beats evasion.
+  REQUIRE(hits_over_40(18) > hits_over_40(1));
+}
+
 TEST_CASE("a lucky attacker crits for extra damage", "[sim]") {
   // Two identical attackers vs identical unkillable dummies over the same seeded stream:
   // one has high Luck (crits), one has none. Neither levels Strength here (no
