@@ -8824,13 +8824,13 @@ TEST_CASE("a creature's blow harms an NPC too, not just the player", "[sim]") {
   REQUIRE(evasion->xp.to_double() > 0.0);
 }
 
-TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, spitter, leech)",
+TEST_CASE("the opening archetypes spawn with their own numbers: brute swarmer spitter leech warden",
           "[sim]") {
   // make_brute/make_swarmer/make_spitter are file-local, but a fresh World seeds one of each. Pin
   // their HP/speed/damage here: make_creature takes three adjacent float params (hp, chase_speed,
   // attack_damage) that a future archetype could transpose silently — this is the guard that would
   // catch it. The spitter also pins its ranged + venom knobs (spit_range/damage/poison), which
-  // melee kinds leave 0.
+  // melee kinds leave 0; the warden pins its magic-ward (high WISDOM) + physical softness (VIT 1).
   eng::sim::World world;
   entt::registry& reg = world.registry();
 
@@ -8838,10 +8838,12 @@ TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, 
   bool saw_swarmer = false;
   bool saw_spitter = false;
   bool saw_leech = false;
+  bool saw_warden = false;
   for (const entt::entity e : reg.view<eng::sim::Enemy>()) {
     const float hp = reg.get<eng::sim::Stats>(e).health.max;
     const eng::sim::Enemy& en = reg.get<eng::sim::Enemy>(e);
-    const int dex = reg.get<eng::sim::Attributes>(e).dexterity.level;
+    const eng::sim::Attributes& at = reg.get<eng::sim::Attributes>(e);
+    const int dex = at.dexterity.level;
     if (hp == Approx(40.0f)) {  // brute: tanky, slow, hits hard — but never dodges
       saw_brute = true;
       REQUIRE(en.chase_speed == Approx(70.0f));
@@ -8863,7 +8865,16 @@ TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, 
       REQUIRE(en.lifesteal_per_hit ==
               Approx(4.0f));           // the sustain — heals per bite (only the leech)
       REQUIRE(en.spit_range == 0.0f);  // melee-only
-    } else {                           // swarmer: fragile, fast, weak — and slippery
+    } else if (hp == Approx(35.0f)) {  // warden: middling melee — but WARDED against magic
+      saw_warden = true;
+      REQUIRE(en.chase_speed == Approx(60.0f));
+      REQUIRE(en.attack_damage == Approx(10.0f));
+      REQUIRE(at.wisdom.level == 16);    // the ward: high WIS -> magic_defence_of blunts a bolt
+      REQUIRE(at.endurance.level == 1);  // ...but physically SOFT (VIT 1) -> a blade lands full
+      REQUIRE(dex == 1);                 // no dodge
+      REQUIRE(en.spit_range == 0.0f);    // melee-only
+      REQUIRE(en.lifesteal_per_hit == 0.0f);  // not a leech
+    } else {                                  // swarmer: fragile, fast, weak — and slippery
       saw_swarmer = true;
       REQUIRE(hp == Approx(15.0f));
       REQUIRE(en.chase_speed == Approx(130.0f));
@@ -8876,4 +8887,5 @@ TEST_CASE("the opening archetypes spawn with their own numbers (brute, swarmer, 
   REQUIRE(saw_swarmer);
   REQUIRE(saw_spitter);
   REQUIRE(saw_leech);
+  REQUIRE(saw_warden);
 }

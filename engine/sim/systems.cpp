@@ -2263,10 +2263,11 @@ float defence_of(const entt::registry& reg, entt::entity e) {
 // The MAGICAL mitigation — the WISDOM twin of defence_of's VIT/armour, the design's "magical
 // INT-vs-WIS": a bolt is resisted by WISDOM (attunement), NOT physical toughness or worn plate.
 // Deliberately NO armour term — steel stops steel, not spells; that asymmetry IS magic's identity,
-// so a plate-tough but un-attuned foe MELTS to a bolt that a sword only chips. A creature carries
-// VIT (make_creature sets endurance = defence_level) but leaves WISDOM at 1, so magic_defence_of is
-// 0 and mitigate(raw, 0) returns the FULL raw: magic PIERCES the armour that blunts a blade. No
-// Attributes
+// so a plate-tough but un-attuned foe MELTS to a bolt that a sword only chips. MOST creatures carry
+// VIT (make_creature sets endurance = defence_level) but leave WISDOM at 1, so magic_defence_of is
+// 0 and mitigate(raw, 0) returns the FULL raw: magic PIERCES the armour that blunts a blade. The
+// WARDEN is the deliberate exception — a high-WISDOM creature built to WARD a bolt (the anti-mage
+// foe), so only it resists. No Attributes
 // -> 0 -> unchanged (and, since existing magic tests target WIS-1 / defence-0 foes, bit-identical).
 // Same kPerX shape as defence_of so the two mitigations tune in parallel.
 float magic_defence_of(const entt::registry& reg, entt::entity e) {

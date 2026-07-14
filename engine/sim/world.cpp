@@ -216,6 +216,22 @@ entt::entity make_leech(entt::registry& reg, Vec2 pos) {
   return e;
 }
 
+// A WARDEN: the ANTI-MAGE — a creature warded against spells. Middling HP (35) and a moderate bite,
+// and physically SOFT (VIT 1, so a blade lands full and wears it down normally), but it carries a
+// high WISDOM, so `magic_defence_of` blunts a bolt hard (the design's INT-vs-WIS mitigation — the
+// SAME magic-defence a WIS-attuned player uses, now on a creature): a novice's bolt barely dents
+// it, and even a trained mage grinds it slower than any other foe. So it COUNTERS a pure-magic
+// build — close and MELEE it rather than plink it from afar. Reuses magic_defence_of wholesale (no
+// new mechanic); every other creature is WIS 1 (magic-defence 0), so they're unchanged — only the
+// warden resists. A muted warded-teal dot. ponytail: HP/speed/attack and the WIS ward are balance
+// knobs.
+entt::entity make_warden(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = make_creature(reg, pos, 35.0f, 60.0f, 10.0f, 1, Vec3{0.35f, 0.6f, 0.55f},
+                                       8.0f);  // warded teal
+  reg.get<Attributes>(e).wisdom.level = 16;    // high WIS -> magic_defence_of ~45 -> wards spells
+  return e;
+}
+
 // Keep the fight alive: once the spawn timer runs out, add a creature at a field edge
 // (if we're under the cap) and reset it. Deterministic — the timer is a fixed per-tick
 // countdown and the position comes from the seeded rng, so every run spawns the same
@@ -485,11 +501,13 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // archetypes show from the start. Strike them (J) to wear their HP down, or THROW (F) at range; a
   // stronger Strength kills faster. The violet SPITTER hangs back and plinks you from afar (close
   // on it or throw back); the blood-red LEECH heals on every bite it lands, so BURST it or kite it
-  // — don't stand and trade. The spawner keeps a mix coming.
+  // — don't stand and trade; the teal WARDEN shrugs off bolts (high WISDOM), so close and MELEE it
+  // rather than cast. The spawner keeps a mix coming.
   make_brute(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
   make_swarmer(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
   make_spitter(reg, Vec2{kFieldWidth * 0.85f, kFieldHeight * 0.15f});
   make_leech(reg, Vec2{kFieldWidth * 0.15f, kFieldHeight * 0.85f});
+  make_warden(reg, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.15f});
 
   // A couple of armour pieces on the field (dull-bronze dots) — walk onto one and press E to
   // don it for +defence at the cost of a slower second wind, the defensive twin of a weapon.
