@@ -641,8 +641,11 @@ colonist leaves nothing.
     Downed commander in `apply_command`, an ally rescues you rather than the reverse (`handle_deaths`)
     — **and the fight ignores you**. Creatures re-target the living instead of camping your corpse
     (`chase_prey`), and neither a creature swing (`resolve_creature_contacts`), an ambient
-    mote (`resolve_contacts`), nor even a **`DamagePlayer` funnel hit** (the debug-hurt command) lands
-    on you — the command-side target guard, the mirror of the actor-side skips above. That last part also closes a real exploit: without
+    mote (`resolve_contacts`), an **in-flight venom spit** (`advance_projectiles` — a spitter's shot
+    that homes on you and lands *after* you crumple, spits flying over several ticks, is dropped
+    *unhit*, the same as a target that vanished; the guard covers every projectile the system carries),
+    nor even a **`DamagePlayer` funnel hit** (the debug-hurt command)
+    lands on you — the command-side target guard, the mirror of the actor-side skips above. That last part also closes a real exploit: without
     it, a helpless body still trained Evasion/Toughness/veteran XP from blows it couldn't
     react to — a risk-free grind (go down beside a swarm, farm attributes, revive to full).
     `advance_progression` (and `update_stamina`) close the *other* half of that grind: a downed

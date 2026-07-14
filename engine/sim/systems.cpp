@@ -3229,8 +3229,18 @@ void advance_projectiles(entt::registry& reg, float dt) {
   auto shots = reg.view<Projectile, Transform>();
   for (const entt::entity s : shots) {
     const Projectile& p = shots.get<Projectile>(s);
-    // Target gone (reaped mid-flight, or never valid) -> the throw is wasted; drop the shot.
-    const Transform* tgt = reg.valid(p.target) ? reg.try_get<Transform>(p.target) : nullptr;
+    // Target gone (reaped mid-flight / never valid) OR Downed -> the shot is WASTED; drop it unhit.
+    // A crumpled body is INERT: it takes no hits, the same exclude<Downed> every other damage site
+    // enforces (resolve_creature_contacts, resolve_contacts, tick_poison, creature_spit,
+    // heal_spell). Without this a venom spit launched at the PLAYER who then crumples mid-flight
+    // would chip the downed body's HP and re-apply Poisoned to a body meant to take no damage.
+    // (Only the player ever goes Downed; an NPC permadeaths, and a spit at an Enemy can't happen.
+    // Spits fly over several ticks, so the player can cross to Downed between launch and impact.)
+    // Matches the existing "target gone first" wasted-shot behaviour; this was the lone combat
+    // damage site missing it.
+    const Transform* tgt = (reg.valid(p.target) && !reg.all_of<Downed>(p.target))
+                               ? reg.try_get<Transform>(p.target)
+                               : nullptr;
     if (tgt == nullptr) {
       spent.push_back(s);
       continue;

@@ -4063,6 +4063,36 @@ TEST_CASE("a downed body takes no hits: no free grind from creatures or motes", 
   REQUIRE(reg.valid(mote));
 }
 
+TEST_CASE(
+    "a downed body takes no hits from a projectile either: the inert invariant reaches ranged",
+    "[sim]") {
+  // The "a crumpled body is inert" invariant extended to the ONE combat damage site that lacked it:
+  // an in-flight shot. A venom spit launched at the PLAYER who CRUMPLES before the shot lands
+  // (spits fly over several ticks; only the player ever goes Downed) must NOT chip the downed
+  // body's HP nor re-poison it — the same exclude<Downed> every melee/contact/tick damage site
+  // enforces. The body is at FULL health, so this proves it's the Downed guard, not a 0-HP
+  // short-circuit. RED before: advance_projectiles homed on and struck the Downed body regardless.
+  // (The test emplaces Downed directly to isolate the guard — it doesn't matter how the body got
+  // there.)
+  entt::registry reg;
+  const entt::entity victim = reg.create();
+  reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(victim).health.current = 100.0f;  // full health, but...
+  reg.emplace<eng::sim::Downed>(victim);                         // ...crumpled -> inert
+  const entt::entity shot = reg.create();
+  reg.emplace<eng::sim::Transform>(shot,
+                                   eng::Vec2{0.0f, 0.0f});  // on the victim -> would impact now
+  reg.emplace<eng::sim::Projectile>(
+      shot, eng::sim::Projectile{victim, entt::null, 20.0f, 600.0f, 5.0f});  // a venom bolt
+
+  eng::sim::advance_projectiles(reg, 1.0f / 60.0f);
+
+  REQUIRE(reg.get<eng::sim::Stats>(victim).health.current == Approx(100.0f));  // no HP chipped...
+  REQUIRE_FALSE(
+      reg.all_of<eng::sim::Poisoned>(victim));  // ...and no venom applied to the inert body
+  REQUIRE_FALSE(reg.valid(shot));  // the wasted shot is dropped, exactly like a gone-target shot
+}
+
 TEST_CASE("touching a hazard damages the player and consumes the hazard", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();
