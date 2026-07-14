@@ -516,6 +516,15 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // --- input as data: keyboard -> a movement direction ---
     const bool* keys = SDL_GetKeyboardState(nullptr);
     const bool imgui_wants_keys = ImGui::GetIO().WantCaptureKeyboard;
+    // Edge ACTIONS (spawn/hurt/attack/hurl/equip/drop/harvest/plant/cast/heal/shield) only fire
+    // when the game owns the keyboard AND the sim isn't paused. The pause gate below zeroes
+    // `steps`, so the per-tick MovePlayer/server.tick() already freeze while paused — but these
+    // edge sends are enqueued OUTSIDE that loop, so without `!paused` they'd pile into the
+    // transport during a pause and all flush on the first tick after unpause (a paused tap of P
+    // five times = -75 HP at once). We gate the ACTION, not the edge state (`_was_down` still
+    // updates every frame below), so a key held across the pause->unpause boundary isn't mistaken
+    // for a fresh press when the game resumes.
+    const bool accept_actions = !imgui_wants_keys && !paused;
     eng::Vec2 dir{0.0f, 0.0f};
     if (!imgui_wants_keys) {
       if (keys[SDL_SCANCODE_A] || keys[SDL_SCANCODE_LEFT]) dir.x -= 1.0f;
@@ -529,7 +538,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // folded focus into the remembered state, ImGui gaining then losing the
     // keyboard while Space stays held would look like a fresh press and spawn twice.
     const bool space_raw = keys[SDL_SCANCODE_SPACE];
-    if (space_raw && !space_was_down && !imgui_wants_keys) {
+    if (space_raw && !space_was_down && accept_actions) {
       const entt::entity player = server.world().player();
       const eng::Vec2 pos = server.world().registry().get<eng::sim::Transform>(player).position;
       transport.send(eng::net::Message{eng::sim::spawn_mote(pos)});
@@ -544,7 +553,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // heal ALSO self-damaged you 15 and spent the mend on someone else. Distinct keys, distinct
     // actions.
     const bool hurt_raw = keys[SDL_SCANCODE_P];
-    if (hurt_raw && !hurt_was_down && !imgui_wants_keys) {
+    if (hurt_raw && !hurt_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::damage_player(eng::sim::kLocalPlayer, 15.0f)});
     }
     hurt_was_down = hurt_raw;
@@ -553,7 +562,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // server picks the target from the player's own position (see the Attack
     // command), destroys it, and trains Striking -> Strength, which lengthens reach.
     const bool attack_raw = keys[SDL_SCANCODE_J];
-    if (attack_raw && !attack_was_down && !imgui_wants_keys) {
+    if (attack_raw && !attack_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::attack(eng::sim::kLocalPlayer)});
     }
     attack_was_down = attack_raw;
@@ -562,7 +571,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // ranged option. Costs stamina, so it's for softening an approaching swarm, not a melee
     // replacement.
     const bool throw_raw = keys[SDL_SCANCODE_F];
-    if (throw_raw && !throw_was_down && !imgui_wants_keys) {
+    if (throw_raw && !throw_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::hurl(eng::sim::kLocalPlayer)});
     }
     throw_was_down = throw_raw;
@@ -570,7 +579,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // E, edge-triggered, wields the nearest dropped weapon in reach (the steel-grey dots a
     // slain brute leaves). The server folds its mods into an Equipped cache — same funnel.
     const bool equip_raw = keys[SDL_SCANCODE_E];
-    if (equip_raw && !equip_was_down && !imgui_wants_keys) {
+    if (equip_raw && !equip_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::equip(eng::sim::kLocalPlayer)});
     }
     equip_was_down = equip_raw;
@@ -579,7 +588,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // heft to sprint clear of a swarm, then circle back and re-wield it (or let a colonist grab
     // it). Same funnel: input becomes a Drop command the server applies.
     const bool drop_raw = keys[SDL_SCANCODE_Q];
-    if (drop_raw && !drop_was_down && !imgui_wants_keys) {
+    if (drop_raw && !drop_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::drop(eng::sim::kLocalPlayer)});
     }
     drop_was_down = drop_raw;
@@ -588,7 +597,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // economy: a prepared meal fills more hunger than grazing the same patch raw. Same funnel:
     // input becomes a Harvest command the server applies.
     const bool harvest_raw = keys[SDL_SCANCODE_G];
-    if (harvest_raw && !harvest_was_down && !imgui_wants_keys) {
+    if (harvest_raw && !harvest_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::harvest(eng::sim::kLocalPlayer)});
     }
     harvest_was_down = harvest_raw;
@@ -597,7 +606,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // grows over time (the same regrow that recovers a grazed patch) and once ripe you HARVEST it
     // (G). Same funnel: input becomes a Plant command the server applies.
     const bool plant_raw = keys[SDL_SCANCODE_T];
-    if (plant_raw && !plant_was_down && !imgui_wants_keys) {
+    if (plant_raw && !plant_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::plant(eng::sim::kLocalPlayer)});
     }
     plant_was_down = plant_raw;
@@ -606,7 +615,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // spell. It spends MANA (not stamina) and only works because the player has LEARNED it
     // (Spellcasting); an empty mana bar or no target fizzles. Same funnel: a Cast command.
     const bool cast_raw = keys[SDL_SCANCODE_C];
-    if (cast_raw && !cast_was_down && !imgui_wants_keys) {
+    if (cast_raw && !cast_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::cast(eng::sim::kLocalPlayer)});
     }
     cast_was_down = cast_raw;
@@ -615,7 +624,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // Same mana bar and learned Spellcasting gate as the bolt; no wounded ally (or no mana)
     // fizzles.
     const bool heal_raw = keys[SDL_SCANCODE_H];
-    if (heal_raw && !heal_was_down && !imgui_wants_keys) {
+    if (heal_raw && !heal_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::cast_heal(eng::sim::kLocalPlayer)});
     }
     heal_was_down = heal_raw;
@@ -624,7 +633,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // H, barrier B). Same mana bar and learned Spellcasting gate; it raises a timed Shielded that
     // soaks part of each creature blow, so you cast it BEFORE wading in. An empty bar fizzles.
     const bool shield_raw = keys[SDL_SCANCODE_B];
-    if (shield_raw && !shield_was_down && !imgui_wants_keys) {
+    if (shield_raw && !shield_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::cast_shield(eng::sim::kLocalPlayer)});
     }
     shield_was_down = shield_raw;
