@@ -1997,6 +1997,54 @@ TEST_CASE("a gathered colonist holds at the fire instead of coasting through it"
   REQUIRE(v.y == Approx(0.0f));  // ...not coasting through and out the far side
 }
 
+TEST_CASE("a colonist that reaches its rally or bond target holds and rests instead of orbiting it",
+          "[sim]") {
+  // The gather rung's hold, extended to the OTHER two person-chase rungs. Rally (toward a hero) and
+  // bond-follow (toward a liked friend) chase at kRallySpeed with no stopping distance, so a
+  // colonist ON its target overshot and ORBITED it every tick, never resting. Now that empty
+  // fatigue kills an NPC, a sociable admirer would EXHAUST itself circling a hero it can never stop
+  // chasing. Within kSocialArrivalRadius each rung now HOLDS (velocity 0); a target still FAR is
+  // chased as before.
+
+  // The public hero rally.
+  const auto rally_vel = [](float colonist_x) {
+    entt::registry reg;
+    const entt::entity hero = reg.create();
+    reg.emplace<eng::sim::Transform>(hero, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(hero);
+    eng::sim::record_deed(reg, hero, eng::sim::Deed::Valor, 3);  // +15 standing -> a "Known" hero
+    const entt::entity c = reg.create();
+    reg.emplace<eng::sim::Transform>(c, eng::Vec2{colonist_x, 0.0f});
+    reg.emplace<eng::sim::Velocity>(c, eng::Vec2{5.0f, 0.0f});  // a stale drift the hold must clear
+    reg.emplace<eng::sim::Npc>(c);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(c).value;
+  };
+  REQUIRE(rally_vel(10.0f).x ==
+          0.0f);  // arrived (10 < kSocialArrivalRadius 24) -> holds, no orbit...
+  REQUIRE(rally_vel(10.0f).y == 0.0f);
+  REQUIRE(rally_vel(50.0f).x < 0.0f);  // ...still far (50 > 24) -> rallies toward the hero (-x)
+
+  // The personal bond-follow (a separate rung, same hold): no hero present, so it falls to the
+  // bond.
+  const auto bond_vel = [](float colonist_x) {
+    entt::registry reg;
+    const entt::entity buddy = reg.create();
+    reg.emplace<eng::sim::Transform>(buddy, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Npc>(buddy);
+    const entt::entity c = reg.create();
+    reg.emplace<eng::sim::Transform>(c, eng::Vec2{colonist_x, 0.0f});
+    reg.emplace<eng::sim::Velocity>(c, eng::Vec2{5.0f, 0.0f});
+    reg.emplace<eng::sim::Npc>(c);
+    reg.emplace<eng::sim::Relationships>(c).edges.push_back(
+        eng::sim::Relation{buddy, 60});  // a Friend-tier bond to follow
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(c).value;
+  };
+  REQUIRE(bond_vel(10.0f).x == 0.0f);  // arrived at the friend -> holds and rests...
+  REQUIRE(bond_vel(50.0f).x < 0.0f);   // ...still far -> follows toward the friend (-x)
+}
+
 TEST_CASE("bravery shapes how far an NPC will commit to a rescue", "[sim]") {
   // Bravery's SECOND read, exercising BOTH directions against the base rescue radius (300):
   //  - GROW: a brave NPC (+100 -> radius 450) at 350 rescues, where a NEUTRAL one (300) could not;

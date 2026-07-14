@@ -202,7 +202,11 @@ underfoot. Sociability reads a **second time** on the ladder's new *last* rung �
 with no hero to rally to and no bonded friend to follow, a sociable colonist ambles to the nearest
 [`Hearth`](stats-system.md) to gather round the fire — and **holds** there once inside (velocity
 zeroed), the twin of the wounded-retreat rung's hold, so it doesn't coast straight through the fire
-and out the far side (`steer_npcs` never damps velocity). So the hearth is a *peacetime* social hub,
+and out the far side. The **rally** and **bond-follow** rungs hold the same way — a colonist within
+`kSocialArrivalRadius` of its hero or friend settles (velocity 0) instead of orbiting it forever — so
+all three *gather-to-someone* rungs **arrive and rest**, they don't circle. (Velocity only changes
+when a rung sets it; there is no gradual decay, so each must zero it explicitly on arrival.) So the
+hearth is a *peacetime* social hub,
 not only the field hospital the wounded-retreat rung makes it. Here the radius is **proportional** to
 sociability (`kHearthGatherRadius × sociability/100`), a deliberately different shape from the
 base-plus-offset rally/bond radii: a neutral, solitary, or personality-less colonist has a
