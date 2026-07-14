@@ -82,6 +82,16 @@ bond, then **find-or-update** the edge toward the target — deepen an existing 
 a new one — so the edge count is the number of *distinct partners*, never per-tick growth.
 Pure integer add, clamped to `±100`, touching no view (safe mid-iteration).
 
+When it **appends a NEW tie**, the starting affinity is seeded by a **personality-match** bias on top
+of the forming event's delta — the design's *"seeded by personality-match"*. `personality_match` is a
+symmetric dot-product over the six axes: two colonists whose traits point the same way (both brave,
+both greedy…) score positive, opposites negative, a mixed pair near zero. It is scaled down to a small
+`±4` seed — kept **under the smallest forming event** — so it *modulates* the start (like minds warm a
+little faster, opposites a little slower) without ever flipping a positive event negative. So **who**
+naturally bonds is shaped by who they *are*, not only what happened. Only when **both** carry a
+Personality; a creature or a bare entity seeds at `0`, bit-identical. Applied only on the *append*
+(never the deepen), so personality sets the start and the event-deltas take over.
+
 The negative event is the **cruel strike** in `perform_attack` (`nudge_affinity(victim, attacker,
 kCrueltyGrudge)` — the struck colonist resents its striker). And that cruelty is **witnessed**: the
 same strike scans the nearby colonists (within `kCamaraderieRadius`, skipping the victim) and gives
@@ -219,9 +229,9 @@ felt strongly about the one who died, in whichever direction they felt.
 
 ## The tradeoffs
 
-- **Five events, a few readers.** No personality-match seeding (that's a later ring) and no
-  *stored* bond stages — the ladder is the derived `bond_tier`, not a slot — just the smallest struct
-  those grow into. (Ties do now **decay** and the deepest **latch**, see above.) Exactly as the
+- **Five events, a few readers**, and no *stored* bond stages — the ladder is the derived `bond_tier`,
+  not a slot — just the smallest struct those grow into. (Ties do now **decay**, the deepest **latch**,
+  and a new tie is **seeded by personality-match** — all see above.) Exactly as the
   morality seed shipped a couple of deeds and let the rest wire themselves.
 - **The readers are getting less coarse.** A gentle gather, a rescue-veto, a graded rescue reach
   (a friend reached from farther), and now an active **defend** — a colonist *charges* to a bonded

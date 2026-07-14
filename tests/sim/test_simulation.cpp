@@ -3142,6 +3142,37 @@ TEST_CASE("standing decays toward neutral over time: reputation fades if unrenew
   REQUIRE(std_of(villain) <= 0);              // ...but hasn't overshot into heroism
 }
 
+TEST_CASE("a new tie is seeded by personality-match: like minds warm faster than opposites",
+          "[sim]") {
+  // The design's "seeded by personality-match" (character-systems.md:116): when an event first
+  // forms a tie, two like-minded colonists (their 6 axes pointing the same way) start a little
+  // WARMER, opposites a little COOLER — so who naturally bonds is shaped by who they ARE, not only
+  // what happened. The seed is kept UNDER the smallest forming event, so it modulates the start
+  // without flipping a positive event negative. A personality-less pair is bit-identical (the tie
+  // is exactly the event delta). RED before: every first tie was bare `delta`, personality-blind.
+  constexpr int delta = 5;  // a camaraderie-sized event (the smallest, so the no-flip guard shows)
+  const auto seeded = [](const eng::sim::Personality* fp, const eng::sim::Personality* tp) {
+    entt::registry reg;
+    const entt::entity from = reg.create();
+    const entt::entity to = reg.create();
+    if (fp) reg.emplace<eng::sim::Personality>(from, *fp);
+    if (tp) reg.emplace<eng::sim::Personality>(to, *tp);
+    eng::sim::nudge_affinity(reg, from, to, static_cast<std::int8_t>(delta));  // the forming event
+    return static_cast<int>(eng::sim::affinity_toward(reg, from, to));
+  };
+  const eng::sim::Personality bold{100, 100, 100, 100, 100, 100};  // a strong personality...
+  const eng::sim::Personality anti{-100, -100, -100,
+                                   -100, -100, -100};  // ...and its exact opposite
+  const int like = seeded(&bold, &bold);               // two like minds
+  const int opposite = seeded(&bold, &anti);           // two opposites
+  const int bare = seeded(nullptr, nullptr);           // no personality on either
+
+  REQUIRE(bare == delta);    // no personality -> exactly the event delta (bit-identical)...
+  REQUIRE(like > bare);      // ...like minds start warmer than the bare event...
+  REQUIRE(opposite < bare);  // ...opposites start cooler...
+  REQUIRE(opposite > 0);  // ...but a POSITIVE event stays positive — the seed modulates, no flip
+}
+
 TEST_CASE("bonds decay toward neutral but the deepest latch: a Partner and Nemesis hold", "[sim]") {
   // The relationships twin of standing decay — an UNLATCHED tie cools toward 0 over time, but a
   // deep bond (Partner, >= +80) or grudge (Nemesis, <= -60) LATCHES and persists (bond_latched). A

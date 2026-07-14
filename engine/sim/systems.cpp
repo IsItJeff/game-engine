@@ -3833,6 +3833,27 @@ void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_
   }
 }
 
+namespace {
+// A symmetric PERSONALITY-MATCH seed for a NEW relationship tie — the design's "seeded by
+// personality-match" (character-systems.md:116). A dot-product over the 6 Personality axes: two
+// colonists whose axes point the SAME way (both brave, both greedy, ...) score positive, opposites
+// negative, a mixed pair near zero. Scaled DOWN to a small ±seed kept strictly UNDER the smallest
+// forming-event delta (kCamaraderieAffinity 5), so it MODULATES a new tie's starting strength —
+// like-minded pairs warm faster, opposites slower — without ever FLIPPING the sign of the event
+// that formed the tie. Symmetric (a·b == b·a) + integer -> replay-safe; two neutral (all-zero)
+// personalities score 0, and a lone strong shared axis (10000/15000) rounds to 0 too, so it takes
+// GENUINE like-mindedness across several axes to register.
+constexpr long kPersonalityMatchDivisor =
+    15000;  // max dot 6*100*100 = 60000, /15000 -> a [-4, +4] seed (a playtest knob)
+std::int8_t personality_match(const Personality& a, const Personality& b) {
+  const long dot =
+      static_cast<long>(a.bravery) * b.bravery + static_cast<long>(a.greed) * b.greed +
+      static_cast<long>(a.compassion) * b.compassion + static_cast<long>(a.industry) * b.industry +
+      static_cast<long>(a.sociability) * b.sociability + static_cast<long>(a.loyalty) * b.loyalty;
+  return static_cast<std::int8_t>(dot / kPersonalityMatchDivisor);  // in [-4, +4]
+}
+}  // namespace
+
 void nudge_affinity(entt::registry& reg, entt::entity from, entt::entity toward,
                     std::int8_t delta) {
   // The whole RELATIONSHIPS write-path, the record_deed twin: lazily give `from` a Relationships on
@@ -3856,7 +3877,19 @@ void nudge_affinity(entt::registry& reg, entt::entity from, entt::entity toward,
       return;
     }
   }
-  rel.edges.push_back(Relation{toward, clamp(static_cast<int>(delta))});  // first tie to `toward`
+  // FIRST tie to `toward`: seed it with a PERSONALITY-MATCH bias on top of the event delta — the
+  // design's "seeded by personality-match" (character-systems.md:116). Two like-minded colonists
+  // start a little warmer, opposites a little cooler, so WHO naturally bonds is shaped by who they
+  // ARE, not only what happened. Only when BOTH carry a Personality; a bare fixture (or a
+  // personality-less entity — a creature, an item) -> bias 0 -> the tie is exactly the delta,
+  // bit-identical to before. Applied ONLY on this first append, never on the deepen path above, so
+  // personality seeds the START and the event-deltas take over from there.
+  int bias = 0;
+  if (const Personality* pf = reg.try_get<Personality>(from))
+    if (const Personality* pt = reg.try_get<Personality>(toward))
+      bias = personality_match(*pf, *pt);
+  rel.edges.push_back(
+      Relation{toward, clamp(bias + static_cast<int>(delta))});  // first tie to `toward`
 }
 
 std::int8_t affinity_toward(const entt::registry& reg, entt::entity from, entt::entity toward) {
