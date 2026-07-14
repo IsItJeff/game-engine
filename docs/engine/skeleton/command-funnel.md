@@ -2,7 +2,7 @@
 
 ## What it is
 
-A **Command** is an *intent* to change the world — "player 1 wants to move left this tick", "spawn a mote here". It is plain data, never an action. The rule the whole engine is built around: **nothing mutates simulation state except by submitting a Command that a single function then applies.** Input handlers, the network, the debug UI, and (later) mods all produce Commands; **`eng::sim::World::apply_command`** in **`engine/sim/world.cpp`** is the only code that turns one into a state change.
+A **Command** is an *intent* to change the world — "player 1 wants to move left this tick", "spawn a mote here". It is plain data, never an action. The rule the whole engine is built around: **nothing mutates simulation state except by submitting a Command that a single function then applies.** Input handlers, the network, the debug UI, and (later) mods all produce Commands; **`eng::sim::World::apply_command`** in **`engine/sim/world.cpp`** is the only code that turns one into a state change. (One narrow, deliberate exception: `World::step` pre-applies the held `PowerAttack` stance from pending `MovePlayer` commands *just before* the drain, so a same-tick edge `Attack` — enqueued ahead of the per-tick move — reads the right stance instead of a stale one. It is a **benign idempotent duplicate** of the write `apply_command` still makes for that same command, not a second source of truth, so replay/determinism and the anti-cheat authorization the choke point buys are untouched.)
 
 Two command kinds exist in the skeleton, defined in **`engine/sim/command.hpp`**:
 

@@ -774,6 +774,39 @@ TEST_CASE("collapsing drops every combat stance not just the guard: no stale pow
   REQUIRE_FALSE(reg.all_of<eng::sim::PowerAttack>(player));  // ...and the power stance, all cleared
 }
 
+TEST_CASE(
+    "a power swing lands the tick you press CTRL: the stance applies before the same-tick attack",
+    "[sim]") {
+  // The FRESH-stance twin of the collapse-clear above. The client enqueues an edge Attack command
+  // BEFORE the per-tick MovePlayer that carries the held PowerAttack stance, so within one tick's
+  // funnel [Attack, MovePlayer] the Attack's perform_attack would read PowerAttack BEFORE
+  // MovePlayer sets it -> the power swing you asked for lands as a plain BASE swing. World::step
+  // now pre-applies the power stance before draining, so a same-tick press-CTRL-and-tap-J is a real
+  // power swing. Run through the FULL funnel (submit in the client's order, then step). Observable
+  // via STAMINA spent: a power swing costs strictly MORE than a base one (kPowerStaminaCost 18 vs
+  // kMeleeStaminaCost 7); the tick's identical at-rest regen cancels between the two runs.
+  const auto stamina_spent = [](bool power) {
+    eng::sim::World world;
+    entt::registry& reg = world.registry();
+    const entt::entity player = world.player();
+    const eng::Vec2 ppos = reg.get<eng::sim::Transform>(player).position;
+    const float stam0 = reg.get<eng::sim::Stats>(player).stamina.current;
+    const entt::entity creature = reg.create();
+    reg.emplace<eng::sim::Transform>(creature, ppos);  // right on the player -> the swing connects
+    reg.emplace<eng::sim::Stats>(creature,
+                                 eng::sim::Vital{100.0f, 100.0f, 0.0f});  // survives the hit
+    reg.emplace<eng::sim::Enemy>(creature);
+    world.submit(eng::sim::attack(eng::sim::kLocalPlayer));  // the edge Attack, enqueued FIRST...
+    world.submit(eng::sim::move_player(eng::sim::kLocalPlayer, eng::Vec2{0.0f, 0.0f}, false, false,
+                                       power));  // ...then the per-tick move carrying the stance
+    world.step();
+    return stam0 - reg.get<eng::sim::Stats>(player).stamina.current;
+  };
+  REQUIRE(stamina_spent(false) > 0.0f);  // the base swing connected and spent (setup is valid)...
+  REQUIRE(stamina_spent(true) >
+          stamina_spent(false));  // ...and the power press spent strictly more -> it WAS powered
+}
+
 TEST_CASE("a trained Survivalist tires slower: the skill lengthens the fatigue timer", "[sim]") {
   // The design's growth source: the Survivalist skill EASES the fatigue drain (eased_bane, never to
   // zero), so a trained survivor lasts longer before exhaustion — the one thing that buffers a
