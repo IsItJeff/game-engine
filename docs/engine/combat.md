@@ -510,9 +510,13 @@ So the weapon choice is now a real build fork: the steel blade's **raw power** v
 **lingering chip + mobility** (soften, then let the poison finish). And the poison build has its own
 **renewable source**: a slain **spitter** drops a venom fang (`DropKind::VenomWeapon`, above), the
 way a sentinel drops its armour — spawned through the one canonical `spawn_venom_weapon`, so a looted
-fang is identical to the one seeded in the opening scene. *ponytail:* dropping a venom blade still
-sheds a *plain* one (the drop reconstructs the default weapon, not the wielded instance's mods) —
-carry the wielder's cached mods into `Drop` once more than one weapon def exists.
+fang is identical to the one seeded in the opening scene. And **a dropped weapon now keeps its
+identity**: `Drop` reconstructs the wielded blade from its cached mods — its traits (a venom proc, a
+keen crit), its heft, *and* its **worn** durability — at quality `1.0` so re-equip folds them back
+without re-scaling. So a keen / venom / half-worn blade dropped to sprint clear of a swarm and
+re-grabbed is the **same** blade, not reset to plain fresh steel — the design's world-entity items,
+the *instance* not just the def. (*ponytail:* the dropped blade renders generic steel-grey; colouring
+it by its trait is a cosmetic follow-up.)
 
 **A second slot — armour.** Gear is now a real offense-vs-defense *choice*, not just a weapon
 on/off. A dull-bronze **`Armour`** piece wears in its own slot alongside the weapon: it adds
@@ -635,9 +639,10 @@ armour (a non-empty `Equipped` slot), that gear lands *where it fell* — a blad
 another colonist, via `npc_equip`) can recover, so a hard-won kit **outlives its bearer** rather than
 vanishing with the corpse. It's the equipment economy's death end, the twin of a slain brute paying
 out a weapon. Recovered gear drops **plain** — baseline quality, no rolled trait, no RNG draw (the
-finer, trait-rolled loot is reserved for a tough *kill*) — matching the `Drop` command's "a dropped
-weapon is a plain one" simplification, so the drop stream stays bit-identical. A bare, unarmed
-colonist leaves nothing.
+finer, trait-rolled loot is reserved for a tough *kill*; a recovered NPC kit is ordinary gear), so
+the drop stream stays bit-identical. This differs from the *player's* `Drop` command, which now
+round-trips the wielded blade's **exact identity** (traits + wear): a fallen colonist's kit is
+recovered as plain steel, not the instance. A bare, unarmed colonist leaves nothing.
 
 !!! note "A Downed body is inert — one invariant across every people-facing system"
     Once you're `Downed` you're not a participant, in *any* direction: you don't self-heal

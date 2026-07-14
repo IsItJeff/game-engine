@@ -3641,19 +3641,35 @@ entt::entity plant_crop(entt::registry& reg, entt::entity planter) {
 }
 
 // Spawn a Weapon on the ground at `pos` — the ONE canonical dropped-weapon entity (a
-// steel-grey dot + Weapon), so a slain BRUTE's drop (handle_deaths) and a player's Drop
-// command produce an identical, re-wieldable pickup. Public so both callers share this one
-// definition of what a grounded weapon looks like (no drift). It spawns the DEFAULT Weapon;
-// that is lossless today because the only Equipped mods come from this same default — when
-// more than one Weapon def exists, Drop must pass the wielder's cached mods instead.
-// ponytail: no lifetime — a dropped weapon persists (brutes are the rarer kill, so they don't
-// pile up); add a fade like Pickup's if the field ever litters.
+// steel-grey dot + Weapon), so a slain BRUTE's drop and a recovered NPC kit produce an identical,
+// re-wieldable baseline pickup. Public so those callers share this one definition of what a plain
+// grounded weapon looks like (no drift). It spawns the DEFAULT Weapon — right for baseline loot.
+// The player's Drop command instead uses the `const Weapon&` overload below to preserve a WIELDED
+// blade's exact identity (its traits + wear), so a keen/venom/worn blade dropped and re-grabbed is
+// the same. ponytail: no lifetime — a dropped weapon persists (brutes are the rarer kill, so they
+// don't pile up); add a fade like Pickup's if the field ever litters.
 void spawn_weapon(entt::registry& reg, Vec2 pos, float quality) {
   const entt::entity e = reg.create();
   reg.emplace<Transform>(e, pos);
   reg.emplace<PrevTransform>(e, pos);
   reg.emplace<RenderDot>(e, Vec3{0.75f, 0.78f, 0.85f}, 6.0f);  // steel grey, a touch bigger
   reg.emplace<Weapon>(e).quality = quality;  // finer than baseline when a tough kill drops it
+}
+
+// Overload: spawn a weapon carrying a SPECIFIC identity (the Drop command's dropped blade). The
+// def's stat block is copied verbatim, so a keen/venom/worn blade dropped and re-grabbed is
+// IDENTICAL — item identity survives the ground (the design's "items are world entities carrying
+// their quality, durability, traits"), not the plain steel a from-nothing spawn makes. Renders the
+// same steel grey as any grounded weapon — the trait TINT isn't reconstructed (a cosmetic
+// follow-up); the FUNCTIONAL identity is what round-trips. ponytail: dropped blades render generic,
+// colour them by trait later.
+void spawn_weapon(entt::registry& reg, Vec2 pos, const Weapon& def) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.75f, 0.78f, 0.85f},
+                         6.0f);  // steel grey, like every grounded blade
+  reg.emplace<Weapon>(e, def);
 }
 
 // Spawn a piece of Armour on the ground at `pos` — the canonical grounded-armour entity, the
