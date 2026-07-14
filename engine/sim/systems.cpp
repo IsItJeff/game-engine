@@ -3355,8 +3355,16 @@ void advance_projectiles(entt::registry& reg, float dt) {
           // KILL VIGOR on a ranged kill too — the same kKillVigor health-back as a melee kill
           // (parity), healing the OWNER (the one who fought), capped at max. A full-health owner is
           // unchanged (bit-identical). p.owner's Stats isn't in the shots view, so this is
-          // view-safe.
-          if (Stats* owner_stats = reg.try_get<Stats>(p.owner); owner_stats != nullptr) {
+          // view-safe. GUARDED on the owner being ALIVE (health > 0), the leech-drink / caster
+          // mirror: advance_projectiles runs AFTER resolve_creature_contacts / tick_poison, so a
+          // shot launched while alive can land on a tick where its owner was ALREADY chipped to 0
+          // HP. Without this guard the landing kill's vigor would heal the 0-HP owner back above 0,
+          // so handle_deaths (later this tick) would never reap it — the owner would cheat death
+          // and the kill be undone (an NPC survives permadeath; a player skips going Downed). 0 HP
+          // is inert. The melee twin (perform_attack) needs no such guard: npc_attack runs BEFORE
+          // any same-tick damage, so its attacker is always alive when it kills.
+          if (Stats* owner_stats = reg.try_get<Stats>(p.owner);
+              owner_stats != nullptr && owner_stats->health.current > 0.0f) {
             owner_stats->health.current += kKillVigor;
             if (owner_stats->health.current > owner_stats->health.max)
               owner_stats->health.current = owner_stats->health.max;
