@@ -8278,6 +8278,37 @@ TEST_CASE("a dropped weapon keeps its keen edge and its wear: identity survives 
   REQUIRE(d.durability == Approx(25.0f));  // ...and so did its worn life (not reset to a fresh 40)
 }
 
+TEST_CASE("a lucky fighter's blade endures: Luck slows durability wear", "[sim]") {
+  // LUCK's "quality/preservation" aspect (its 3rd effect, beside crit and the orb-heal): fortune
+  // slows gear wear, so a lucky wielder's blade lasts longer. Two attackers land the SAME hits on a
+  // near-indestructible foe; only their Luck differs. Deterministic (no RNG on wear) -- Luck 1 =
+  // the full 1.0/hit wear, so every existing durability test is bit-identical. RED before: wear was
+  // a flat 1.0, so a lucky and a plain fighter wore the same.
+  const auto durability_after = [](int luck) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).luck.level = luck;        // the wielder's fortune
+    reg.emplace<eng::sim::Skills>(atk);                              // no Stats -> swings freely
+    reg.emplace<eng::sim::Equipped>(atk).weapon_durability = 40.0f;  // a fresh blade
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});  // in reach
+    reg.emplace<eng::sim::Stats>(foe,
+                                 eng::sim::Vital{100000.0f, 100000.0f, 0.0f});  // survives it all
+    reg.emplace<eng::sim::Attributes>(foe);  // VIT/DEX 1 -> no dodge, so every swing connects
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};
+    for (int i = 0; i < 10; ++i) {
+      reg.get<eng::sim::Stats>(foe).health.current = 100000.0f;  // keep it alive so all 10 connect
+      eng::sim::perform_attack(reg, atk, rng);
+    }
+    return reg.get<eng::sim::Equipped>(atk).weapon_durability;
+  };
+  REQUIRE(durability_after(18) > durability_after(1));  // the lucky blade kept more life...
+  REQUIRE(durability_after(1) ==
+          Approx(30.0f));  // ...and a plain fighter wore the full 10 (40 - 10)
+}
+
 TEST_CASE("dropping a weapon sheds its durability too so no phantom blade mends by the fire",
           "[sim]") {
   // Regression (bug-hunt find): the Drop command clears the weapon slot, and the blade's remaining

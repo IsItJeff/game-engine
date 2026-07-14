@@ -131,9 +131,11 @@ offensive-fortune counterpart to a dodge. After the hit lands, `perform_attack` 
 **Luck grows by looting.** The fourth attribute, **LCK**, is fed by a **Scavenging** skill
 that trains every time you `collect_pickups` an orb. So the health orbs you already grab
 stop being pure sustain and become an *offensive build*: **grab orbs → Scavenging → Luck →
-more crits → faster kills → more orbs.** Luck now pays *twice*: a higher LCK also makes each
-orb **restore more health** (`1 + (LCK − 1)·0.1`, capped ×2 — the design's "richer finds"), so
-the same loot loop sharpens your blade **and** deepens your mending. It's the first stat you grow
+more crits → faster kills → more orbs.** Luck now pays *three* ways: a higher LCK also makes each
+orb **restore more health** (`1 + (LCK − 1)·0.1`, capped ×2 — the design's "richer finds") **and**
+slows your **gear wear** (`durability_wear` — fortune preserves a blade or plate, down to a half
+floor), so the same loot loop sharpens your blade, deepens your mending, **and** keeps your gear
+alive longer. It's the first stat you grow
 with your feet rather than your fists. (Creatures never collect loot, so their LCK stays 1 — they
 never crit or mend from orbs, just as they never train.)
 
@@ -487,8 +489,10 @@ do (both the buff and the carry relief bite both). So the player and NPCs now *r
 brute's blade.
 
 **And the blade wears out.** Beyond the heft, a weapon carries a `durability` (40 connecting hits on
-a hostile), copied onto the wielder's `Equipped` at equip. Each such swing dulls it by one, and at 0
-it **shatters** — the weapon slot clears (strength, heft, *and* venom all gone), and if nothing else
+a hostile), copied onto the wielder's `Equipped` at equip. Each such swing dulls it by one — though a
+**lucky** wielder's blade wears **slower** (`durability_wear` shaves the loss by the wielder's LUCK,
+down to a half floor; LUCK 1 is the full 1, so it's the design's LUCK *quality/preservation* aspect) —
+and at 0 it **shatters** — the weapon slot clears (strength, heft, *and* venom all gone), and if nothing else
 is worn the now-empty `Equipped` is **removed** (exactly as `Drop` does), so "unarmed" reads as
 `gear == nullptr` everywhere. That last part is load-bearing for **NPCs**: `steer_npcs`' arm-up rung
 and `npc_equip` both gate on `Equipped` *presence*, so removing the empty cache is what lets a
@@ -553,7 +557,8 @@ it); with only armour worn, `Q` is a no-op. NPCs grab armour through the same sh
 
 **And the plate wears too.** Armour carries its own `durability` (30 blows, fewer than a blade's 40 —
 plate takes the brunt in a swarm), copied onto `Equipped` at equip. Every creature blow it *softens*
-(`resolve_creature_contacts`) wears it by one, and at 0 it **shatters** — the armour slot clears and
+(`resolve_creature_contacts`) wears it by one — a **lucky** wearer's plate lasts longer too (the same
+`durability_wear` LUCK shaving, driven by the *wearer's* fortune) — and at 0 it **shatters** — the armour slot clears and
 the wearer is bare, the defensive twin of a blade shattering. So the "bane bites both" pillar is now
 whole: **both** slots are consumables you cycle, offence *and* defence. The breaking blow still gets
 full mitigation (wear is applied after), only a piece you're actually wearing wears (a bare or

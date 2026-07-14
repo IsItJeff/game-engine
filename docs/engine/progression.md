@@ -42,12 +42,14 @@ Seventeen strands are wired end to end so far, across all seven attributes:
   connects more reliably (player-triggered, like Throwing, since only the player sprints). Agility also **wades a mire's mud faster**
   (`waded_mire_factor`) — the *movement twin* of Strength's weapon-carry and Endurance's armour-bear,
   the same `eased_bane` half-floor so mud always still slows;
-- **collecting loot** trains **Scavenging**, which raises **Luck** — fortune with *two* effects: your
-  chance to land a **critical hit** for doubled damage (see
-  [combat](combat.md#lucky-strikes-crits-luck)) **and** how much **health a found orb restores** (the
-  design's *richer finds / quality* — `collect_pickups` scales the orb's heal by `1 + (LCK − 1)·0.1`,
-  capped ×2). So a lucky scavenger both crits harder *and* mends more from the same loot, and the
-  loot→Scavenging→Luck loop feeds both;
+- **collecting loot** trains **Scavenging**, which raises **Luck** — fortune with *three* effects:
+  your chance to land a **critical hit** for doubled damage (see
+  [combat](combat.md#lucky-strikes-crits-luck)), how much **health a found orb restores**
+  (`collect_pickups` scales the orb's heal by `1 + (LCK − 1)·0.1`, capped ×2), **and** how slowly your
+  **gear wears** — fortune *preserves* a blade or plate, shaving the per-hit `durability` loss
+  (`durability_wear`, down to a half floor). The design's *richer finds / quality* on three fronts. So
+  a lucky scavenger crits harder, mends more from the same loot, *and* keeps its gear longer, and the
+  loot→Scavenging→Luck loop feeds all three;
 - **landing a thrown hit** trains **Throwing**, which raises **Dexterity** (aim — plus a little
   **Strength** for hurl power), the ranged mirror of Striking (see [combat](combat.md));
 - **grazing a food plot** trains **Foraging**, which raises **Wisdom**, the first *non-combat*
