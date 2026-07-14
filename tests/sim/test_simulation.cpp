@@ -746,6 +746,34 @@ TEST_CASE("exhaustion reaps an NPC too: empty fatigue permakills a colonist pari
       reg.valid(npc));  // exhaustion permakilled it (RED before: health > 0 -> it survived)
 }
 
+TEST_CASE("collapsing drops every combat stance not just the guard: no stale power swing on revive",
+          "[sim]") {
+  // handle_deaths already drops Blocking when a player crumples ("a crumpled body isn't guarding").
+  // Sprinting and PowerAttack — the other two held MovePlayer stances — were LEFT set: inert during
+  // the down but PERSISTING past a revive (handle_deaths doesn't clear them). The hazard is a stale
+  // PowerAttack: the first post-revive swing would read it as a powered blow (the Attack command
+  // drains before the MovePlayer that would clear it). A crumpled body now drops ALL THREE. RED
+  // before: Sprinting and PowerAttack survived the collapse.
+  entt::registry reg;
+  const eng::Vec2 centre{640.0f, 360.0f};
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, centre);
+  reg.emplace<eng::sim::Velocity>(player);
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Stats>(player).health.current =
+      0.0f;                                 // a mortal blow -> collapse this tick
+  reg.emplace<eng::sim::Blocking>(player);  // ...while holding all three stances
+  reg.emplace<eng::sim::Sprinting>(player);
+  reg.emplace<eng::sim::PowerAttack>(player);
+
+  eng::sim::handle_deaths(reg, centre, 1.0f / 60.0f);
+
+  REQUIRE(reg.all_of<eng::sim::Downed>(player));             // crumpled...
+  REQUIRE_FALSE(reg.all_of<eng::sim::Blocking>(player));     // ...guard dropped (as before)...
+  REQUIRE_FALSE(reg.all_of<eng::sim::Sprinting>(player));    // ...and the sprint...
+  REQUIRE_FALSE(reg.all_of<eng::sim::PowerAttack>(player));  // ...and the power stance, all cleared
+}
+
 TEST_CASE("a trained Survivalist tires slower: the skill lengthens the fatigue timer", "[sim]") {
   // The design's growth source: the Survivalist skill EASES the fatigue drain (eased_bane, never to
   // zero), so a trained survivor lasts longer before exhaustion — the one thing that buffers a
