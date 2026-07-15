@@ -5038,6 +5038,46 @@ TEST_CASE("npc_cleanse cures a poisoned ally: the caster parity for the fourth s
   REQUIRE_FALSE(reg.all_of<eng::sim::Poisoned>(ally));  // the colony mage cured its ally's venom
 }
 
+TEST_CASE("casting trains Attunement and a practised caster recharges mana faster: the MP skill",
+          "[sim]") {
+  // The design's MP resource-skill (the mana twin of Recovery for stamina): casting spends mana and
+  // trains Attunement -> Endurance, so a caster's mana pool DEEPENS (Endurance grows mp.max) and
+  // RECHARGES faster by USE. Two checks: (1) a cast grants Attunement XP; (2) a practised
+  // Attunement level raises the mana-regen rate directly (on top of the Endurance boost).
+
+  // (1) Casting the bolt trains Attunement (a fresh caster starts without it).
+  entt::registry reg;
+  const entt::entity mage = reg.create();
+  reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(mage);
+  reg.emplace<eng::sim::Attributes>(mage);
+  reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);  // learned to cast
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{100.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(foe);
+  reg.emplace<eng::sim::Enemy>(foe);
+  eng::sim::magic_bolt(reg, mage);
+  REQUIRE(reg.get<eng::sim::Skills>(mage).find(eng::sim::SkillId::Attunement) !=
+          nullptr);  // the cast trained the mana skill
+
+  // (2) A practised Attunement recharges mana faster (drained bar, one second of regen).
+  const auto mana_after_1s = [](int attunement_level) {
+    entt::registry reg2;
+    const entt::entity e = reg2.create();
+    reg2.emplace<eng::sim::Stats>(e).mp.current = 0.0f;  // drained -> room to refill
+    reg2.emplace<eng::sim::Attributes>(e);               // Endurance 1 -> isolates the skill boost
+    if (attunement_level > 1)
+      reg2.emplace<eng::sim::Skills>(e).train(eng::sim::SkillId::Attunement).level =
+          attunement_level;
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i)
+      eng::sim::regenerate_vitals(reg2, dt);  // 1s
+    return reg2.get<eng::sim::Stats>(e).mp.current;
+  };
+  REQUIRE(mana_after_1s(10) > mana_after_1s(1));  // a practised attuner recharges faster
+}
+
 TEST_CASE("an empty mana bar fizzles a cast: a bolt needs mana in hand", "[sim]") {
   // The mana gate, the magic echo of an exhausted thrower fizzling. A learned mage drained to 0
   // mana casts nothing — no bolt launched.

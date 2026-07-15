@@ -968,6 +968,13 @@ enum class SkillId : std::uint16_t {
              // design's INT Cooking skill, Spellcasting's non-magic sibling): a better cook's meal
              // fills more hunger, so INT scales the meal the way it scales a bolt. Added LAST so
              // existing SkillId values hold.
+  Attunement,  // trained by CASTING (spending mana, every spell). Main attribute ENDURANCE — the
+               // design's VIT MP resource-skill, the mana twin of Recovery for stamina. Its
+               // main-attr feeds the Endurance that GROWS the mana pool (mp.max) AND its base
+               // regen, so a pure caster's mana finally DEEPENS by casting (not only by
+               // moving/fighting); and its OWN level speeds mana regen directly
+               // (kAttunementPerLevel in regenerate_vitals, mirroring Recovery's second wind).
+               // Added LAST so existing SkillId values hold.
 };
 
 // The skills an entity is training — a KEYED collection, so a character can hold a
@@ -1006,7 +1013,9 @@ struct Attribute {
 };
 
 struct Attributes {
-  Attribute endurance;  // fed by Conditioning + Toughness; each level past 1 grows the pools
+  Attribute endurance;  // fed by every Endurance-main VIT skill (Conditioning, Toughness, Recovery,
+                        // Guarding, Resistance, Survivalist, Attunement); each level past 1 grows
+                        // the pools
   Attribute strength;   // fed by Striking; each level past 1 lengthens attack reach + damage AND
                         // eases a wielded weapon's heft (carry, carried_move_penalty below)
   Attribute dexterity;  // fed by Evasion + Striking; each level past 1 raises the dodge chance
