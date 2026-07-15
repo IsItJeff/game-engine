@@ -874,6 +874,20 @@ struct MireZone {
   float slow_factor = 0.4f;  // movement multiplier inside — 0.4 = crawl to ~40% speed. A knob.
 };
 
+// A HAZARD FIELD — persistent damaging terrain (brambles, a scald patch, a thorn bed): anyone
+// standing within `radius` loses HEALTH each tick (tick_hazard_fields), the direct-HP twin of a
+// ColdZone's warmth drain. Where the ColdZone touches a Need and the MireZone touches movement,
+// this bites HP outright — and it bites EVERYONE inside, people AND creatures (the tick excludes
+// only the Downed, not Enemy), so you can KITE a brute across a thorn bed to wear it down: terrain
+// as a weapon, not just an obstacle. 0 HP routes through the normal death path (handle_deaths).
+// Scenery (Transform + a render disc + this); no Stats/Velocity. Distinct from the transient
+// `Hazard` mote above (a consumed-on-contact pickup marker) — this PERSISTS. None in a fresh scene,
+// so the view is empty and the world is bit-identical until one is placed.
+struct HazardField {
+  float radius = 0.0f;
+  float damage_per_second = 8.0f;  // HP chipped per second while inside — a felt bite. A knob.
+};
+
 // A fixed food plot — a berry patch / garden a hungry character GRAZES to refill hunger (the
 // `graze` system). Unlike the water pond it is FINITE: `stock` falls as colonists eat and REGROWS
 // over time toward `max_stock`, so a picked-over patch must recover — the seed of the design's food

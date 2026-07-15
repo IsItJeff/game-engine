@@ -1753,6 +1753,39 @@ void drain_warmth(entt::registry& reg, float dt) {
   }
 }
 
+void tick_hazard_fields(entt::registry& reg, float dt) {
+  // HAZARD FIELD — persistent damaging terrain (brambles, a scald patch): anyone standing within a
+  // field's radius loses HEALTH each tick, the direct-HP twin of a ColdZone's warmth drain (and the
+  // lingering cousin of the bomber's one-off death blast). Unlike the ColdZone it bites CREATURES
+  // too (the victim view excludes only Downed, NOT Enemy), so you can KITE a brute across a thorn
+  // bed to wear it down — terrain as a weapon. 0 HP routes through the normal death path
+  // (handle_deaths, later this step): a player Downs, an NPC or creature permadies, exactly as
+  // starving does. A Downed body is inert (excluded, like every need tick). No HazardField placed
+  // -> the field view is empty -> the early-out returns before touching anyone -> bit-identical.
+  // Draws no RNG.
+  auto fields = reg.view<HazardField, Transform>();
+  if (fields.begin() == fields.end())
+    return;  // no field placed -> nothing to tick (the common case)
+  for (const entt::entity e : reg.view<Stats, Transform>(entt::exclude<Downed>)) {
+    const Vec2 pos = reg.get<Transform>(e).position;
+    float worst = 0.0f;  // the highest damage_per_second among the fields covering this spot
+    for (const entt::entity f : fields) {
+      if (glm::distance(pos, fields.get<Transform>(f).position) <
+          fields.get<HazardField>(f).radius) {
+        // Overlapping fields don't STACK — the WORST (deadliest) bites, applied once, exactly as
+        // the mire's stickiest drag wins: not iteration-order-dependent, not a summed double chip.
+        const float dps = fields.get<HazardField>(f).damage_per_second;
+        if (dps > worst) worst = dps;
+      }
+    }
+    if (worst > 0.0f) {  // in at least one field -> take the deadliest one's bite this tick
+      Vital& h = reg.get<Stats>(e).health;
+      h.current -= worst * dt;
+      if (h.current < 0.0f) h.current = 0.0f;  // never below empty
+    }
+  }
+}
+
 void tick_fatigue(entt::registry& reg, float dt) {
   // Fatigue is the ODD need: it falls while you EXERT and RECOVERS while you rest — the "you can't
   // run forever" pressure, on a slow (minutes) background timescale like hunger/water. The same
