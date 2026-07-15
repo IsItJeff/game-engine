@@ -5002,6 +5002,59 @@ TEST_CASE("a veteran's grind sharpens the throw and the bolt not just the blade"
   REQUIRE(bolt_damage(1) == Approx(30.0f));
 }
 
+TEST_CASE("the held POWER stance reaches the throw: a powered hurl hits harder for a dearer cost",
+          "[sim]") {
+  // Completing the design's "power shapes EVERY attack, not just the swing": a throw made while
+  // holding the CTRL power stance (the PowerAttack marker) hits kPowerThrowDamage (1.75x) harder
+  // and spends kPowerThrowStaminaCost (26) instead of the base 15 — the ranged mirror of
+  // perform_attack's power swing. No marker -> 1.0 / base cost -> bit-identical, which the existing
+  // throw tests pin; this pins the powered side. The foe is VIT 1 (defence 0) so mitigate is a
+  // no-op and the projectile carries the raw, so the multiplier reads exactly.
+  const auto throw_damage = [](bool powered) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).dexterity.level =
+        5;  // an earned delta, as the other throw tests
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk);
+    if (powered) reg.emplace<eng::sim::PowerAttack>(atk);  // the held CTRL stance
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});  // in throw range
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(foe);  // VIT 1 -> defence_of 0 -> mitigate no-op
+    reg.emplace<eng::sim::Enemy>(foe);
+    eng::sim::perform_throw(reg, atk);
+    return reg.get<eng::sim::Projectile>(*reg.view<eng::sim::Projectile>().begin()).damage;
+  };
+  const auto stamina_spent = [](bool powered) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);  // Endurance 1 -> eased_cost is the full base
+    reg.emplace<eng::sim::Skills>(atk);
+    auto& s = reg.emplace<eng::sim::Stats>(atk);
+    if (powered) reg.emplace<eng::sim::PowerAttack>(atk);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(foe);
+    reg.emplace<eng::sim::Enemy>(foe);
+    eng::sim::perform_throw(reg, atk);
+    return s.stamina.max - s.stamina.current;
+  };
+
+  // Damage: a rookie throw is 8 + (5-1)*3 = 20; powered scales the whole hit by 1.75 -> 35.
+  REQUIRE(throw_damage(false) == Approx(20.0f));      // base — unchanged from before the stance
+  REQUIRE(throw_damage(true) == Approx(35.0f));       // 20 * 1.75
+  REQUIRE(throw_damage(true) > throw_damage(false));  // ...harder, plainly
+
+  // Cost: the powered wind-up spends 26 (vs the base 15) — dearer, so you can't power-throw
+  // forever.
+  REQUIRE(stamina_spent(false) == Approx(15.0f));
+  REQUIRE(stamina_spent(true) == Approx(26.0f));
+}
+
 TEST_CASE("an unlearned caster cannot cast: magic is learned not innate", "[sim]") {
   // The LEARNED gate — the design's "magic is taught, not innate". A colonist with a full mana bar
   // but no Spellcasting skill flings nothing: no bolt, no mana spent. This is what keeps a world of

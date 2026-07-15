@@ -92,7 +92,8 @@ flowchart TD
   `mire_factor` that slows every other movement — the *raw* factor, not the agility-eased wade a
   self-driven mover earns (a passive shove is a projectile, not the foe nimbly picking its way).
   Sampled once at the foe's current spot, so a foe shoved *in from* dry ground still flies the full
-  `kKnockback` (as does any shove with no mire).
+  `kKnockback` (as does any shove with no mire). The same held stance now reaches the **throw** too
+  (see *Throwing* below) — power shapes *every* attack, not just the swing.
 
 ### The damage contest — Strength vs VIT
 
@@ -412,14 +413,21 @@ approaching swarm before it reaches you**, not to replace melee, and two rules k
   forever for free. Out of stamina, the throw **fizzles** — nothing spent, no damage.
 - **It's plain.** Unlike a swing, a throw draws **no RNG** — no dodge, no crit, no execute, no
   backstab — for a modest, *reliable* `kBaseThrowDamage` (8, less than melee's 12) plus your earned **Dexterity**,
-  softened by the target's VIT. Ranged trades melee's burst potential (crits, execute) for range and
-  certainty. That earned-Dexterity delta **compounds with your character level** through the same
+  softened by the target's VIT. Ranged trades melee's *random* burst (crits, execute) for range and
+  certainty — the one deliberate way to hit harder is the held power stance (next bullet), paid for in
+  stamina, not luck. That earned-Dexterity delta **compounds with your character level** through the same
   [veteran layer](progression.md) a swing rides (`veteran_mult` — the design's `POWER(char_level)` is
   a global multiplier on *everything* you earn, not melee alone), so a grinding thrower's aim sharpens
   with them; only the *earned* part scales, so a fresh thrower is `POWER(0)` = 1.0 — unchanged. It
   trains **Throwing → Dexterity** (a little Strength too) — the aim-led mirror of a
   swing's Striking → Strength; and a *killing* throw credits **Valor** just like a melee kill, so
   the morality ledger doesn't care which hand felled the foe.
+- **Powering reaches it too.** Held CTRL (the same `PowerAttack` stance that heavies a swing) makes a
+  throw hit `kPowerThrowDamage` (**1.75×**) harder for a dearer `kPowerThrowStaminaCost` (**26**, vs
+  the base 15) — the ranged arm of "power shapes *every* attack, not just the swing." It's the one
+  deliberate way to burst with a throw, and unlike a crit it's **paid for in stamina, not luck** (still
+  no RNG); the dearer wind-up means you can't power-plink a swarm forever. No stance held → 1.0 / the
+  base cost → every existing throw is bit-identical. Player-only like the throw itself (no NPC powers).
 
 It targets `Enemy` creatures only — never a peaceful colonist (villainy stays a deliberate melee
 choice) nor a mote. Player-only for now: there is no `npc_throw`, so NPCs still only melee.

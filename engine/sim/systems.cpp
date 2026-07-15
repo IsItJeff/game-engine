@@ -3042,20 +3042,27 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   // The player's RANGED option — hurl something at the nearest hostile far out of melee reach,
   // chipping an approaching swarm before it closes. What sets it apart from a melee swing: it draws
   // NO RNG (no dodge, no crit, no execute) — a plain, reliable, MODEST hit, so ranged trades
-  // melee's burst potential for range and certainty. Like a swing it COSTS STAMINA
-  // (kThrowStaminaCost, dearer than melee's kMeleeStaminaCost — a bigger wind-up): a standing
-  // character out-regenerates a slow plink, but throwing fast, or on the move (kiting drains far
-  // more than regen), empties the bar and drops you to the same exhausted crawl a sprint causes
-  // (update_stamina's gate), and an empty bar can't throw at all. So the cost keeps range honest:
-  // you can soften an approach but can't burst a swarm down or kite one forever for free. The hit
-  // isn't dealt HERE — this LAUNCHES a homing Projectile that advance_projectiles flies to the
-  // target and lands on arrival (so a throw has a visible travel time, and is wasted if the target
-  // dies first). Player-only for now: there is no npc_throw, so NPCs still only melee (a
+  // melee's RANDOM burst (crit/execute) for range and certainty — the one deliberate way to hit
+  // harder is the held POWER stance (below), paid for in stamina, not luck. Like a swing it COSTS
+  // STAMINA (kThrowStaminaCost, dearer than melee's kMeleeStaminaCost — a bigger wind-up): a
+  // standing character out-regenerates a slow plink, but throwing fast, or on the move (kiting
+  // drains far more than regen), empties the bar and drops you to the same exhausted crawl a sprint
+  // causes (update_stamina's gate), and an empty bar can't throw at all. So the cost keeps range
+  // honest: you can soften an approach but can't burst a swarm down or kite one forever for free.
+  // The hit isn't dealt HERE — this LAUNCHES a homing Projectile that advance_projectiles flies to
+  // the target and lands on arrival (so a throw has a visible travel time, and is wasted if the
+  // target dies first). Player-only for now: there is no npc_throw, so NPCs still only melee (a
   // creature-ranged AI, reusing the same Projectile, is a later ring).
   constexpr float kThrowRange = 350.0f;       // vastly longer than a melee swing's ~45 reach
   constexpr float kThrowStaminaCost = 15.0f;  // each connecting throw spends this
   constexpr float kBaseThrowDamage = 8.0f;  // raw before Dexterity (weaker than a melee swing's 12)
   constexpr float kDamagePerDexterity = 3.0f;  // each Dexterity level past 1 sharpens the throw
+  constexpr float kPowerThrowDamage = 1.75f;   // the held POWER stance's throw premium — the SAME
+                                               // 1.75x as the power swing (perform_attack's
+                                               // kPowerDamage): power shapes EVERY attack, not the
+                                               // swing alone
+  constexpr float kPowerThrowStaminaCost = 26.0f;  // ...for a dearer wind-up than the base 15 — the
+                                                   // throw twin of the swing's kPowerStaminaCost
   const Fixed kThrowingPerHit = Fixed::from_int(10);
 
   const Transform* tf = reg.try_get<Transform>(attacker);
@@ -3083,10 +3090,18 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   // Winding up needs stamina in hand — an exhausted thrower fizzles (nothing spent, no XP), the
   // ranged echo of the empty-stamina melee crawl. Strict <, so a throw at exactly the cost still
   // lands and a throw at exactly 0 can't.
+  // The held POWER stance reaches the THROW too — a powered hurl hits kPowerThrowDamage harder for
+  // a dearer kPowerThrowStaminaCost, the ranged mirror of the power swing (perform_attack).
+  // PowerAttack is a PLAYER stance (set from MovePlayer like Blocking/Sprinting) and perform_throw
+  // is player-only, so no NPC ever powers a throw; and no marker -> power 1.0 / the base cost ->
+  // every existing throw is bit-identical. Read once for BOTH the cost here and the damage below,
+  // exactly as the swing does.
+  const bool powered = reg.all_of<PowerAttack>(attacker);
+  const float power = powered ? kPowerThrowDamage : 1.0f;
   // VIT eases the throw's stamina COST too (eased_cost, the same "Cost" aspect as the swing): a
-  // hardier thrower spends less per hurl. Endurance 1 -> the full 15 -> bit-identical. `attrs` is
+  // hardier thrower spends less per hurl. Endurance 1 -> the full base -> bit-identical. `attrs` is
   // the thrower's sheet (non-null here).
-  const float throw_cost = eased_cost(kThrowStaminaCost, attrs);
+  const float throw_cost = eased_cost(powered ? kPowerThrowStaminaCost : kThrowStaminaCost, attrs);
   if (stats->stamina.current < throw_cost) return;
   stats->stamina.current -= throw_cost;
 
@@ -3106,9 +3121,12 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   // `stats`/`character` were fetched above (stats non-null here; character nullable, which
   // veteran_mult treats as level 1).
   const float veteran = veteran_mult(character);
+  // ...and finally the held POWER stance scales the whole hit (power, 1.0 unless powering) — a
+  // deterministic kPowerThrowDamage multiplier you PAY for in stamina, NOT a random burst, so the
+  // "no RNG" promise still holds.
   const float raw = (kBaseThrowDamage + static_cast<float>(attrs->dexterity.level - 1) *
                                             kDamagePerDexterity * veteran) *
-                    need_efficiency(*stats);
+                    need_efficiency(*stats) * power;
   const float applied = mitigate(raw, defence_of(reg, target));
 
   // The hit isn't dealt here — instead we LAUNCH a homing Projectile carrying that (already

@@ -675,8 +675,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
     // both.
     const bool sprint =
         !imgui_wants_keys && (keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT]);
-    // Hold CTRL to POWER your swings — each hits harder but costs more stamina (see PowerAttack),
-    // the offensive twin of sprint. Also a held stance on the per-tick MovePlayer command;
+    // Hold CTRL to POWER your attacks — every hit lands harder for a dearer stamina cost (see
+    // PowerAttack): a swing AND a throw both, since power shapes EVERY attack, not just the swing.
+    // The offensive twin of sprint. Also a held stance on the per-tick MovePlayer command;
     // orthogonal to guard/sprint (it shapes the ATTACK, not the movement), so it stacks with
     // either.
     const bool power = !imgui_wants_keys && (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]);
