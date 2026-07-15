@@ -3926,6 +3926,27 @@ TEST_CASE("allies_of counts the colonists bonded to an entity: the camaraderie p
   REQUIRE(eng::sim::allies_of(reg, player) == 2);  // a and b, not c, not the self-directed edge
 }
 
+TEST_CASE("foes_of counts the colonists who resent an entity: the enmity mirror of allies_of",
+          "[sim]") {
+  // The INCOMING-GRUDGE count, the negative mirror of allies_of: every colonist that resents the
+  // player (affinity <= kGrudgeThreshold -20) is one that WON'T cross the field to rescue it. A
+  // mild disliker (above the grudge line), the player's OWN outgoing grudge, and the player itself
+  // must NOT inflate the count.
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  const entt::entity a = reg.create();
+  const entt::entity b = reg.create();
+  const entt::entity c = reg.create();
+  REQUIRE(eng::sim::foes_of(reg, player) == 0);  // nobody resents it yet -> no foes
+
+  eng::sim::nudge_affinity(reg, a, player, -30);  // a real grudge (<= kGrudgeThreshold -20)...
+  eng::sim::nudge_affinity(reg, b, player, -20);  // ...another, exactly at the threshold...
+  eng::sim::nudge_affinity(reg, c, player, -10);  // ...but c only mildly dislikes it (> threshold)
+  eng::sim::nudge_affinity(reg, player, a, -50);  // the player's OWN outgoing grudge doesn't count
+
+  REQUIRE(eng::sim::foes_of(reg, player) == 2);  // a and b, not c, not the self-directed edge
+}
+
 TEST_CASE("the public hero-rally still beats a personal bond", "[sim]") {
   // The gating claim that keeps the public rally byte-identical: the bond-pull sits BELOW the
   // hero-rally, so when a renowned hero is present it claims the rung first. A colonist with a

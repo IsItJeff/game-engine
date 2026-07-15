@@ -4524,6 +4524,27 @@ int allies_of(const entt::registry& reg, entt::entity e) {
   return count;
 }
 
+int foes_of(const entt::registry& reg, entt::entity e) {
+  // Count the entities that hold a GRUDGE against `e` — an incoming affinity at/below
+  // kGrudgeThreshold — the negative mirror of allies_of, the "who resents me" readout beneath
+  // standing's global scalar. A resented colonist won't cross the field to rescue `e` (the
+  // abandonment half of the grudge, in steer_npcs + handle_deaths); foes_of surfaces HOW MANY hold
+  // that grudge, so a cruel player reads the enmity it has sown. Same whole-registry scan as
+  // allies_of (only the bonded carry a Relationships, so a fresh world counts 0). Skips `e`. A pure
+  // read used by the HUD; the sim never calls it.
+  int count = 0;
+  for (auto [other, rel] : reg.view<const Relationships>().each()) {
+    if (other == e) continue;  // an entity isn't its own foe
+    for (const Relation& edge : rel.edges) {
+      if (edge.other == e && edge.affinity <= kGrudgeThreshold) {
+        ++count;  // one foe, however many edges it holds toward e (it holds at most one)
+        break;
+      }
+    }
+  }
+  return count;
+}
+
 namespace {
 // Drop a fallen colonist's KIT where it fell — its wielded weapon and/or worn armour land as
 // recoverable ground gear ("gear outlives its bearer"). SHARED by the two REAP sites (the

@@ -423,6 +423,14 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   // steer_npcs defend rung will send rushing to your side when a creature closes in. Shown even at
   // 0 (you've won nobody over yet). A cheap whole-registry scan.
   ImGui::Text("allies: %d", eng::sim::allies_of(world.registry(), player));
+  // Foes: the negative mirror — how many colonists hold a GRUDGE against the player (an incoming
+  // affinity <= kGrudgeThreshold, sown by cutting them down). Each is one colonist that WON'T cross
+  // the field to rescue you (the grudge's abandonment half), so a cruel player reads the enmity
+  // it's made. Only shown when there IS enmity (> 0) — a well-liked player has no foes line to
+  // clutter it.
+  if (const int foes = eng::sim::foes_of(world.registry(), player); foes > 0) {
+    ImGui::TextColored(ImVec4{0.95f, 0.4f, 0.4f, 1.0f}, "foes: %d", foes);
+  }
   if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
     // Show one learned skill's level + progress bar. Toughness only appears once the
     // player has taken a hit (it isn't in `owned` until then), so guard on find().

@@ -44,6 +44,10 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
   reads out the player's **closest bond** by it — and, beside it, an **`allies`** count: how many
   colonists have bonded *to* the player (`allies_of`, the incoming mirror of the closest outgoing
   tie), which is exactly the set the [defend rung](npc-behaviour.md) will send rushing to your side.
+  Its negative twin, a red **`foes`** count (`foes_of`), shows only when there IS enmity — how many
+  colonists hold a **grudge** *against* the player (incoming affinity ≤ `kGrudgeThreshold`, sown by
+  cutting them down), each one that **won't cross the field to rescue you**: a cruel player reads the
+  enmity it has made, the incoming twin of the outgoing grudge.
   The deep bands **latch**: `bond_latched` (a Partner
   `≥ +80` or a Nemesis `≤ −60`) marks a tie that **resists decay**, so the strongest bonds and grudges
   persist while casual ones fade (see the leak below). A **Partner** earns defend teeth to match its
@@ -306,8 +310,8 @@ standing to choose stances (befriend / protect / exploit).
 - `engine/sim/components.hpp` — `Relation` (one directed tie) and `Relationships` (the
   lazy sparse edge list), placed beside `BehaviorLedger`/`standing`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `nudge_affinity` (the single write-point, the
-  `record_deed` twin), `affinity_toward` (its read-side counterpart), and `allies_of` (the incoming
-  count the HUD shows); `socialize` (the peaceful *befriend* path — hearth-mates warm over time,
+  `record_deed` twin), `affinity_toward` (its read-side counterpart), and `allies_of` / `foes_of` (the
+  incoming bond / grudge counts the HUD shows); `socialize` (the peaceful *befriend* path — hearth-mates warm over time,
   staggered from `step` every `kSocialPeriod`); the bond formed at
   `handle_deaths`' rescue branch, the victim grudge **and** the witness-grudge spread (`kWitnessGrudge`)
   at `perform_attack`'s cruel-strike branch, and `bond_witnesses` (camaraderie) at `perform_attack`'s
@@ -322,8 +326,8 @@ standing to choose stances (befriend / protect / exploit).
   stale-handle guard, the grudge (a cruel strike resents the striker; a grudge-holder
   won't cross to rescue nor haul up the resented), the graded rescue reach (a bond extends the
   trek beyond the base radius, a mild dislike shortens it — isolated from the bond-pull rung), the
-  defend charge (outranking hunger, isolated from bond-follow), `allies_of` (the incoming-bond
-  count, floor + direction + self-exclusion), and the death-drift pair — **grief** (a fallen friend
+  defend charge (outranking hunger, isolated from bond-follow), `allies_of` / `foes_of` (the incoming
+  bond / grudge counts, threshold + direction + self-exclusion), and the death-drift pair — **grief** (a fallen friend
   drifts a mourner's bravery down + panics it; a mere acquaintance is untouched) and its mirror
   **vindication** (a slain Nemesis lifts a survivor's bravery, no panic; a passing rival is untouched).
 
