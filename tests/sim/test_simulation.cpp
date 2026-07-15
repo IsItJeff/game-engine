@@ -8655,6 +8655,94 @@ TEST_CASE("a warded plate is a named armour trait: thorns bought with a notch of
   REQUIRE(warded.defence_bonus < plain.defence_bonus);               // ...bought with less defence
 }
 
+TEST_CASE("an evasive plate slips more blows: armour's second trait bought with a notch of defence",
+          "[sim]") {
+  // Armour's SECOND flavourful trait (the mirror of the weapon's venom+keen pair): an evasive plate
+  // adds a flat DODGE bonus folded into the wearer's hit-vs-Evasion contest, bought with a BIGGER
+  // notch of raw defence than warded so it is never pure-upside. First the equip plumbing + the
+  // paired -defence: equip folds evasion_bonus -> Equipped.armour_evasion, and a lighter plate
+  // soaks less.
+  const auto equip = [](bool evasive) {
+    entt::registry reg;
+    if (evasive)
+      eng::sim::spawn_evasive_armour(reg, eng::Vec2{0.0f, 0.0f});
+    else
+      eng::sim::spawn_armour(reg, eng::Vec2{0.0f, 0.0f});
+    const entt::entity wearer = reg.create();
+    reg.emplace<eng::sim::Transform>(wearer, eng::Vec2{0.0f, 0.0f});  // on the plate -> in reach
+    eng::sim::equip_nearest_gear(reg, wearer);
+    return reg.get<eng::sim::Equipped>(wearer);  // a VALUE copy — no dangling into local storage
+  };
+  const eng::sim::Equipped evasive = equip(true);
+  const eng::sim::Equipped plain = equip(false);
+  REQUIRE(evasive.armour_evasion ==
+          Approx(eng::sim::kEvasiveEvasion));            // its nimbleness folds in...
+  REQUIRE(plain.armour_evasion == Approx(0.0f));         // ...a plain plate has none
+  REQUIRE(evasive.defence_bonus < plain.defence_bonus);  // ...bought with less defence
+
+  // The boon in action: an evasive-armoured victim slips MORE of a creature's blows than a bare
+  // one. A DEX-1 player has 0 dodge_chance of its own, so bare = no dodge at all; the plate's
+  // evasion is the ONLY source, isolating the trait. Same seed, same DEX-1 creature (0 accuracy to
+  // cancel it); only the worn plate differs. A "hit" = any damage lands (health dips below full); a
+  // dodged blow deals none, so hits count the blows that got through.
+  const auto hits_over_40 = [](bool evasive) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(player);
+    reg.emplace<eng::sim::Stats>(player);
+    reg.emplace<eng::sim::Attributes>(player);  // DEX 1 -> no dodge_chance of its own
+    if (evasive) {
+      eng::sim::spawn_evasive_armour(reg, eng::Vec2{0.0f, 0.0f});
+      eng::sim::equip_nearest_gear(reg, player);
+    }
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});  // on the player -> in contact
+    reg.emplace<eng::sim::Enemy>(foe);  // DEX 1 -> no accuracy to cancel the evasion
+    std::mt19937 rng{1234};
+    int hits = 0;
+    for (int i = 0; i < 40; ++i) {
+      reg.get<eng::sim::Stats>(player).health.current = 100.0f;  // reset so a hit always shows
+      eng::sim::resolve_creature_contacts(reg, 1.0f, rng);       // dt=1s clears the cooldown
+      if (reg.get<eng::sim::Stats>(player).health.current < 100.0f) ++hits;
+    }
+    return hits;
+  };
+  REQUIRE(hits_over_40(true) < hits_over_40(false));  // evasive plate dodges some; bare dodges none
+}
+
+TEST_CASE("a shattered evasive plate takes its dodge with it: no phantom evasion", "[sim]") {
+  // The shatter path must clear armour_evasion like it clears armour_thorns -- else a wearer who
+  // ALSO holds a weapon (so its Equipped is NOT removed as empty) keeps a phantom dodge from a
+  // plate that's gone. Give the victim a weapon (cache survives the shatter) + an evasive plate one
+  // point from breaking, and a DEX-5 creature whose accuracy (0.12) exactly cancels the plate's
+  // evasion (0.12) so the blow LANDS (dodge floored to 0, no roll) and wears the plate to shatter.
+  entt::registry reg;
+  const entt::entity victim = reg.create();
+  reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(victim);
+  eng::sim::Equipped& eq = reg.emplace<eng::sim::Equipped>(victim);
+  eq.strength_bonus = 2;         // a weapon slot -> the cache is NOT removed as empty on shatter
+  eq.weapon_durability = 40.0f;  // ...so a lingering armour_evasion would survive
+  eq.defence_bonus = 3.0f;
+  eq.armour_durability = 0.5f;  // one blow from shattering (wear is a full 1.0 at LCK 1)
+  eq.armour_evasion = eng::sim::kEvasiveEvasion;
+  const entt::entity foe = reg.create();
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});  // on the victim -> in contact
+  reg.emplace<eng::sim::Enemy>(foe);
+  reg.emplace<eng::sim::Attributes>(foe).dexterity.level = 5;  // accuracy 0.12 cancels the evasion
+
+  std::mt19937 rng{1};
+  eng::sim::resolve_creature_contacts(reg, 1.0f,
+                                      rng);  // the landing blow wears -> shatters the plate
+
+  REQUIRE(reg.all_of<eng::sim::Equipped>(victim));  // the weapon keeps the cache alive...
+  REQUIRE(reg.get<eng::sim::Equipped>(victim).armour_durability ==
+          Approx(0.0f));  // ...plate shattered
+  REQUIRE(reg.get<eng::sim::Equipped>(victim).armour_evasion ==
+          Approx(0.0f));  // ...and its dodge went with it — no phantom evasion
+}
+
 TEST_CASE("a warded plate chips a creature that strikes it: the thorns reflect", "[sim]") {
   // A warded plate REFLECTS a flat chip onto any creature whose blow it absorbs (the defensive twin
   // of a venom blade's proc). A plain-armour wearer reflects nothing — the bit-identity gate. The

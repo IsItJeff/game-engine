@@ -621,18 +621,40 @@ fixed def that could never actually drop, so the tank build was unreachable in p
 hands it to you. (One trait, so a single threshold splits warded from plain — no mutually-exclusive
 band like the blade's venom/keen.)
 
+Armour's **second flavourful trait** follows — the **evasive** (light) plate (`spawn_evasive_armour`, a
+pale light-steel dot), so armour now mirrors the blade's *two* traits. Where warded stands and chips
+back, evasive **slips**: it trades a *bigger* notch of raw defence (`kEvasiveDefence` 3, plain plate's 6
+down three — lighter than warded's 4) for a flat `kEvasiveEvasion` (0.12) **dodge** bonus folded into
+the wearer's hit-vs-Evasion contest in `resolve_creature_contacts` — where a worn plate meets a
+creature's blow — through the shared `evasion_of` helper, added to the wearer's own `dodge_chance`. (A
+cruel strike lands *plainly*, undodgeable by design, so evasion doesn't touch it; and a creature carries
+no armour, so this is the one place a plate's dodge bites.) Because the flat 0.12 is added *outside*
+`dodge_chance`'s 0.50 DEX cap, an evasive maxed-DEX wearer reaches ~0.62 and keeps a bounded edge even
+against a maxed attacker's aim (`accuracy`, itself capped at 0.50) — so the trait stays meaningful at any
+DEX, yet never a *guaranteed* dodge (a stream of hits still lands). So a nimble wearer avoids more blows
+**outright** (no damage at all), a mobile hit-and-dodge build distinct from warded's soak-and-punish. It
+reuses the whole armour path exactly as warded does: `Armour`/`Equipped` each gain one
+`evasion_bonus`/`armour_evasion` field (appended last, default 0 → bit-identical; the dodge draw stays
+gated on `chance > 0`, so an un-evasive world's RNG stream is untouched), the equip fold copies it, and
+it clears when the plate shatters. Never pure-upside — you soak much less to dodge more. For now it's a
+**hand-placed opener** (beside the warded plate) so the dodge build is reachable for playtest; rolling
+it as loot the way warded does is a clean follow-up.
+
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), hardcoded defs (plain
-    steel, a venom fang, a plain and a *warded* armour, and two rolled steel variants — *venomous* and
-    *keen*) each pairing a boon (`+Attribute`/`+defence`/`+venom`/`+crit`/`+thorns`) with a bane, so
+    steel, a venom fang, a plain, a *warded*, and an *evasive* armour, and two rolled steel variants —
+    *venomous* and *keen*) each pairing a boon (`+Attribute`/`+defence`/`+venom`/`+crit`/`+thorns`/`+evasion`)
+    with a bane, so
     weapon and armour banes stay *distinct* even as the blades share a kind. Each archetype's kill
     already feeds this loop as *creature loot* (the four `DropKind`s). The rest of the design's
     Equipment — NPC armour-*seeking*, the `Item{def, quality, durability, traits[]}` model (`quality`
-    scales the boon at equip AND rolls per fine drop; **three named traits** exist — venom via existing
-    fields and keen via an added `crit_bonus` on the weapon, warded via a `thorns_per_hit` on the
-    armour; all **three** now roll on a fine battlefield drop (`handle_deaths`) — the two *weapon*
-    traits on a steel drop, and *warded* on a **sentinel**'s armour drop (its own portable draw into
-    the armour-drop branch, so a warded build is renewable like the venom one); a `traits[]` *list*
+    scales the boon at equip AND rolls per fine drop; **four named traits** exist — venom via existing
+    fields and keen via an added `crit_bonus` on the weapon, warded via a `thorns_per_hit` *and* evasive
+    via an `evasion_bonus` on the armour; **three** of the four roll on a fine battlefield drop
+    (`handle_deaths`) — the two *weapon* traits on a steel drop, and *warded* on a **sentinel**'s armour
+    drop (its own portable draw into the armour-drop branch, so a warded build is renewable like the
+    venom one), while *evasive* is a hand-placed opener for now (its loot roll a follow-up); a `traits[]`
+    *list*
     waits until two
     traits must STACK on one item, which the mutually-exclusive roll avoids), the `+skill/+aspect`
     bonuses (which ride the

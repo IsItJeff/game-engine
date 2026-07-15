@@ -2363,6 +2363,17 @@ float accuracy(int dexterity_level) {
   return chance < kCap ? chance : kCap;
 }
 
+// An EVASIVE plate's cached dodge bonus for a wearer — armour's SECOND flavourful trait (the twin
+// of the weapon's venom+keen). Added to the wearer's own dodge_chance at the hit-vs-Evasion contest
+// in resolve_creature_contacts (a worn plate's real home — where it meets a creature's blow), so an
+// evasive plate slips more blows outright. Bare/plain/warded armour and creatures (no Equipped)
+// return 0, so an un-evasive world's dodge — and its gated RNG draw — is bit-identical to before
+// the trait existed. Bought with a notch of raw defence (spawn_evasive_armour), never pure-upside.
+float evasion_of(const entt::registry& reg, entt::entity e) {
+  const Equipped* eq = reg.try_get<Equipped>(e);
+  return eq != nullptr ? eq->armour_evasion : 0.0f;
+}
+
 // Chance in [0, kCap] that a strike CRITS (deals extra damage), from the attacker's LCK —
 // the offensive-fortune mirror of dodge_chance. Level 1 = 0 (no head start, and the
 // chance > 0 guard at the call site means an untrained attacker never even draws), each
@@ -2753,6 +2764,10 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // the target's own dodge_chance and the RNG draw is bit-identical to before. Floored at 0: aim
   // can fully negate evasion (both cap at 50%) but never makes a foe EASIER to hit than a plain
   // non-dodger.
+  // (An EVASIVE plate's dodge is NOT added here: this line is only reached for an Enemy target — a
+  // creature, which carries no Equipped — and the one armour-wearing target, a colonist taking a
+  // cruel strike, lands plainly with no dodge in the null-target branch above. So evasion lives
+  // solely at resolve_creature_contacts, where a worn plate actually meets a blow.)
   float dodge = dodge_chance(target_attrs != nullptr ? target_attrs->dexterity.level : 1) -
                 accuracy(attrs->dexterity.level);
   if (dodge < 0.0f) dodge = 0.0f;
@@ -3649,6 +3664,8 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
     eq.stamina_regen_penalty = arm.stamina_regen_penalty;
     eq.armour_durability = arm.durability;  // fresh plate starts with its full life; blows wear it
     eq.armour_thorns = arm.thorns_per_hit;  // a warded plate folds its spikes in (raw, like venom)
+    eq.armour_evasion =
+        arm.evasion_bonus;  // an evasive plate folds its dodge in (added at contest)
   }
   return nearest;
 }
@@ -3919,6 +3936,28 @@ void spawn_warded_armour(entt::registry& reg, Vec2 pos, float quality) {
   a.thorns_per_hit = kWardedThorns;  // ...bought with spikes: chip back per blow soaked (the boon)
   // stamina_regen_penalty keeps its default (full bane), and quality scales the reduced defence
   // boon exactly like any fine plate.
+  a.quality = quality;
+}
+
+// EVASIVE plate — armour's SECOND named trait, the LIGHT counterpart of spawn_warded_armour and the
+// mirror of the weapon's venom/keen pair. It trades a bigger notch of raw defence (kEvasiveDefence,
+// plain plate's 6 down THREE) for a flat kEvasiveEvasion DODGE bonus folded into the wearer's
+// hit-vs-Evasion contest (evasion_of, added in resolve_creature_contacts where a plate meets a
+// blow) — so a nimble wearer slips more blows outright, feeding a mobile hit-and-dodge build (a
+// distinct payoff from warded's stand-and-chip-back). Never pure-upside: you soak much less to
+// dodge more, atop plate's unchanged stamina-regen bane. Reuses the whole shipped armour path (the
+// equip fold copies evasion_bonus into Equipped.armour_evasion — NOTHING new in equip). A pale
+// steel tint so it reads apart from plain bronze and warded's cold grey. Draws no RNG.
+void spawn_evasive_armour(entt::registry& reg, Vec2 pos, float quality) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.75f, 0.8f, 0.85f}, 6.0f);  // pale light-steel (its own tint)
+  Armour& a = reg.emplace<Armour>(e);
+  a.defence_bonus = kEvasiveDefence;  // plain plate's 6 down three — the paired -defence trade
+  a.evasion_bonus = kEvasiveEvasion;  // ...bought with nimbleness: a flat dodge bonus (the boon)
+  // stamina_regen_penalty keeps its default (full bane); quality scales the reduced defence boon
+  // exactly like any fine plate.
   a.quality = quality;
 }
 
@@ -4709,7 +4748,11 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // it EASIER to hit than a non-dodger. The creature's Attributes carry its fixed archetype DEX
       // (none -> 1).
       const Attributes* c_attrs = reg.try_get<Attributes>(c);
-      float chance = dodge_chance(attrs != nullptr ? attrs->dexterity.level : 1) -
+      // An EVASIVE plate on the victim adds its flat dodge (armour's 2nd trait) — its PRIMARY home,
+      // since a worn plate meets creature blows here. A bare/plain-armoured victim adds 0 ->
+      // bit-identical, the draw still gated on chance > 0.
+      float chance = dodge_chance(attrs != nullptr ? attrs->dexterity.level : 1) +
+                     evasion_of(reg, p) -
                      accuracy(c_attrs != nullptr ? c_attrs->dexterity.level : 1);
       if (chance < 0.0f) chance = 0.0f;
       if (chance > 0.0f && unit(rng) < chance) continue;  // slipped it — no damage taken
@@ -4867,7 +4910,9 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
           pg->defence_bonus = 0.0f;
           pg->stamina_regen_penalty = 0.0f;
           pg->armour_durability = 0.0f;
-          pg->armour_thorns = 0.0f;  // the spikes go with the shattered plate
+          pg->armour_thorns = 0.0f;   // the spikes go with the shattered plate
+          pg->armour_evasion = 0.0f;  // ...and so does the nimbleness (else a phantom dodge lingers
+                                      // on a weapon-wielding wearer whose Equipped isn't removed)
           remove_equipped_if_empty(reg, p, *pg);
         }
       }
