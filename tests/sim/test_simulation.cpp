@@ -613,6 +613,76 @@ TEST_CASE("an un-re-driven mover crawls through the mire and exits: no compoundi
   REQUIRE(reg.get<eng::sim::Velocity>(mover).value.x == Approx(100.0f));  // velocity never mutated
 }
 
+TEST_CASE("a hazard field chips health from anyone inside friend and foe but spares the downed",
+          "[sim]") {
+  // Persistent damaging terrain (brambles/scald): tick_hazard_fields chips HEALTH from every
+  // Stats-bearer within a field's radius each tick, the direct-HP twin of the cold zone's warmth
+  // drain. Four guarantees in one: it HITS someone inside, it hits a CREATURE inside too (the kite
+  // value -- terrain as a weapon), it SPARES someone out of the radius, and it SPARES the already-
+  // Downed (inert, like every need tick). RED-provable by dropping the chip, the radius test, or
+  // the Downed exclusion.
+  entt::registry reg;
+  const entt::entity field = reg.create();  // origin, radius 100, 10 HP/s
+  reg.emplace<eng::sim::Transform>(field, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::HazardField>(field, eng::sim::HazardField{100.0f, 10.0f});
+
+  const entt::entity npc = reg.create();  // a colonist standing IN it (50 < 100)
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{50.0f, 0.0f});
+  const float npc_before = reg.emplace<eng::sim::Stats>(npc).health.current;
+
+  const entt::entity foe =
+      reg.create();  // a CREATURE in it too -- brambles bite foes (kite a brute in)
+  reg.emplace<eng::sim::Transform>(foe, eng::Vec2{30.0f, 0.0f});
+  reg.emplace<eng::sim::Enemy>(foe);
+  const float foe_before = reg.emplace<eng::sim::Stats>(foe).health.current;
+
+  const entt::entity safe = reg.create();  // OUT of the radius (200 > 100)
+  reg.emplace<eng::sim::Transform>(safe, eng::Vec2{200.0f, 0.0f});
+  const float safe_before = reg.emplace<eng::sim::Stats>(safe).health.current;
+
+  const entt::entity downed = reg.create();  // a Downed body inside -- inert, spared
+  reg.emplace<eng::sim::Transform>(downed, eng::Vec2{60.0f, 0.0f});
+  reg.emplace<eng::sim::Downed>(downed);
+  const float downed_before = reg.emplace<eng::sim::Stats>(downed).health.current;
+
+  eng::sim::tick_hazard_fields(reg, 1.0f);  // one second -> 10 HP to everyone in reach
+
+  REQUIRE(reg.get<eng::sim::Stats>(npc).health.current == Approx(npc_before - 10.0f));  // bitten
+  REQUIRE(reg.get<eng::sim::Stats>(foe).health.current ==
+          Approx(foe_before - 10.0f));  // creatures too -- the kite value
+  REQUIRE(reg.get<eng::sim::Stats>(safe).health.current ==
+          Approx(safe_before));  // out of reach -> safe
+  REQUIRE(reg.get<eng::sim::Stats>(downed).health.current ==
+          Approx(downed_before));  // Downed is inert -> spared
+}
+
+TEST_CASE(
+    "overlapping hazard fields don't stack: the deadliest one bites like the mire's stickiest",
+    "[sim]") {
+  // Two fields covering the same spot don't sum into a double chip, and it isn't
+  // iteration-order-arbitrary either: the WORST (highest damage_per_second) wins, applied once --
+  // the HP-damage twin of the mire's "stickiest slow_factor wins." RED-provable: a summing bug
+  // reads 16, and the pre-fix "first in view order" behaviour would read 4 OR 12 depending on order
+  // (so this pins the max, not just "not the sum").
+  entt::registry reg;
+  const entt::entity mild = reg.create();  // a shallow 4/s bramble...
+  reg.emplace<eng::sim::Transform>(mild, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::HazardField>(mild, eng::sim::HazardField{100.0f, 4.0f});
+  const entt::entity deadly = reg.create();  // ...overlapping a deadly 12/s scald
+  reg.emplace<eng::sim::Transform>(deadly, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::HazardField>(deadly, eng::sim::HazardField{100.0f, 12.0f});
+
+  const entt::entity victim = reg.create();  // standing inside BOTH
+  reg.emplace<eng::sim::Transform>(victim, eng::Vec2{10.0f, 0.0f});
+  const float before = reg.emplace<eng::sim::Stats>(victim).health.current;
+
+  eng::sim::tick_hazard_fields(reg, 1.0f);
+
+  REQUIRE(
+      reg.get<eng::sim::Stats>(victim).health.current ==
+      Approx(before - 12.0f));  // the deadliest (12), once -- not the sum (16), not the milder (4)
+}
+
 TEST_CASE("hunger drains over time and never self-recovers", "[sim]") {
   entt::registry reg;
   const entt::entity e = reg.create();

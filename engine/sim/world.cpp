@@ -88,6 +88,21 @@ entt::entity make_mire(entt::registry& reg, Vec2 pos, float radius, float slow_f
   return e;
 }
 
+// Create a HAZARD FIELD — persistent damaging terrain (brambles, a scald patch) that chips HEALTH
+// from anyone standing in it (tick_hazard_fields), the HP-damage twin of the cold zone's Need-drain
+// and the mire's movement-drag. Unlike those it HURTS, and it hurts creatures too, so it's terrain
+// you can turn into a weapon (lead a brute across it). A dark danger-red disc drawn at its reach.
+// Scenery — no Stats/Velocity.
+entt::entity make_hazard_field(entt::registry& reg, Vec2 pos, float radius,
+                               float damage_per_second) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.65f, 0.1f, 0.1f}, radius);  // dark danger-red, at its reach
+  reg.emplace<HazardField>(e, HazardField{radius, damage_per_second});
+  return e;
+}
+
 // Create a SPELLBOOK on the ground — a tome the player walks over to LEARN Spellcasting
 // (study_spellbooks). The design's "magic is read/taught": a small arcane-violet dot (matching the
 // bolt it unlocks) a would-be mage seeks out. Scenery until read; no Stats/Velocity.
@@ -479,6 +494,12 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // creature chasing you west bogs down in it, a bit of tactical terrain to kite a brute across.
   // Neutral: it slows friend and foe alike, never hurts.
   make_mire(reg, Vec2{center.x - 170.0f, center.y}, 110.0f, 0.4f);
+  // A HAZARD FIELD to the NORTH — a bramble/scald patch that CHIPS HEALTH from anyone in it
+  // (tick_hazard_fields), the biting cousin of the mire's harmless drag. Set well off the player's
+  // centre spawn (its near edge clears it), so you start safe and choose when to brave it — and,
+  // like the mire, it's terrain you can turn on the enemy: kite a brute across it and the thorns
+  // wear it down for you. Unlike the mire it HURTS, and it hurts friend and foe alike.
+  make_hazard_field(reg, Vec2{center.x, center.y - 160.0f}, 100.0f, 10.0f);
 
   const entt::entity player = reg.create();
   reg.emplace<Transform>(player, center);
@@ -645,6 +666,7 @@ void World::step() {
   tick_fatigue(registry_, dt);    // ...and tire while exerting, recovering at rest (the 3rd need)
   drain_warmth(registry_,
                dt);  // ...and CHILL in a cold zone, re-warming by a fire (freezing chips)
+  tick_hazard_fields(registry_, dt);  // ...and BLEED in a hazard field (brambles chip HP directly)
   teach(registry_);  // ...veterans pass a mastered skill to a nearby novice (mentorship)
   advance_progression(registry_);  // activity -> skill+attribute XP -> level -> bigger pools
   wrap_bounds(registry_, Vec2{kFieldWidth, kFieldHeight});

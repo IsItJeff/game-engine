@@ -96,6 +96,10 @@ void drink(entt::registry& reg, float dt);
 // background timer. No ColdZone in the world -> nobody chills -> bit-identical.
 void drain_warmth(entt::registry& reg, float dt);
 
+// Chip HEALTH from anyone standing in a HazardField (persistent damaging terrain: brambles, a scald
+// patch). The direct-HP twin of drain_warmth's cold; bites creatures too (kite a brute across it).
+void tick_hazard_fields(entt::registry& reg, float dt);
+
 // Tick the Fatigue need — the THIRD survival Need, and the one that RECOVERS with rest. Every
 // person loses fatigue while exerting (moving, faster sprinting — the same rest<walk<sprint tiers
 // the other needs use) and regains it while standing still. Unlike hunger/water it self-recovers,
