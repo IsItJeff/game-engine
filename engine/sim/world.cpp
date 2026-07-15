@@ -131,8 +131,9 @@ entt::entity make_npc(entt::registry& reg, Vec2 pos, Vec2 vel, int bravery = 0, 
 // Create one hostile creature from an archetype's numbers: HP (Stats) that attacks
 // whittle down, VIT (Attributes) that softens blows, and the Enemy marker (so
 // chase_prey hunts, resolve_creature_contacts hurts, handle_deaths reaps at 0 HP).
-// No regen — you can wear it down (unless an archetype sets `lifesteal_per_hit`, the leech's
-// drink); no Skills/CharacterLevel — it doesn't grow.
+// No regen by default — you can wear it down (unless an archetype sets `lifesteal_per_hit`, the
+// leech's on-bite drink, or a health regen, the knitflesh's passive knit); no Skills/CharacterLevel
+// — it doesn't grow.
 entt::entity make_creature(entt::registry& reg, Vec2 pos, float hp, float chase_speed,
                            float attack_damage, int defence_level, Vec3 color, float radius) {
   const entt::entity e = reg.create();
@@ -204,8 +205,9 @@ entt::entity make_spitter(entt::registry& reg, Vec2 pos) {
 }
 
 // A LEECH: the SUSTAIN threat — a creature that DRINKS. Middling HP (22) and speed, a modest bite
-// (8), but every landed blow HEALS it (lifesteal_per_hit) — the ONLY creature self-heal in the game
-// (creatures otherwise never regen), so it REVERSES the wear-down: chip it slowly and it
+// (8), but every landed blow HEALS it (lifesteal_per_hit) — the only creature that heals ON A BITE
+// (the wound-pink KNITFLESH heals PASSIVELY instead, via regenerate_vitals), so it REVERSES the
+// wear-down: chip it slowly and it
 // out-sustains you, feeding on every hit it lands. You must BURST it down or DENY its bites (kite
 // it) rather than stand and trade — a fresh tactical foe, and nasty in a swarm. A dark blood-red
 // dot. ponytail: HP/speed/attack/lifesteal are balance knobs.
@@ -229,6 +231,25 @@ entt::entity make_warden(entt::registry& reg, Vec2 pos) {
   const entt::entity e = make_creature(reg, pos, 35.0f, 60.0f, 10.0f, 1, Vec3{0.35f, 0.6f, 0.55f},
                                        8.0f);  // warded teal
   reg.get<Attributes>(e).wisdom.level = 16;    // high WIS -> magic_defence_of ~45 -> wards spells
+  return e;
+}
+
+// A KNITFLESH creature — the SUSTAIN foe. It slowly KNITS its wounds shut: a non-zero
+// health.regen_per_second, healed by the shared regenerate_vitals every tick (which already runs
+// over ANY Stats-bearing entity, creatures included — they just carry regen 0 today, so they're
+// bit-identical). So chipping it and backing off lets it recover — you must COMMIT and BURST IT
+// DOWN, out-damaging its regen, or it's a war of attrition you lose. The passive-heal twin of the
+// leech's heal-on-hit (the leech mends by BITING; the knitflesh mends ALWAYS). No new mechanic —
+// just a creature with a regen. defence_level 1 so regenerate_vitals' Endurance scaling doesn't
+// amplify the heal (a predictable knob). A raw wound-pink dot so it reads apart from the roster. A
+// hand-placed OPENER (no RNG -> bit-identical, like the warden/leech), NOT in the reinforcement
+// mix.
+entt::entity make_regenerator(entt::registry& reg, Vec2 pos) {
+  constexpr float kKnitfleshRegen = 4.0f;  // HP/sec knitted back — low enough to burst, high enough
+                                           // to punish a chip-and-flee (a playtest knob)
+  const entt::entity e = make_creature(reg, pos, 30.0f, 60.0f, 8.0f, 1, Vec3{0.8f, 0.4f, 0.45f},
+                                       9.0f);                   // raw wound-pink
+  reg.get<Stats>(e).health.regen_per_second = kKnitfleshRegen;  // it knits its wounds shut
   return e;
 }
 
@@ -506,12 +527,14 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // stronger Strength kills faster. The violet SPITTER hangs back and plinks you from afar (close
   // on it or throw back); the blood-red LEECH heals on every bite it lands, so BURST it or kite it
   // — don't stand and trade; the teal WARDEN shrugs off bolts (high WISDOM), so close and MELEE it
-  // rather than cast. The spawner keeps a mix coming.
+  // rather than cast; the wound-pink KNITFLESH knits its wounds shut (passive regen), so commit and
+  // BURST it down — chip-and-retreat only lets it heal back. The spawner keeps a mix coming.
   make_brute(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
   make_swarmer(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
   make_spitter(reg, Vec2{kFieldWidth * 0.85f, kFieldHeight * 0.15f});
   make_leech(reg, Vec2{kFieldWidth * 0.15f, kFieldHeight * 0.85f});
   make_warden(reg, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.15f});
+  make_regenerator(reg, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.85f});
 
   // A couple of armour pieces on the field (dull-bronze dots) — walk onto one and press E to
   // don it for +defence at the cost of a slower second wind, the defensive twin of a weapon.
