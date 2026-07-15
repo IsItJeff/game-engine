@@ -5447,6 +5447,41 @@ TEST_CASE("an exhausted fighter can't swing but a whiff is free: melee costs sta
   REQUIRE(reg.get<eng::sim::Stats>(lone).stamina.current == Approx(100.0f));  // a whiff is free
 }
 
+TEST_CASE("a hardy body spends less stamina per action: VIT eases the Cost aspect", "[sim]") {
+  // The design's "Cost" action-aspect (the last aspect with no code): VIT (Endurance) eases an
+  // action's stamina spend via the eased_bane half-floor, so a seasoned body sustains a longer
+  // fight
+  // -- the attribute's own combat-sustain aspect, distinct from the Survivalist SKILL's
+  // need-buffer. A connecting swing (and a throw) spend LESS at high VIT; Endurance 1 spends the
+  // full base (bit-identical). RED before: the cost was a flat constant, so VIT didn't ease it.
+  const auto stamina_spent = [](int endurance, bool ranged) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    auto& a = reg.emplace<eng::sim::Attributes>(atk);
+    a.endurance.level = endurance;       // VIT eases the cost
+    if (ranged) a.dexterity.level = 20;  // (a throw is DEX-driven; irrelevant to the cost)
+    reg.emplace<eng::sim::Skills>(atk);
+    const float before = reg.emplace<eng::sim::Stats>(atk).stamina.current;  // full bar
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{ranged ? 100.0f : 10.0f, 0.0f});  // in reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{1000.0f, 1000.0f, 0.0f});       // survives
+    reg.emplace<eng::sim::Attributes>(foe);  // VIT/DEX 1 -> the blow lands and isn't dodged
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};
+    if (ranged)
+      eng::sim::perform_throw(reg, atk);
+    else
+      eng::sim::perform_attack(reg, atk, rng);
+    return before - reg.get<eng::sim::Stats>(atk).stamina.current;  // stamina spent this action
+  };
+  REQUIRE(stamina_spent(11, false) <
+          stamina_spent(1, false));                  // a hardy body's SWING costs less...
+  REQUIRE(stamina_spent(1, false) == Approx(7.0f));  // ...and VIT 1 spends the full melee 7
+  REQUIRE(stamina_spent(11, true) < stamina_spent(1, true));  // ...its THROW costs less too...
+  REQUIRE(stamina_spent(1, true) == Approx(15.0f));  // ...and VIT 1 spends the full throw 15
+}
+
 TEST_CASE("a throw only targets creatures: a peaceful colonist is never hit", "[sim]") {
   // The Enemy-only filter that sets a throw apart from a melee swing: unlike perform_attack's
   // cruel-strike branch, perform_throw never targets an Npc, so a colonist standing in range is

@@ -55,7 +55,10 @@ flowchart TD
 
 - **Reach** grows with Strength: `45 + (Strength − 1)·6` world units.
 - **Stamina** — a **connecting** swing spends `kMeleeStaminaCost` (7, cheaper than the 15-cost throw
-  since melee is the faster primary attack), and a fighter below the cost **can't land the blow** —
+  since melee is the faster primary attack) — though a **hardy** body (high VIT/Endurance) spends less
+  per action, `eased_cost` shaving the price up to a half floor so a tougher fighter sustains a longer
+  bout (the design's **Cost** aspect, the same eased-bane curve as armour-bear and weapon-carry) —
+  and a fighter below the cost **can't land the blow** —
   the swing fizzles (no XP, no damage, no cost), the melee echo of the throw's stamina gate and the
   reason 0 stamina means *disengage and recover*, not stand and win. Only a swing that *connects*
   pays: a **targetless whiff is free** — load-bearing, because `npc_attack` polls `perform_attack`

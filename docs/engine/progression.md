@@ -17,10 +17,12 @@ Seventeen strands are wired end to end so far, across all seven attributes:
   **Survivalist** (drive your fatigue to the edge and the *skill* itself then *slows* how fast
   **every** need drains — fatigue, hunger, AND water, via the shared `survivalist_relief`, so hard
   living lets you last longer in the field on all fronts; it's the Survivalist *skill level* that
-  buffers, not Endurance — VIT stays pure combat defence) — all six raise
+  buffers, not Endurance — VIT stays pure combat, never a survival-need buffer) — all six raise
   **Endurance**, which grows your **max health, stamina, and mana** (the design's "VIT governs
   HP/Stamina/MP" — all three pools off the one attribute, so a hardy caster carries a bigger reserve
-  too), speeds how fast stamina comes back, softens the venom you take, *and* lets you **bear armour**
+  too), speeds how fast stamina comes back, softens the venom you take, eases the **stamina cost** of
+  every swing and throw (a hardy body spends less per action, so it sustains a longer fight — the
+  design's **Cost** action-aspect, `eased_cost`, up to a half floor), *and* lets you **bear armour**
   better (a hardy body shrugs off part of plate's stamina-recovery bane, `borne_regen_penalty` — the
   armour twin of Strength's weapon carry);
 - **attacking** trains **Striking**, which mainly raises **Strength** (plus a little

@@ -1041,6 +1041,18 @@ inline float borne_regen_penalty(float base_penalty, const Attributes* attrs) {
   return attrs != nullptr ? eased_bane(base_penalty, attrs->endurance.level) : base_penalty;
 }
 
+// VIT = "Cost": a hardier body spends LESS stamina per ACTION — the design's action-aspect family
+// (Yield / Speed / Crit / Quality / COST ...), the one aspect with no code yet. A swing's or
+// throw's stamina cost is eased by Endurance (VIT), the SAME eased_bane half-floor the STR/VIT gear
+// masteries use, so a cost still bites (never free) but a seasoned body sustains a longer fight —
+// the raw VIT attribute's own combat-sustain aspect. Endurance 1 (or no Attributes) ->
+// eased_bane(base, 1) = base
+// -> the FULL cost -> bit-identical. Distinct from the Survivalist SKILL's need-buffer (that eases
+// survival Need DRAINS); this eases an action's stamina SPEND.
+inline float eased_cost(float base_cost, const Attributes* attrs) {
+  return attrs != nullptr ? eased_bane(base_cost, attrs->endurance.level) : base_cost;
+}
+
 // DEX = "agility": a nimble mover WADES a mire's mud better — the movement twin of STR's weapon
 // carry and VIT's armour-bear, closing the gap where the mire was the ONE movement modifier that
 // read no attribute (weapon-heft and need-efficiency already shape move speed). Given a mire's
