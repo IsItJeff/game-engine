@@ -3933,6 +3933,53 @@ void decay_bonds(entt::registry& reg) {
   }
 }
 
+// The PEACEFUL bond path. Bonds no longer form ONLY from drama (a shared kill's camaraderie, a
+// rescue, a lesson): colonists who LINGER at the same hearth grow FRIENDLY over time, the mundane
+// "we spend time together, we become friends". This is the affinity EVENT-DELTA that half of the
+// design's social layer (character-systems.md's "relationships ... small event-deltas, seeded by
+// personality-match") — the peaceful feeder the future perceive() BEFRIEND *stance* will READ, not
+// that stance itself (the perceive layer is a later ring). For each hearth, every pair of colonists
+// within it warms toward the
+// other by kHearthWarmth — PERSONALITY-shaped for FREE, since nudge_affinity seeds a first tie by
+// personality_match (like-minded warm faster, opposites slower). Capped BELOW the Friend tier (it
+// warms an edge only while it's still under kBondFriendAt), so mere proximity makes Acquaintances
+// and Friends but never the LATCHING Partner tier — a Partner is still EARNED by deeds, not by
+// loitering. The caller (World::step) throttles this to every kSocialPeriod ticks, so warmth
+// accrues slowly. Colony-internal for now: the folk view is Npc, so the player warming to colonists
+// by the fire is a later ring. nudge_affinity touches no view (get_or_emplace + a vector write), so
+// mutating Relationships while the pairs come from a pre-collected vector is safe (same reason
+// bond_witnesses is). No hearth, or a lone colonist at one -> no pairs -> bit-identical.
+void socialize(entt::registry& reg) {
+  constexpr std::int8_t kHearthWarmth =
+      1;  // affinity gained per social period between hearth-mates
+  auto hearths = reg.view<Hearth, Transform>();
+  auto folk = reg.view<Npc, Personality, Transform>();
+  std::vector<entt::entity> mates;
+  for (const entt::entity h : hearths) {
+    const Vec2 hpos = hearths.get<Transform>(h).position;
+    const float r = hearths.get<Hearth>(h).radius;
+    mates.clear();
+    for (const entt::entity n : folk) {
+      if (glm::distance(folk.get<Transform>(n).position, hpos) <= r) mates.push_back(n);
+    }
+    // Every ORDERED pair warms both ways (directed edges). Two gates: capped once it reaches Friend
+    // (kBondFriendAt — Partner stays deed-earned), and it SKIPS a latched tie (bond_latched), so a
+    // sworn NEMESIS isn't thawed by mere co-loitering — proximity mends casual coolness (a mild
+    // rivalry drifts back toward neutral, faster than decay for hearth-mates), but a latched grudge
+    // resists proximity exactly as it resists decay_bonds (the "Nemesis latches" invariant). A
+    // latched Partner (>= kBondFriendAt) is already excluded by the cap. ponytail: overlapping
+    // hearths would double-warm a shared pair (+2/period) — harmless (still capped), unreachable
+    // with one hearth.
+    for (const entt::entity a : mates) {
+      for (const entt::entity b : mates) {
+        if (a == b) continue;
+        const std::int8_t aff = affinity_toward(reg, a, b);
+        if (aff < kBondFriendAt && !bond_latched(aff)) nudge_affinity(reg, a, b, kHearthWarmth);
+      }
+    }
+  }
+}
+
 void record_deed(entt::registry& reg, entt::entity actor, Deed kind, std::int32_t mag) {
   // The whole morality write-path, one line: lazily give the actor a ledger on its first deed, then
   // add the magnitude to the chosen dimension. No switch — every dimension accrues identically, so
@@ -3986,12 +4033,15 @@ namespace {
 // A symmetric PERSONALITY-MATCH seed for a NEW relationship tie — the design's "seeded by
 // personality-match" (character-systems.md:116). A dot-product over the 6 Personality axes: two
 // colonists whose axes point the SAME way (both brave, both greedy, ...) score positive, opposites
-// negative, a mixed pair near zero. Scaled DOWN to a small ±seed kept strictly UNDER the smallest
-// forming-event delta (kCamaraderieAffinity 5), so it MODULATES a new tie's starting strength —
-// like-minded pairs warm faster, opposites slower — without ever FLIPPING the sign of the event
-// that formed the tie. Symmetric (a·b == b·a) + integer -> replay-safe; two neutral (all-zero)
-// personalities score 0, and a lone strong shared axis (10000/15000) rounds to 0 too, so it takes
-// GENUINE like-mindedness across several axes to register.
+// negative, a mixed pair near zero. Scaled DOWN to a small ±4 seed, so it MODULATES a new tie's
+// starting strength — like-minded pairs warm faster, opposites slower. For the LARGER forming
+// events (kCamaraderieAffinity 5, rescue/gratitude 12, ...) the ±4 seed only shades a SAME-sign
+// tie, never flipping it. The exception is `socialize`'s gentle +1: it's smaller than the seed, so
+// a strongly- opposite pair sharing a hearth can even start a hair COOL (−4 + 1 = −3, inert — above
+// the grudge line) and then warm from there — "opposites warm slower" made literal. Symmetric (a·b
+// == b·a) + integer -> replay-safe; two neutral (all-zero) personalities score 0, and a lone strong
+// shared axis (10000/15000) rounds to 0 too, so it takes GENUINE like-mindedness across several
+// axes to register.
 constexpr long kPersonalityMatchDivisor =
     15000;  // max dot 6*100*100 = 60000, /15000 -> a [-4, +4] seed (a playtest knob)
 std::int8_t personality_match(const Personality& a, const Personality& b) {

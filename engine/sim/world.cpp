@@ -622,6 +622,11 @@ void World::step() {
   decay_standing(registry_);  // reputations leak toward neutral over time (redemption/corruption)
   decay_bonds(
       registry_);  // ...and casual ties cool the same way (deep Partner/Nemesis latches hold)
+  // ...while hearth-mates WARM: colonists lingering at the same fire grow friendly over time (the
+  // peaceful BEFRIEND path). Throttled to every kSocialPeriod ticks so warmth accrues slowly, the
+  // counter-current to the decay above. Uses the pre-increment tick_ (bumped at the tick's end).
+  constexpr Tick kSocialPeriod = 300;  // ~5 game-seconds per +1 of hearth-mate warmth (a knob)
+  if (tick_ % kSocialPeriod == 0) socialize(registry_);
   decay_flashes(registry_, dt);  // age the hit-flashes left by this tick's blows (presentation)
 
   // Reinforcements: after deaths are resolved, top the creature population back up
