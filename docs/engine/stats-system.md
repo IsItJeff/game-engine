@@ -106,7 +106,9 @@ self-heal". (It does make starvation bite harder — a wounded starver no longer
 regen — which is the intended, more honest survival pressure.)
 
 Regen also has a **place**: a **`Hearth`** — a fixed, warm safe spot — multiplies the health
-regen of anyone resting within its radius (`kHearthRegenBoost`, stacking on the VIT boost). It's
+regen of a **colonist** resting within its radius (`kHearthRegenBoost`, stacking on the VIT boost) —
+but **not a creature's**: the fire is the colony's recovery seed, not a monster buff, so a
+regenerating foe like the knitflesh knits at its flat base rate here, never double. It's
 the design's **base-building recovery seed**: a reason to hold or fall back to a spot. The fire has a
 **defensive** half as well as a healing one: **creatures won't hunt prey standing in its glow**
 (`chase_prey` skips anyone `in_a_hearth` — the *same* reach that heals also **hides**, one predicate
