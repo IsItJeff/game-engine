@@ -2590,7 +2590,11 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   // fourth, choice-driven damage factor beside veteran / need_eff / berserk.
   const bool powered = reg.all_of<PowerAttack>(attacker);
   const float power = powered ? kPowerDamage : 1.0f;
-  const float melee_cost = powered ? kPowerStaminaCost : kMeleeStaminaCost;
+  // VIT eases the swing's stamina COST (eased_cost — the design's "Cost" aspect): a hardier body
+  // spends less per swing, so it sustains a longer fight. Endurance 1 -> the full base -> every
+  // existing combat test (bare or VIT-1 attacker) is bit-identical. `attrs` is the attacker's
+  // sheet.
+  const float melee_cost = eased_cost(powered ? kPowerStaminaCost : kMeleeStaminaCost, attrs);
   const float raw = (kBaseAttackDamage +
                      static_cast<float>(attrs->strength.level - 1) * kDamagePerStrength * veteran +
                      static_cast<float>(gear_strength) * kDamagePerStrength) *
@@ -2977,8 +2981,12 @@ void perform_throw(entt::registry& reg, entt::entity attacker) {
   // Winding up needs stamina in hand — an exhausted thrower fizzles (nothing spent, no XP), the
   // ranged echo of the empty-stamina melee crawl. Strict <, so a throw at exactly the cost still
   // lands and a throw at exactly 0 can't.
-  if (stats->stamina.current < kThrowStaminaCost) return;
-  stats->stamina.current -= kThrowStaminaCost;
+  // VIT eases the throw's stamina COST too (eased_cost, the same "Cost" aspect as the swing): a
+  // hardier thrower spends less per hurl. Endurance 1 -> the full 15 -> bit-identical. `attrs` is
+  // the thrower's sheet (non-null here).
+  const float throw_cost = eased_cost(kThrowStaminaCost, attrs);
+  if (stats->stamina.current < throw_cost) return;
+  stats->stamina.current -= throw_cost;
 
   // A connecting throw trains Throwing -> Dexterity (a lot) + Strength (a little) — the mirror of a
   // swing training Striking -> Strength + Dexterity.
