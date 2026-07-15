@@ -604,6 +604,38 @@ TEST_CASE("sprinting drains hunger and water faster than walking (the exertion t
           reg.get<eng::sim::Stats>(walker).water.current);  // ...and more water than a walk
 }
 
+TEST_CASE(
+    "a still sprint stance drains no extra needs: the sprint tier gates on movement not the stance",
+    "[sim]") {
+  // The bug the exertion tiers hid. MovePlayer emplaces Sprinting on shift-held + stamina with NO
+  // movement check, so a player standing still holding sprint carries the Sprinting stance at ZERO
+  // velocity. drain_hunger/drain_water must gate the sprint tier on ACTUAL movement -- exactly as
+  // update_stamina and tick_fatigue already do -- not on the stance alone. Else a still sprinter
+  // over-drains at the WALKING rate (rest 0.3 + sprint 0.3 = 0.6/s) while every sibling exertion
+  // system treats the same entity as resting (stamina and fatigue RECOVER). Two stationary
+  // entities, identical but for the Sprinting stance: they must drain IDENTICALLY.
+  entt::registry reg;
+  const entt::entity rester = reg.create();
+  reg.emplace<eng::sim::Stats>(rester);
+  reg.emplace<eng::sim::Velocity>(rester);  // zero velocity == standing still
+  const entt::entity still_sprinter = reg.create();
+  reg.emplace<eng::sim::Stats>(still_sprinter);
+  reg.emplace<eng::sim::Velocity>(still_sprinter);   // ALSO standing still...
+  reg.emplace<eng::sim::Sprinting>(still_sprinter);  // ...but holding the sprint stance
+
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) {
+    eng::sim::drain_hunger(reg, dt);
+    eng::sim::drain_water(reg, dt);
+  }
+
+  // A sprint stance with no movement adds nothing: the still sprinter drains EXACTLY as the rester.
+  REQUIRE(reg.get<eng::sim::Stats>(still_sprinter).hunger.current ==
+          Approx(reg.get<eng::sim::Stats>(rester).hunger.current));
+  REQUIRE(reg.get<eng::sim::Stats>(still_sprinter).water.current ==
+          Approx(reg.get<eng::sim::Stats>(rester).water.current));
+}
+
 TEST_CASE("fatigue falls while exerting and recovers at rest (the third need)", "[sim]") {
   // The ODD need: unlike hunger/water (which only fall), fatigue RECOVERS with rest and FALLS with
   // exertion. A rester regains it (toward full), a mover spends it, and a sprinter spends it

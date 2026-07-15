@@ -1577,12 +1577,15 @@ void drain_hunger(entt::registry& reg, float dt) {
     if (const Velocity* v = reg.try_get<Velocity>(e);
         v != nullptr && glm::length(v->value) > 0.0f) {
       drain += kExertionDrainPerSecond;  // moving costs extra
+      // ...and a SPRINT costs extra AGAIN — the exertion tier above walking (rest < walk < sprint),
+      // the need-twin of update_stamina's sprint burn, so a dash across the map arrives hungrier
+      // than a walk. Nested INSIDE the moving check (like update_stamina and tick_fatigue) because
+      // MovePlayer sets the Sprinting stance on shift-held + stamina with NO movement gate: a
+      // player standing still holding sprint carries the stance at zero velocity, so only an
+      // actually MOVING sprinter pays the tier. No Sprinting stance (or a still one) -> the
+      // walk/rest drain -> bit-identical.
+      if (reg.all_of<Sprinting>(e)) drain += kSprintNeedExertion;
     }
-    // ...and a SPRINT costs extra AGAIN — the exertion tier above walking (rest < walk < sprint),
-    // the need-twin of update_stamina's sprint burn, so a dash across the map arrives hungrier than
-    // a walk. Sprinting is a player-set stance (MovePlayer); no Sprinting stance -> the walk drain
-    // -> bit-identical. A sprinter is always moving, so this stacks on the move tier.
-    if (reg.all_of<Sprinting>(e)) drain += kSprintNeedExertion;
     drain *= survivalist_relief(reg, e);  // a trained survivor hungers slower (the ONE need-buffer)
     s.hunger.current -= drain * dt;
     if (s.hunger.current < 0.0f) s.hunger.current = 0.0f;  // never below empty
@@ -1615,11 +1618,12 @@ void drain_water(entt::registry& reg, float dt) {
     if (const Velocity* v = reg.try_get<Velocity>(e);
         v != nullptr && glm::length(v->value) > 0.0f) {
       drain += kExertionDrainPerSecond;  // moving costs extra
+      // ...and a SPRINT costs extra AGAIN (the tier above walking) — the twin of the hunger sprint
+      // drain, nested INSIDE the moving check for the same reason: a still Sprinting stance (shift
+      // held, no WASD) sits at zero velocity and must NOT over-drain. No Sprinting stance (or a
+      // still one) -> bit-identical.
+      if (reg.all_of<Sprinting>(e)) drain += kSprintNeedExertion;
     }
-    // ...and a SPRINT costs extra AGAIN (the tier above walking) — the twin of the hunger sprint
-    // drain, so exertion tiers rest < walk < sprint apply to thirst too. No Sprinting ->
-    // bit-identical.
-    if (reg.all_of<Sprinting>(e)) drain += kSprintNeedExertion;
     drain *= survivalist_relief(reg, e);  // a trained survivor thirsts slower too (the same buffer)
     s.water.current -= drain * dt;
     if (s.water.current < 0.0f) s.water.current = 0.0f;  // never below empty
