@@ -232,6 +232,17 @@ are three separate labels. Unlike the always-present band titles it returns noth
 crosses the threshold, so the HUD only shows *known as* once you've truly earned a reputation. The
 richer ones (*Master Smith*, *Dragonslayer* — from specific skills and gear) hang off the same idea.
 
+A further recognition **conjoins** two of the others into the design's named **role**: `hero_role(ledger)`
+reads a colonist a **Champion** or a **Fiend**, but only when fame *and* deeds AGREE. A Champion is
+*Renowned* (standing ≥ `kRenownFullAt`) **and** dominantly a *Slayer* (Valor the top deed); a Fiend is
+its mirror — *Notorious* **and** dominantly a *Butcher* (Cruelty). Where `standing_title` shows the
+fame alone and `deed_epithet` the deed alone, this is the one label that demands **both**: not just a
+reputation but that it was earned the heroic (or villainous) way. So a Renowned *Savior* — famous, and
+for a good deed — is celebrated but **no Champion**; the role is a martial pole, `HERO`/`VILLAIN`
+distinct from the epithet's nuance, the emergent identity the world's future reactions can key on. A
+pure query (same dominant-deed argmax as `deed_epithet`); `nullptr` for everyone who isn't at a pole,
+so the HUD shows *role* only for the truly exceptional.
+
 A further title reads neither deed nor build but **who you ARE**: `temperament_title(bravery)` names how
 brave or cowardly you've become — *Steady* by default, drifting to *Bold* / *Fearless* or *Timid* /
 *the Coward* (the design's named badge) as Valor and Violence deeds and a friend's death (grief)
@@ -279,8 +290,10 @@ bit-identical to before decay existed.
   titles `standing_title` (repute from deeds), `build_title` (from trained attributes), `deed_epithet`
   (what you're known for — the dominant single ledger dimension, past `kEpithetAt`), `veteran_title`
   (how seasoned, from character level), `temperament_title` (how brave, from the personality
-  bravery axis — the panel-text twin of `personality_tint`), and `versatile_title` (how BROADLY
-  trained — the generalist counterpart to `build_title`'s peak, reading all seven attributes).
+  bravery axis — the panel-text twin of `personality_tint`), `versatile_title` (how BROADLY
+  trained — the generalist counterpart to `build_title`'s peak, reading all seven attributes), and
+  `hero_role` (the design's Champion/Fiend ROLE — the conjunction of Renown *and* a dominant
+  Valor/Cruelty deed, where the other titles each read only one axis).
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point,
   which also **drifts** the actor's matching `Personality` axis via the shared `drift_axis` clamp);
   `decay_standing` (the slow leak toward neutral, run each `step()`); the Charity credit and the
@@ -294,8 +307,9 @@ bit-identical to before decay existed.
   so standing reads on screen *both ways* (heroes swell, villains shrink), and the debug HUD
   shows the player's `standing` number and its titles (`veteran_title` as *rank*, `standing_title`,
   `build_title`, its `breadth` twin `versatile_title` — shown only once you've trained 3+ attributes
-  wide — `temperament_title`, and the `known as` epithet, shown only once a deed kind crosses
-  `kEpithetAt`).
+  wide — `temperament_title`, the `known as` epithet (shown only once a deed kind crosses
+  `kEpithetAt`), and the `role` line (`hero_role` — a gold *Champion* / red *Fiend*, shown only at a
+  fame-and-deed pole).
 - `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired deeds with
   player==NPC parity, the lazy no-deed-no-ledger path, `renown_scale`, `deed_epithet` (threshold,
   dominant-dimension pick, and the fixed tie order), and `versatile_title` (both count-band edges,

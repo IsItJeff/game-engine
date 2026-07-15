@@ -373,6 +373,17 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     // never-acting player shows nothing.
     if (led != nullptr) {
       if (const char* epithet = eng::sim::deed_epithet(*led)) ImGui::Text("known as: %s", epithet);
+      // Role: the design's HERO/VILLAIN — the CONJUNCTION of fame and deeds that the standing and
+      // epithet lines each show only half of. A Renowned Slayer reads "role: Champion", a Notorious
+      // Butcher "role: Fiend"; everyone else (not famous enough, or famous for something else)
+      // shows no line. Coloured to match — heroic gold / villainous red — so the identity beat
+      // pops.
+      if (const char* role = eng::sim::hero_role(*led)) {
+        const bool champion = role[0] == 'C';
+        ImGui::TextColored(
+            champion ? ImVec4{1.0f, 0.85f, 0.3f, 1.0f} : ImVec4{0.95f, 0.3f, 0.3f, 1.0f},
+            "role: %s", role);
+      }
     }
   }
   // Build: which trained Attribute dominates names what KIND of fighter you are (Warrior /

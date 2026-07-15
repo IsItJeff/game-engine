@@ -416,6 +416,30 @@ inline const char* deed_epithet(const BehaviorLedger& led) {
   return nullptr;  // unreachable — top always indexes a real dim; satisfies -Wreturn-type
 }
 
+// A ROLE — the design's HERO / VILLAIN, the recognition that CONJOINS fame and deeds where each
+// sibling title reads only one: standing_title says how famous you are (the signed scalar),
+// deed_epithet what you're KNOWN FOR (your dominant deed), and this fuses them into the design's
+// named role. A CHAMPION is Renowned AND dominantly a Slayer (standing >= kRenownFullAt ∧ Valor the
+// top deed); a FIEND is the mirror, Notorious AND dominantly a Butcher (standing <= -kRenownFullAt
+// ∧ Cruelty the top deed). So the label demands BOTH a reputation AND that it was earned the
+// heroic/villainous way — "famous FOR heroism", not merely famous: a Renowned *Savior*
+// (Charity-led) is celebrated but not a Champion, a martial pole distinct from the epithet's
+// nuance. Returns nullptr for everyone else (the common case). A pure query over the ledger (never
+// stored); the HUD shows it, the sim never reads it, so it can't touch replay. A fresh ledger ->
+// standing 0, no dominant deed past kEpithetAt -> nullptr -> bit-identical. Uses the SAME
+// dominant-deed argmax + earliest-enum tie-break as deed_epithet (so a Champion's epithet is always
+// "the Slayer", a Fiend's "the Butcher"); duplicated rather than shared for a 3-line scan.
+inline const char* hero_role(const BehaviorLedger& led) {
+  const std::int32_t s = standing(led);
+  std::size_t top = 0;  // the dominant deed kind (strict-> keeps the earliest on a tie)
+  for (std::size_t i = 1; i < led.dims.size(); ++i)
+    if (led.dims[i] > led.dims[top]) top = i;
+  if (led.dims[top] < kEpithetAt) return nullptr;  // no deed repeated enough to have earned a name
+  if (s >= kRenownFullAt && static_cast<Deed>(top) == Deed::Valor) return "Champion";
+  if (s <= -kRenownFullAt && static_cast<Deed>(top) == Deed::Cruelty) return "Fiend";
+  return nullptr;  // famous but not FOR heroism/villainy, or not famous enough
+}
+
 // Marks an entity as dangerous to touch. An entity with a Hazard deals `damage`
 // to any player it overlaps and is then consumed — destroyed (see the
 // resolve_contacts system). The drifting motes have this: touch one, take a hit,

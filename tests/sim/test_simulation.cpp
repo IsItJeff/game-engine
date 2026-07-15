@@ -7436,6 +7436,43 @@ TEST_CASE("deed_epithet names you by your most-repeated deed once it crosses the
   REQUIRE(std::string(eng::sim::deed_epithet(tied)) == "the Butcher");
 }
 
+TEST_CASE(
+    "hero_role conjoins fame and deeds: a Renowned Slayer is a Champion a Notorious Butcher a "
+    "Fiend",
+    "[sim]") {
+  // The design's HERO/VILLAIN role: the CONJUNCTION standing_title (fame) and deed_epithet
+  // (dominant deed) each show only HALF of. CHAMPION = Renowned (standing >= kRenownFullAt 50) AND
+  // dominantly a Slayer (Valor the top deed); FIEND = Notorious (<= -50) AND dominantly a Butcher
+  // (Cruelty). Everyone else -> nullptr: not famous enough, OR famous for the wrong deed. standing
+  // weights: Charity*4 + Valor*5 - Cruelty*6 - Violence*4. Pin both poles, the fresh miss, the
+  // not-famous miss, and BOTH famous-but-wrong-deed edges (Champion side: a Renowned Savior / a
+  // high-Valor but Charity-dominant hero; Fiend side: a Notorious but Violence-dominant Brutal) so
+  // each pole's dominant-deed guard is independently protected.
+  const auto role = [](std::int32_t charity, std::int32_t valor, std::int32_t cruelty,
+                       std::int32_t violence) {
+    eng::sim::BehaviorLedger led{};
+    led.dims[static_cast<std::size_t>(eng::sim::Deed::Charity)] = charity;
+    led.dims[static_cast<std::size_t>(eng::sim::Deed::Valor)] = valor;
+    led.dims[static_cast<std::size_t>(eng::sim::Deed::Cruelty)] = cruelty;
+    led.dims[static_cast<std::size_t>(eng::sim::Deed::Violence)] = violence;
+    return eng::sim::hero_role(led);
+  };
+  REQUIRE(role(0, 0, 0, 0) == nullptr);                   // a fresh ledger -> no role
+  REQUIRE(std::string(role(0, 12, 0, 0)) == "Champion");  // Valor 12 -> standing 60, Valor-dominant
+  REQUIRE(std::string(role(0, 0, 10, 0)) ==
+          "Fiend");                       // Cruelty 10 -> standing -60, Cruelty-dominant
+  REQUIRE(role(0, 5, 0, 0) == nullptr);   // a mild Slayer: Valor-dominant but standing 25 < 50
+  REQUIRE(role(15, 0, 0, 0) == nullptr);  // a Renowned Savior: famous + good, but Charity-dominant
+  REQUIRE(
+      role(10, 8, 0, 0) ==
+      nullptr);  // famous (standing 80) with high Valor, but Charity DOMINATES -> not a Champion
+  // The Fiend side needs its OWN wrong-deed rejection (else dropping the Cruelty guard ships
+  // green): Violence 15 -> standing -60 (Notorious) but Violence-dominant (the Brutal, not the
+  // Butcher) -> no role. (Unreachable in play -- a lethal cruel strike feeds BOTH -- but it pins
+  // the Cruelty guard.)
+  REQUIRE(role(0, 0, 0, 15) == nullptr);
+}
+
 TEST_CASE("versatile_title rewards BREADTH: a generalist earns it a specialist earns nothing",
           "[sim]") {
   // The SIXTH derived recognition, and the generalist counterpart to build_title's PEAK: it reads
