@@ -205,6 +205,12 @@ tie:
   parallel: a downed **hero** (`standing ≥ +kKnownAt`) is discounted too, so the colony rushes to a
   fallen champion from farther *even without a personal bond* (the [morality](morality.md) villain-veto's
   bright mirror). Affinity and standing **stack** — a bonded hero is worth the longest trek of all.
+- **Teach your friends first** — the same `/200` discount weights *whom a mentor teaches*. `teach`
+  picks the nearest eligible student, but the candidate's distance is now discounted by the mentor's
+  affinity toward it, so a **bonded pupil feels closer** and wins the lesson over a nearer stranger (a
+  resented one, inflated, is skipped). Neutral affinity is the plain distance (bit-identical). So the
+  hearth-friendships and drama-bonds a colony forms feed back into *who* it lifts up — a mentor
+  invests in the protege it likes.
 - **Avoidance** (negative, active) — the grudge's *active* completion, the negative twin of
   bond-pull. Where a friend draws an idle colonist **toward** it, a resented one (affinity at/below
   `kGrudgeThreshold`) pushes it **away**: a new `steer_npcs` rung, just above the gather rungs, steers
