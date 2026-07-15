@@ -356,6 +356,12 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
   // the twin of the deed-derived standing title above. "Greenhorn" until you train one.
   if (const eng::sim::Attributes* attrs = world.registry().try_get<eng::sim::Attributes>(player)) {
     ImGui::Text("build: %s", eng::sim::build_title(*attrs));
+    // Breadth: the generalist twin of the build line above — if you've trained BROADLY (3+ of the
+    // seven attributes past the bar) you also read "the Versatile"/"the Polymath". A specialist (or
+    // a fresh player) earns no breadth badge, so versatile_title returns nullptr and the line hides
+    // — shown only when earned, exactly like the deed epithet.
+    if (const char* breadth = eng::sim::versatile_title(*attrs))
+      ImGui::Text("breadth: %s", breadth);
   }
   // Temperament: how BRAVE or COWARDLY you are — the panel-text twin of the bravery dot-tint above
   // (draw_entities), naming the design's "the Coward"/"Fearless". A fresh player is "Steady"
