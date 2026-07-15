@@ -8437,6 +8437,107 @@ TEST_CASE("equipping a venom weapon folds its venom into the wielder", "[sim]") 
   REQUIRE(eq->weapon_venom == Approx(6.0f));  // the venom folded into the wielder's cache
 }
 
+TEST_CASE("a vampiric weapon's hit heals the wielder a slice of the damage it deals", "[sim]") {
+  // The player-side LEECH proc: wielding a vampiric blade (Equipped.weapon_leech > 0) heals the
+  // wielder a fraction of the damage a landed hit deals -- the mirror of the leech creature's
+  // on-bite heal, and the on-hit twin of kill-vigor. A plain/bare swing heals nothing
+  // (bit-identical), the drink scales with the leech, and it's capped at the wielder's max HP. The
+  // foe SURVIVES (full HP), so no kill-vigor contaminates the measurement. Same rng seed each call
+  // -> same damage dealt, so the proportional check is exact. (Returns a VALUE, not a pointer into
+  // the local registry.)
+  const auto health_gained = [](float weapon_leech, float start_hp) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(
+        atk);  // STR 1 -> raw is the flat base; not <30% HP -> no berserk
+    reg.emplace<eng::sim::Skills>(atk);
+    auto& s =
+        reg.emplace<eng::sim::Stats>(atk, eng::sim::Vital{start_hp, 100.0f, 0.0f});  // wounded
+    if (weapon_leech > 0.0f) reg.emplace<eng::sim::Equipped>(atk).weapon_leech = weapon_leech;
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});  // in reach
+    reg.emplace<eng::sim::Stats>(
+        foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});  // full -> survives, no kill-vigor
+    reg.emplace<eng::sim::Attributes>(foe);  // default DEX 1 -> never dodges, VIT 1 -> defence 0
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};
+    eng::sim::perform_attack(reg, atk, rng);
+    return s.health.current - start_hp;
+  };
+
+  const float drink = health_gained(0.5f, 50.0f);
+  REQUIRE(drink > 0.0f);  // a vampiric blade DRINKS on a landed hit...
+  REQUIRE(health_gained(0.0f, 50.0f) == Approx(0.0f));  // ...a plain/bare swing heals nothing
+  REQUIRE(
+      drink ==
+      Approx(2.0f * health_gained(0.25f, 50.0f)));  // proportional to leech (same seed -> same dmg)
+  REQUIRE(health_gained(0.5f, 98.0f) ==
+          Approx(2.0f));  // capped at max: a near-full wielder gains only up to its ceiling
+}
+
+TEST_CASE("equipping a vampiric weapon folds its leech into the wielder", "[sim]") {
+  // The equip plumbing: equip_nearest_gear copies a vampiric blade's leech into the Equipped
+  // cache's weapon_leech, so perform_attack reads it from the cache (folded once, not per hit) --
+  // exactly as it folds venom, crit, and strength.
+  entt::registry reg;
+  const entt::entity wearer = reg.create();
+  reg.emplace<eng::sim::Transform>(wearer, eng::Vec2{0.0f, 0.0f});
+  const entt::entity blade = reg.create();
+  reg.emplace<eng::sim::Transform>(blade, eng::Vec2{5.0f, 0.0f});  // within equip reach
+  reg.emplace<eng::sim::Weapon>(blade).leech = 0.3f;
+
+  eng::sim::equip_nearest_gear(reg, wearer);
+
+  const eng::sim::Equipped* eq = reg.try_get<eng::sim::Equipped>(wearer);
+  REQUIRE(eq != nullptr);
+  REQUIRE(eq->weapon_leech == Approx(0.3f));  // the leech folded into the wielder's cache
+}
+
+TEST_CASE("dropping a vampiric blade clears the wielder's leech and carries it to the ground",
+          "[sim]") {
+  // The Drop command must uphold the leech trait's twin invariants, exactly as it does for
+  // venom/crit: (1) the PHANTOM-LIFEDRAIN guard -- clearing the weapon slot must ZERO weapon_leech,
+  // else an armoured dropper KEEPS the Equipped and drinks bare-handed forever; (2) IDENTITY -- the
+  // blade dropped on the ground carries its leech, so re-grabbing it is the same blade, not a plain
+  // one. (Drop is a Command, so this runs through the real World funnel.)
+  eng::sim::World world;
+  const entt::entity player = world.player();
+  entt::registry& reg = world.registry();
+
+  // Wield a vampiric blade AND wear armour, so the Equipped survives the drop (only the weapon slot
+  // clears -- the case where the phantom-lifedrain bug bit).
+  eng::sim::Equipped eq{};
+  eq.strength_bonus = 2;
+  eq.move_penalty = 0.2f;
+  eq.weapon_leech = 0.3f;
+  eq.weapon_durability = 40.0f;
+  eq.defence_bonus = 6.0f;  // armour worn -> the cache is kept after the drop
+  reg.emplace_or_replace<eng::sim::Equipped>(player, eq);
+  const eng::Vec2 spot =
+      reg.get<eng::sim::Transform>(player).position;  // where the blade will land
+
+  world.submit(eng::sim::drop(eng::sim::kLocalPlayer));
+  world.step();
+
+  // (1) phantom-lifedrain fixed: the kept Equipped no longer carries leech, so no bare-handed
+  // drink.
+  const eng::sim::Equipped& after = reg.get<eng::sim::Equipped>(player);
+  REQUIRE(after.weapon_leech == Approx(0.0f));   // the leech was shed with the weapon slot...
+  REQUIRE(after.strength_bonus == 0);            // ...the whole weapon slot cleared...
+  REQUIRE(after.defence_bonus == Approx(6.0f));  // ...but the armour slot stayed
+  // (2) identity: the blade dropped AT the player's spot carries its leech (re-grab = the same
+  // blade).
+  bool found = false;
+  for (const entt::entity w : reg.view<eng::sim::Weapon, eng::sim::Transform>()) {
+    if (glm::distance(reg.get<eng::sim::Transform>(w).position, spot) < 1.0f) {
+      REQUIRE(reg.get<eng::sim::Weapon>(w).leech == Approx(0.3f));
+      found = true;
+    }
+  }
+  REQUIRE(found);  // the dropped blade is really on the ground, carrying its lifedrain
+}
+
 TEST_CASE("item quality scales the equipped boon but not the bane: a finer blade hits harder",
           "[sim]") {
   // The quality seam (the item-tier axis): equip folds the BOON scaled by the item's quality, while

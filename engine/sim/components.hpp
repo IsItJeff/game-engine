@@ -638,6 +638,14 @@ struct Weapon {
   // (spawn_keen_steel), so it is never pure-upside. 0 = a plain blade, bit-identical for anyone not
   // wielding a keen one. Last for positional-init safety.
   float crit_bonus = 0.0f;
+  // LEECH — the vampiric trait (the third named weapon trait). If > 0 a landed hit on a hostile
+  // DRINKS: the wielder heals this fraction of the damage it dealt (perform_attack), the
+  // player-side mirror of the leech creature's on-bite heal and the on-HIT twin of kill-vigor's
+  // on-KILL heal. It feeds a sustain build — you out-heal a war of attrition instead of finishing
+  // fast. Bought with a notch of raw Strength (spawn_vampiric_weapon), so it is never pure-upside.
+  // 0 = a plain blade, bit-identical for anyone not wielding a vampiric one. Last for
+  // positional-init safety.
+  float leech = 0.0f;
 };
 
 // A dropped piece of ARMOUR — the first defensive item, the offense/defence counterpart of
@@ -715,6 +723,11 @@ struct Equipped {
   // plain plate or bare (bit-identical). Cleared when the armour slot clears (plate shatters). Last
   // field, same positional-init and zero-fill guarantee as the fields above.
   float armour_evasion = 0.0f;
+  // The wielded blade's VAMPIRIC leech, copied from Weapon::leech on equip; a landed hit heals the
+  // wielder this fraction of the damage dealt (perform_attack). 0 = a plain blade (bit-identical).
+  // Cleared when the weapon slot clears (blade shatters). Last field, same positional-init and
+  // zero-fill guarantee as the fields above.
+  float weapon_leech = 0.0f;
 };
 
 // --- Stats system ---

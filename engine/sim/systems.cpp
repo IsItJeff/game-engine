@@ -2610,8 +2610,9 @@ namespace {
 // logic (world.cpp) — shared here by the two shatters so they can never drift.
 void remove_equipped_if_empty(entt::registry& reg, entt::entity e, const Equipped& eq) {
   if (eq.strength_bonus == 0 && eq.move_penalty == 0.0f && eq.weapon_venom == 0.0f &&
-      eq.crit_bonus == 0.0f && eq.weapon_durability == 0.0f && eq.defence_bonus == 0.0f &&
-      eq.stamina_regen_penalty == 0.0f && eq.armour_durability == 0.0f) {
+      eq.crit_bonus == 0.0f && eq.weapon_leech == 0.0f && eq.weapon_durability == 0.0f &&
+      eq.defence_bonus == 0.0f && eq.stamina_regen_penalty == 0.0f &&
+      eq.armour_durability == 0.0f) {
     reg.remove<Equipped>(e);
   }
 }
@@ -2945,6 +2946,8 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
   constexpr float kExecuteBonus = 1.5f;  // ...and the finishing blow lands this much harder
   if (Stats* st = reg.try_get<Stats>(target); st != nullptr) {
     const bool was_alive = st->health.current > 0.0f;
+    const float before_hp =
+        st->health.current;  // for the vampiric leech below (cap the drink at HP removed)
     float dealt =
         st->health.current < st->health.max * kExecuteThreshold ? applied * kExecuteBonus : applied;
     dealt *= backstab;  // a flank stacks on the finisher — a distracted, half-dead beast folds fast
@@ -3005,6 +3008,21 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
     // potency). Only a venomous blade (gear->weapon_venom > 0) does this, so a bare-handed or
     // plain-weapon swing is unchanged. `gear` is the wielder's Equipped fetched at the top.
     if (gear != nullptr && gear->weapon_venom > 0.0f) apply_venom(reg, target, gear->weapon_venom);
+    // A VAMPIRIC weapon's hit DRINKS: the wielder heals a fraction of the damage it dealt — the
+    // player-side mirror of the leech creature's on-bite heal, and the on-HIT twin of kill-vigor's
+    // on-KILL heal (a sustain build — you out-heal a war of attrition instead of finishing fast).
+    // It drinks only what the foe ACTUALLY lost (min(dealt, before_hp), so a huge overkill on a
+    // near-dead foe can't over-heal off HP that wasn't there), scaled by the blade's leech, capped
+    // at the wielder's max. Only a vampiric blade (gear->weapon_leech > 0) with a Stats-bearing
+    // attacker heals, so a bare-handed or plain swing is bit-identical. `gear`/`atk_stats` were
+    // fetched at the top; NPCs drink too via the shared perform_attack.
+    if (gear != nullptr && gear->weapon_leech > 0.0f && atk_stats != nullptr) {
+      const float drained =
+          dealt < before_hp ? dealt : before_hp;  // only what the foe actually lost
+      atk_stats->health.current += drained * gear->weapon_leech;
+      if (atk_stats->health.current > atk_stats->health.max)
+        atk_stats->health.current = atk_stats->health.max;
+    }
   }
 
   // CLEAVE: a wide swing catches a SECOND foe. The nearest OTHER Enemy within kCleaveRadius of the
@@ -3060,6 +3078,7 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       gear->weapon_venom = 0.0f;
       gear->crit_bonus =
           0.0f;  // a shattered keen blade loses its crit edge with the rest of its slot
+      gear->weapon_leech = 0.0f;  // ...and a shattered vampiric blade loses its lifedrain too
       gear->weapon_durability = 0.0f;
       // ...and if nothing else is worn, REMOVE the now-empty cache so "bare" reads as gear ==
       // nullptr everywhere (else a shattered NPC, gated on Equipped presence, never re-arms).
@@ -3910,6 +3929,7 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
     eq.move_penalty = wpn.move_penalty;
     eq.weapon_venom = wpn.venom_per_second;  // a venom blade folds its proc in with its other stats
     eq.crit_bonus = wpn.crit_bonus;          // a keen blade folds its crit chance in the same way
+    eq.weapon_leech = wpn.leech;             // a vampiric blade folds its lifedrain in the same way
     eq.weapon_durability = wpn.durability;  // a fresh blade starts with its full life; hits wear it
   } else {
     const Armour& arm = armours.get<Armour>(nearest);
@@ -4123,6 +4143,28 @@ void spawn_venom_weapon(entt::registry& reg, Vec2 pos) {
   w.strength_bonus = 2;       // lighter/weaker than the steel blade's +4 — the trade for the proc
   w.move_penalty = 0.15f;     // and nimbler than the steel blade's 0.25 heft
   w.venom_per_second = 6.0f;  // its hits poison (health/sec); a knob
+}
+
+// Spawn a VAMPIRIC blade on the ground — the third named weapon TRAIT (after venom and keen), a
+// standalone weapon TYPE like the venom fang. A lifedrain blade: its landed hits DRINK, healing the
+// wielder a fraction of the damage dealt (perform_attack reads Equipped.weapon_leech, folded from
+// Weapon::leech on equip — NOTHING new in equip or combat beyond the one fold + heal). Bought with
+// a notch of raw Strength (steel's +4 down to +2), so it's never pure-upside: you trade raw burst
+// for SUSTAIN — the player-side answer to the leech creature's on-bite heal, the on-hit twin of
+// kill-vigor. A dark blood-red dot to tell it from steel / the green fang / keen steel. One
+// definition ready to be shared by the opening scene and a later loot-drop (the way the venom fang
+// drops from a spitter) — so a looted blade would be identical to the seeded one; hand-placed only
+// for now (a slain-leech drop is the natural renewable source, deferred so the drop stream stays
+// seeded-identical). Draws no RNG.
+void spawn_vampiric_weapon(entt::registry& reg, Vec2 pos) {
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.6f, 0.1f, 0.15f}, 6.0f);  // dark blood-red
+  Weapon& w = reg.emplace<Weapon>(e);
+  w.strength_bonus = 2;   // steel's +4 down to +2 — the paired -STR trade for the lifedrain
+  w.move_penalty = 0.2f;  // a shade nimbler than steel's 0.25 heft
+  w.leech = 0.3f;         // heals 30% of each landed hit's damage to the wielder; a knob
 }
 
 // A steel blade that rolled VENOMOUS (the first named equipment TRAIT). Mirrors spawn_weapon's
@@ -4641,7 +4683,7 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
     if (const Equipped* eq = reg.try_get<Equipped>(e); eq != nullptr) {
       const Vec2 pos = reg.get<Transform>(e).position;
       if (eq->strength_bonus != 0 || eq->move_penalty != 0.0f || eq->weapon_venom != 0.0f ||
-          eq->crit_bonus != 0.0f)
+          eq->crit_bonus != 0.0f || eq->weapon_leech != 0.0f)
         kit_weapon_drops.push_back(pos);  // it was armed -> its weapon drops
       if (eq->defence_bonus != 0.0f || eq->stamina_regen_penalty != 0.0f)
         kit_armour_drops.push_back(pos);  // it was armoured -> its plate drops
