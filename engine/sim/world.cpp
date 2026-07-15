@@ -388,19 +388,23 @@ void spawn_npc_if_due(entt::registry& reg, float& timer, std::mt19937& rng, floa
   // Warrior aspiration (steer_npcs' hunt rung sends it after creatures); an INDUSTRIOUS but
   // not-brave one (a Drudge) craves PLENTY instead — the Provider aspiration (it works the food
   // plots, npc_harvest); a GREEDY but neither-brave-nor-industrious one craves POWER — the Scholar
-  // aspiration, seeking a Spellbook to learn magic's might (steer_npcs' study rung). A priority
-  // chain, so a colonist gets ONE dream (brave > industrious > greedy), never several. Openers and
-  // every test NPC get no aspiration, so those scenes stay bit-identical — this only shapes the
-  // ongoing reinforcements. Tuning knobs.
+  // aspiration, seeking a Spellbook to learn magic's might (steer_npcs' study rung); a KIND but
+  // otherwise-unremarkable one craves to HELP — the Healer aspiration, rushing to tend the hurt
+  // (steer_npcs' mercy rung). A priority chain, so a colonist gets ONE dream (brave > industrious >
+  // greedy > compassionate), never several. Openers and every test NPC get no aspiration, so those
+  // scenes stay bit-identical — this only shapes the ongoing reinforcements. Tuning knobs.
   constexpr int kWarriorAspirationBravery = 60;
   constexpr int kProviderAspirationIndustry = 60;
   constexpr int kScholarAspirationGreed = 60;
+  constexpr int kHealerAspirationCompassion = 60;
   if (p.bravery >= kWarriorAspirationBravery)
     reg.emplace<Aspiration>(e, Aspiration{AspirationKind::Warrior});
   else if (p.industry >= kProviderAspirationIndustry)
     reg.emplace<Aspiration>(e, Aspiration{AspirationKind::Provider});
   else if (p.greed >= kScholarAspirationGreed)
     reg.emplace<Aspiration>(e, Aspiration{AspirationKind::Scholar});
+  else if (p.compassion >= kHealerAspirationCompassion)
+    reg.emplace<Aspiration>(e, Aspiration{AspirationKind::Healer});
 }
 
 // Build the opening scene: a controllable player in the centre, a few wandering

@@ -333,6 +333,9 @@ void steer_npcs(entt::registry& reg) {
   auto cold_zones = reg.view<ColdZone, Transform>();  // for the AVOID-THE-COLD rung
   auto books =
       reg.view<Spellbook, Transform>();  // for the SCHOLAR aspiration: a tome to learn from
+  auto people = reg.view<Stats, Transform>(
+      entt::exclude<Enemy,
+                    Downed>);  // for the HEALER aspiration: allies (incl. the player) to tend
   for (const entt::entity n : npcs) {
     const Vec2 pos = npcs.get<Transform>(n).position;
 
@@ -960,6 +963,43 @@ void steer_npcs(entt::registry& reg) {
             const float len = glm::length(toward);
             if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kStudySpeed * move_scale;
             continue;  // off to the library — skip the idle rungs below
+          }
+          break;
+        }
+        case AspirationKind::Healer: {
+          // Dreams of MERCY: a compassionate colonist proactively closes on the nearest HURT ally —
+          // one that's WOUNDED (health below its max) OR POISONED — to tend it, the support mirror
+          // of the warrior's hunt and the provider's harvest. It does NOT heal here: it supplies
+          // the INTENT (bring the hurt ally into reach), and npc_heal (mends the wounded) /
+          // npc_cleanse (cures the poisoned) then fire on their own — so a compassionate CASTER
+          // becomes a field medic, SEEKING the hurt rather than only tending whoever wanders into
+          // range. A non-caster's rush carries no mend YET — it's the compassionate instinct alone
+          // (be near the hurt), a visible drive whose HEALING payoff awaits the magic: the ONE
+          // aspiration whose effect needs a prerequisite (a caster) rather than resolving on
+          // arrival like the hunt lands blows, the harvest reaps, the study learns. It can tend the
+          // player too (a wounded/poisoned player is a valid patient). Mostly self-limiting: a
+          // badly-hurt healer retreats to a hearth FIRST if one is in reach (the rung above) — but
+          // with no fire nearby it may still rush to the hurt, a selfless streak. Reuses the
+          // `people` view (allies with Stats) and the Provider's kTend* knobs (a tend is a tend, of
+          // land or of a person).
+          entt::entity patient = entt::null;
+          float nearest_hurt = kTendRange;
+          for (const entt::entity a : people) {
+            if (a == n) continue;  // tend an ALLY, not yourself
+            const Stats& st = people.get<Stats>(a);
+            if (st.health.current >= st.health.max && !reg.all_of<Poisoned>(a))
+              continue;  // hale AND unpoisoned — nothing to tend
+            const float d = glm::distance(pos, people.get<Transform>(a).position);
+            if (d < nearest_hurt) {
+              nearest_hurt = d;
+              patient = a;
+            }
+          }
+          if (patient != entt::null) {
+            const Vec2 toward = people.get<Transform>(patient).position - pos;
+            const float len = glm::length(toward);
+            if (len > 0.0f) npcs.get<Velocity>(n).value = (toward / len) * kTendSpeed * move_scale;
+            continue;  // rushing to the hurt — skip the idle rungs below
           }
           break;
         }
