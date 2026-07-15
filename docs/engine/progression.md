@@ -69,16 +69,20 @@ Eighteen strands are wired end to end so far, across all seven attributes:
   combat role is that purely **defensive** ward, never offence;
 - **public heroism with allies watching — felling a foe *or* hauling up a downed ally** — trains
   **Leadership**, which raises **Charisma**, the second *non-combat* attribute (the design's **social**
-  stat), with **two** effects — depth *and* reach. Each level deepens the **camaraderie** a witness
-  feels toward you per heroic act (the shared
+  stat), with **three** effects — depth, reach, *and* persistence. Each level deepens the
+  **camaraderie** a witness feels toward you per heroic act (the shared
   `bond_witnesses` grant, at a kill *and* a rescue, see [relationships](relationships.md)), up to a ×2
-  cap; **and** it widens the **reach** — how far a deed is witnessed and admired (`kCamaraderieRadius`
+  cap; it widens the **reach** — how far a deed is witnessed and admired (`kCamaraderieRadius`
   scales with Charisma, up to ×1.5), so a charismatic champion's heroism inspires **more onlookers**,
-  each **more deeply**. So Charisma **compounds** twice over: a champion who fights and saves beside
-  its colony forges ever-deeper bonds with an ever-wider ring the more it leads (be seen being heroic →
-  Leadership → Charisma → allies bond harder *and* from farther), the
-  social mirror of a striker building Strength by hitting. Like Wisdom it grows neither the pools nor a
-  fighter build — it grows the colony's *bonds*.
+  each **more deeply**. Those two are about how OTHERS bond to a charismatic leader (both keyed on the
+  *leader's* CHA, at `bond_witnesses`). The **third** acts the other way, on a character's OWN ties:
+  a charismatic edge-owner's bonds cool **SLOWER** (`decay_bonds`' period lengthens with the owner's
+  Charisma, up to ×2), so the social-glue stat doesn't just FORGE bonds but HOLDS them against the
+  leak. So Charisma **compounds**: leading heroically forges ever-deeper bonds in an ever-wider ring
+  of onlookers (be seen being heroic → Leadership → Charisma → allies bond harder *and* from farther),
+  while a charismatic character's own ties **fade slower** — the social mirror of a striker building
+  Strength by hitting. Like Wisdom it grows neither the pools nor a fighter build — it grows the
+  colony's *bonds*.
 - **casting a spell** (a `magic_bolt`, the **C** command) trains **Spellcasting**, which raises
   **Intellect** — the **seventh** attribute, completing the set, and the design's **magic** stat. Each
   level sharpens a bolt's damage, the arcane mirror of Strength on a swing. It also **eases a spell's
