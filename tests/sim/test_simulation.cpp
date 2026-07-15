@@ -5048,6 +5048,48 @@ TEST_CASE("a learned mage casts a bolt that chips a creature spends mana and tra
           eng::Fixed{});  // ...training Spellcasting -> Intellect
 }
 
+TEST_CASE("Intellect eases a spell's mana cost: the arcane twin of VIT's stamina eased_cost",
+          "[sim]") {
+  // INT = "the arcane Cost" (INTELLECT's 2nd effect beside sharpening a bolt): a cleverer caster
+  // spends LESS mana per spell, via the SAME eased_bane half-floor as VIT's stamina eased_cost -- a
+  // spell still costs (never free), but a sharp mind casts more per bar. INT 1 (or no sheet) -> the
+  // FULL cost -> bit-identical for every existing caster (which is why the mana tests above stay
+  // green). Pin the helper math, then confirm the wiring through a real magic_bolt cast.
+  eng::sim::Attributes attrs;  // Intellect defaults to level 1
+  REQUIRE(eng::sim::eased_mana_cost(25.0f, &attrs) == Approx(25.0f));  // INT 1 -> the full cost...
+  REQUIRE(eng::sim::eased_mana_cost(25.0f, nullptr) ==
+          Approx(25.0f));  // ...as does no sheet at all
+  attrs.intellect.level = 10;
+  const float eased = eng::sim::eased_mana_cost(25.0f, &attrs);
+  REQUIRE(eased < 25.0f);                                     // a cleverer caster spends less...
+  REQUIRE(eased >= 25.0f * 0.5f);                             // ...but never below the half-floor
+  REQUIRE(eased == Approx(eng::sim::eased_bane(25.0f, 10)));  // exactly the shared eased_bane curve
+  attrs.intellect.level = 100;
+  REQUIRE(eng::sim::eased_mana_cost(25.0f, &attrs) < eased);  // higher INT eases more (monotonic)
+  REQUIRE(
+      eng::sim::eased_mana_cost(25.0f, &attrs) ==
+      Approx(12.5f));  // ...bottoming at EXACTLY the half-floor (relief caps at 0.5, never free)
+
+  // Wiring: a real bolt cast by a high-INT mage leaves more mana than a fresh one.
+  const auto mana_spent = [](int intellect) {
+    entt::registry reg;
+    const entt::entity mage = reg.create();
+    reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mage).intellect.level = intellect;
+    reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);
+    auto& s = reg.emplace<eng::sim::Stats>(mage);
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{200.0f, 0.0f});  // in bolt range
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{40.0f, 40.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(foe);
+    reg.emplace<eng::sim::Enemy>(foe);
+    eng::sim::magic_bolt(reg, mage);
+    return s.mp.max - s.mp.current;
+  };
+  REQUIRE(mana_spent(10) < mana_spent(1));  // the clever mage spent less on the same bolt...
+  REQUIRE(mana_spent(10) >= mana_spent(1) * 0.5f);  // ...but still paid at least the half-floor
+}
+
 TEST_CASE("magic is resisted by Wisdom not armour: a bolt pierces the plate that blunts a blade",
           "[sim]") {
   // The design's "magical INT-vs-WIS": a bolt is softened by the target's WISDOM (attunement), NOT

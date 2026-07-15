@@ -10,7 +10,7 @@ mana, but it does nothing until you have *learned* to cast.
 |---|---|
 | **`Stats.mp`** | the **mana** bar — a `Vital` like stamina, spent by casting and regenerating at rest |
 | **`SkillId::Spellcasting`** | the **learned gate** — an entity that carries this skill can cast; one that doesn't, can't |
-| **`AttrId::Intellect`** | the design's 7th attribute, the **magic** one — scales a spell's power, fed by casting |
+| **`AttrId::Intellect`** | the design's 7th attribute, the **magic** one — scales a spell's power AND eases its mana cost (`eased_mana_cost`), fed by casting |
 | **`magic_bolt`** | the first **spell** — a homing bolt at the nearest hostile, the magic mirror of a throw |
 | **`Cast` command** | the funnel path (press **C**) that runs `magic_bolt` for the player |
 | **`heal_spell`** | the **support** spell — mends the nearest wounded ally, trains `Healing → Wisdom` |

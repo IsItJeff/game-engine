@@ -1170,6 +1170,18 @@ inline float eased_cost(float base_cost, const Attributes* attrs) {
   return attrs != nullptr ? eased_bane(base_cost, attrs->endurance.level) : base_cost;
 }
 
+// INT = "the arcane Cost": a cleverer caster spends LESS mana per spell — the magic mirror of VIT's
+// eased_cost for stamina, easing the flat mana cost by the SAME eased_bane half-floor the STR/VIT
+// gear masteries and the stamina spend use. A spell still costs mana (never free — the half-floor
+// guarantees it), but a sharp mind casts more before the bar runs dry: INTELLECT's second effect
+// beside sharpening a bolt, the caster-economy fantasy. Intellect 1 (or no Attributes) ->
+// eased_bane(base, 1) = base -> the FULL cost -> every non-INT-trained caster (every existing mana
+// test) is bit-identical. Distinct from Attunement, which grows/regens the MP POOL; this eases the
+// SPEND — the arcane twin of eased_cost's stamina spend.
+inline float eased_mana_cost(float base_cost, const Attributes* attrs) {
+  return attrs != nullptr ? eased_bane(base_cost, attrs->intellect.level) : base_cost;
+}
+
 // DEX = "agility": a nimble mover WADES a mire's mud better — the movement twin of STR's weapon
 // carry and VIT's armour-bear, closing the gap where the mire was the ONE movement modifier that
 // read no attribute (weapon-heft and need-efficiency already shape move speed). Given a mire's
