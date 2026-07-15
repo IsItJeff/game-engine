@@ -468,11 +468,28 @@ inline constexpr float kWardedDefence =
 inline constexpr float kWardedThorns =
     2.5f;  // ...bought with spikes: flat chip back per blow soaked
 
+// The EVASIVE (light) plate's paired numbers — armour's SECOND flavourful trait, the twin of the
+// weapon's venom+keen pair. It trades MORE raw defence than warded (kEvasiveDefence, plain plate's
+// 6 down THREE) for a flat DODGE bonus (kEvasiveEvasion): the wearer slips more blows OUTRIGHT, the
+// active-avoidance counterpart to warded's passive chip-back. Well under the 0.50 dodge cap, so it
+// stacks with earned DEX without ever guaranteeing a dodge — a stream of hits still lands. Knobs.
+inline constexpr float kEvasiveDefence =
+    3.0f;  // plain plate's 6 down three — the paired -defence trade (lighter than warded's 4)
+inline constexpr float kEvasiveEvasion =
+    0.12f;  // ...bought with nimbleness: +12% flat dodge while worn
+
 // Spawn a WARDED plate — a piece of Armour that rolled the thorns trait, the defensive counterpart
 // of spawn_keen_steel/spawn_venomous_steel. Reduced defence (kWardedDefence) in exchange for
 // reflecting kWardedThorns onto any creature that strikes the wearer (resolve_creature_contacts). A
 // distinct spiked-iron tint so it reads apart from plain bronze plate. Draws no RNG.
 void spawn_warded_armour(entt::registry& reg, Vec2 pos, float quality = 1.0f);
+
+// Spawn an EVASIVE plate — a piece of Armour that rolled the dodge trait, the LIGHT counterpart of
+// spawn_warded_armour. Reduced defence (kEvasiveDefence, a bigger notch than warded's) in exchange
+// for a flat kEvasiveEvasion dodge bonus added to the wearer's dodge in resolve_creature_contacts
+// (where a plate meets a creature's blow). A distinct pale tint so it reads apart from plain bronze
+// plate. Draws no RNG.
+void spawn_evasive_armour(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 
 // Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
 // player overlaps restores its `heal` health (capped) AND permanently raises max HP by

@@ -523,6 +523,11 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // blade: E it for a stand-and-tank build that soaks a little less but chips back every creature
   // that hits you. Placed clear of the mire (west) and cold zone (east) so it's a clean third pick.
   spawn_warded_armour(reg, Vec2{center.x, center.y - 160.0f});
+  // An EVASIVE plate (pale light-steel dot) beside the warded one — armour's SECOND trait, the
+  // LIGHT build: E it to soak much less but slip more blows outright (the mobile counterpart to
+  // warded's stand-and-chip-back). A hand-placed opener so the dodge build is reachable for
+  // playtest; rolling it as loot (like the warded plate does) is a clean follow-up.
+  spawn_evasive_armour(reg, Vec2{center.x + 60.0f, center.y - 160.0f});
   return player;
 }
 

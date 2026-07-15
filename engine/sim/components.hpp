@@ -649,6 +649,14 @@ struct Armour {
   // of raw defence (spawn_warded_armour), so it is never pure-upside. 0 = a plain plate,
   // bit-identical for anyone not wearing a warded one. Last for positional-init safety.
   float thorns_per_hit = 0.0f;
+  // EVASIVE — the DODGE trait, armour's SECOND flavourful trait (the twin of the weapon's two:
+  // venom+keen). If > 0 the plate is LIGHT and nimble: it adds this flat dodge chance to the
+  // wearer's hit-vs-Evasion contest in resolve_creature_contacts (where a worn plate meets a
+  // creature's blow), so an evasive wearer slips more blows OUTRIGHT — the active-avoidance
+  // counterpart to warded's passive chip-back. Bought with a bigger notch of raw defence than
+  // warded (spawn_evasive_armour), so it is never pure-upside. 0 = a plain plate, bit-identical for
+  // anyone not wearing an evasive one. Last for positional-init safety.
+  float evasion_bonus = 0.0f;
 };
 
 // The cached bonuses of everything a character is wearing — the design's EquipMods, folded ONCE
@@ -687,6 +695,11 @@ struct Equipped {
   // plate or bare (bit-identical). Cleared when the armour slot clears (plate shatters). Last
   // field, same positional-init and zero-fill guarantee as the fields above.
   float armour_thorns = 0.0f;
+  // The worn plate's EVASIVE dodge bonus, copied from Armour::evasion_bonus on equip and added to
+  // the wearer's dodge in resolve_creature_contacts (where a plate meets a creature's blow). 0 =
+  // plain plate or bare (bit-identical). Cleared when the armour slot clears (plate shatters). Last
+  // field, same positional-init and zero-fill guarantee as the fields above.
+  float armour_evasion = 0.0f;
 };
 
 // --- Stats system ---
