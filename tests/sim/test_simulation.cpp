@@ -7433,6 +7433,41 @@ TEST_CASE("a high-Dexterity player dodges some blows but not all", "[sim]") {
   REQUIRE(hits > 0);    // ...but a stream of hits still lands — never invulnerable
 }
 
+TEST_CASE("a slippery creature is harder to dodge: the hit-vs-Evasion contest cuts both ways",
+          "[sim]") {
+  // The creature-side mirror of the player's attacker accuracy: a fast, high-DEX creature (a
+  // swarmer) is not only harder to hit -- it's harder to DODGE. Its DEX gives it accuracy that cuts
+  // the player's evasion, completing the design's TWO-SIDED hit-vs-Evasion contest. Two creatures
+  // swing at the SAME slippery player with the SAME seed; only the creature's own Dexterity
+  // differs. RED before: resolve_creature_contacts read only the player's dodge, so a nimble
+  // creature landed no better than a lumbering one.
+  const auto hits_over_40 = [](int creature_dex) {
+    entt::registry reg;
+    const entt::entity player = reg.create();
+    reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::PlayerControlled>(player);
+    reg.emplace<eng::sim::Stats>(player);
+    reg.emplace<eng::sim::Skills>(player);
+    reg.emplace<eng::sim::Attributes>(player).dexterity.level = 18;  // a slippery player (50% cap)
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{0.0f, 0.0f});  // on the player -> in contact
+    reg.emplace<eng::sim::Enemy>(foe);
+    reg.emplace<eng::sim::Attributes>(foe).dexterity.level = creature_dex;  // the creature's aim
+    std::mt19937 rng{1234};
+    int hits = 0;
+    for (int i = 0; i < 40; ++i) {
+      reg.get<eng::sim::Stats>(player).health.current = 100.0f;  // reset so a hit always shows
+      eng::sim::resolve_creature_contacts(reg, 1.0f, rng);       // dt=1s clears the cooldown
+      if (reg.get<eng::sim::Stats>(player).health.current < 100.0f) ++hits;
+    }
+    return hits;
+  };
+  // A keen-eyed creature (DEX 18, 50% accuracy) fully cancels the player's 50% dodge and lands
+  // every blow; a lumbering one (DEX 1, no accuracy) is slipped half the time. So aim beats evasion
+  // here too.
+  REQUIRE(hits_over_40(18) > hits_over_40(1));
+}
+
 TEST_CASE("motes drift through creatures without hurting them", "[sim]") {
   entt::registry reg;
   // A creature and a mote sitting on the same spot (well within contact range).

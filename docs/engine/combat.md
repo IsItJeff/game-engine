@@ -316,8 +316,12 @@ replay dodges the same blows every time.
     is offence *and* defence: **evasion** when you're hit, **aim** when you strike. A DEX-1
     attacker adds no aim, so the target dodges exactly as before (bit-identical, the same RNG
     draw). The swing still trains your Striking — you learn from a whiff — only the damage is
-    skipped. Creatures don't grow, so their DEX is a fixed archetype trait (dodge only — a
-    creature's own swing draws no accuracy; that mirror is a later ring).
+    skipped. And the contest runs the **other way too**: when a *creature* swings, `resolve_creature_contacts`
+    subtracts the **creature's** `accuracy(its DEX)` from **your** dodge, so a slippery swarmer (DEX 8)
+    is harder to *dodge* as well as harder to *hit* — a nimble foe both slips your blows and lands its
+    own. A lumbering brute (DEX 1) adds no accuracy, so you dodge it exactly as before (bit-identical).
+    Creatures don't grow, so their DEX is a fixed archetype trait, but it now cuts *both* ways — the
+    full two-sided hit-vs-Evasion contest.
 
 ### Raising a guard — active block (K)
 

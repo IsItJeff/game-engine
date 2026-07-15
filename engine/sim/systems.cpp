@@ -4687,9 +4687,19 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
                        reg.try_get<CharacterLevel>(p));
       }
 
-      // Dodge? A DEX-driven roll. Only draw when there's a real chance (DEX 1 = 0), so
-      // an untrained world never perturbs the shared RNG stream — same sequence as before.
-      const float chance = dodge_chance(attrs != nullptr ? attrs->dexterity.level : 1);
+      // Dodge? The design's hit-vs-Evasion CONTEST, now BOTH ways: the victim's DEX (dodge) MINUS
+      // the creature's DEX (accuracy) — a fast, slippery creature (a swarmer, DEX 8) is harder to
+      // DODGE, not only harder to hit, the mirror of a defter player attacker cutting a creature's
+      // dodge in perform_attack. Only draw when there's a real chance, and a DEX-1 creature adds 0
+      // accuracy, so a brute-vs-untrained-player world never perturbs the shared RNG stream (same
+      // sequence as before — every creature-dodge test uses a bare/DEX-1 creature ->
+      // bit-identical). Floored at 0: a creature's aim can null the player's evasion but never make
+      // it EASIER to hit than a non-dodger. The creature's Attributes carry its fixed archetype DEX
+      // (none -> 1).
+      const Attributes* c_attrs = reg.try_get<Attributes>(c);
+      float chance = dodge_chance(attrs != nullptr ? attrs->dexterity.level : 1) -
+                     accuracy(c_attrs != nullptr ? c_attrs->dexterity.level : 1);
+      if (chance < 0.0f) chance = 0.0f;
       if (chance > 0.0f && unit(rng) < chance) continue;  // slipped it — no damage taken
 
       // ENRAGE: a creature worn below kEnrageThreshold of its own HP lashes out HARDER
