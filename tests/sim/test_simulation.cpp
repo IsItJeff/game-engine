@@ -197,6 +197,50 @@ TEST_CASE("a knitflesh creature regenerates: regenerate_vitals heals a regen-bea
           Approx(20.0f));  // ...a plain creature (regen 0) stays wearable-down
 }
 
+TEST_CASE(
+    "a hearth does not boost a creature's regen: the fire is a colonist seed not a monster buff",
+    "[sim]") {
+  // The cross-system fix: regenerate_vitals' 2x HEARTH boost must SKIP creatures (Enemy). A
+  // regenerating knitflesh standing in a hearth would otherwise heal DOUBLE at the very spot you're
+  // told to burst it down -- the colony's own fire healing the monster. So a creature's regen is
+  // its flat archetype knob whether or not a fire is near; a COLONIST's still doubles by the fire.
+  const auto healed = [](bool is_enemy, bool in_hearth) {
+    entt::registry reg;
+    if (in_hearth) {
+      const entt::entity h = reg.create();
+      reg.emplace<eng::sim::Transform>(h, eng::Vec2{0.0f, 0.0f});
+      reg.emplace<eng::sim::Hearth>(h, eng::sim::Hearth{80.0f});
+    }
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Transform>(e, eng::Vec2{0.0f, 0.0f});             // standing at the fire
+    reg.emplace<eng::sim::Stats>(e, eng::sim::Vital{20.0f, 100.0f, 4.0f});  // wounded, regen 4/s
+    if (is_enemy) reg.emplace<eng::sim::Enemy>(e);
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::regenerate_vitals(reg, dt);  // 1s
+    return reg.get<eng::sim::Stats>(e).health.current - 20.0f;  // HP healed in 1 second
+  };
+  // A CREATURE at the fire regens the SAME as away from it -- the boost skips it...
+  REQUIRE(healed(true, true) == Approx(healed(true, false)));
+  // ...at its flat base ~4/sec (not the doubled 8 the fire would give a colonist)...
+  REQUIRE(healed(true, true) == Approx(4.0f).margin(0.1f));
+  // ...but a COLONIST (non-Enemy) still heals FASTER at the fire than away (its boost is intact).
+  REQUIRE(healed(false, true) > healed(false, false));
+
+  // The VIT/Endurance amplifier is gated for creatures too (the root fix, not just the hearth): a
+  // TOUGH creature (high Endurance) regens at the same flat base, not amplified — so a future
+  // regenerating creature needs no defence-level workaround.
+  entt::registry reg;
+  const entt::entity tough = reg.create();
+  reg.emplace<eng::sim::Transform>(tough, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(tough, eng::sim::Vital{20.0f, 100.0f, 4.0f});  // regen 4/s
+  reg.emplace<eng::sim::Attributes>(tough).endurance.level = 10;              // tough...
+  reg.emplace<eng::sim::Enemy>(tough);                                        // ...but a creature
+  const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+  for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::regenerate_vitals(reg, dt);  // 1s
+  REQUIRE(reg.get<eng::sim::Stats>(tough).health.current - 20.0f ==
+          Approx(4.0f).margin(0.1f));  // flat 4/s, not Endurance-amplified
+}
+
 TEST_CASE("a hearth speeds nearby health regen: mend by the fire", "[sim]") {
   // The base-building recovery seed: a wounded character resting within a hearth's radius mends
   // faster than one out in the cold, but is rooted to the spot (a positioning trade). Same wound

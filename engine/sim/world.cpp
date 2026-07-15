@@ -240,8 +240,10 @@ entt::entity make_warden(entt::registry& reg, Vec2 pos) {
 // bit-identical). So chipping it and backing off lets it recover — you must COMMIT and BURST IT
 // DOWN, out-damaging its regen, or it's a war of attrition you lose. The passive-heal twin of the
 // leech's heal-on-hit (the leech mends by BITING; the knitflesh mends ALWAYS). No new mechanic —
-// just a creature with a regen. defence_level 1 so regenerate_vitals' Endurance scaling doesn't
-// amplify the heal (a predictable knob). A raw wound-pink dot so it reads apart from the roster. A
+// just a creature with a regen. defence_level 1 makes it physically SOFT (VIT 1 -> a blade lands
+// full), so you CAN burst it — the regen is a flat archetype knob regardless of defence, since
+// regenerate_vitals now gates BOTH its Endurance and hearth amplifiers on not-a-creature. A raw
+// wound-pink dot so it reads apart from the roster. A
 // hand-placed OPENER (no RNG -> bit-identical, like the warden/leech), NOT in the reinforcement
 // mix.
 entt::entity make_regenerator(entt::registry& reg, Vec2 pos) {

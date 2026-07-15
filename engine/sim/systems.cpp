@@ -1371,7 +1371,8 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   // the three tune independently. (No hearth boost yet — mana isn't part of the fireside recovery
   // set; a possible follow-up.)
   constexpr float kManaRegenPerEndurance = 0.10f;  // ponytail: playtest value
-  // A HEARTH multiplies the health regen of anyone resting within its radius — the base-building
+  // A HEARTH multiplies the health regen of a COLONIST resting within its radius (not a creature's
+  // — the fire is a recovery seed, not a monster buff; gated on !Enemy below) — the base-building
   // recovery seed. Modest, and NOT an invincible camp even though chase_prey won't hunt you into
   // the fire: a spitter still lobs venom from range and a beast already on top of you gets its last
   // licks (only the CHASE breaks), plus you're rooted (can't kite or forage while healing) and
@@ -1428,18 +1429,28 @@ void regenerate_vitals(entt::registry& reg, float dt) {
                  // nets health strictly down like the other needs. Warmth is full unless a ColdZone
                  // exists, so this clause is dormant (bit-identical) in a world without cold.
 
-    // Tougher characters heal faster (VIT), reusing the endurance_bonus fetched at the loop top. No
-    // Attributes -> bonus 0 -> boost 1.0 (bit-identical), so creatures and bare entities are
-    // unchanged. Same shape as update_stamina and the mana regen above.
-    float boost = 1.0f + endurance_bonus * kHealthRegenPerEndurance;
-    // ...and faster still by a HEARTH: a colonist resting within one's radius mends quicker (stacks
-    // on the VIT boost). Shares the in_a_hearth reach with chase_prey's ward, so "healed by the
-    // fire" and "hidden from the hunt" are the same glow. No hearth in reach (or none exist) ->
-    // x1.0, bit-identical to before. Reads the entity's own Transform; a Stats entity without one
-    // skips it.
-    if (const Transform* tf = reg.try_get<Transform>(e);
-        tf != nullptr && in_a_hearth(reg, tf->position))
-      boost *= kHearthRegenBoost;
+    // A CREATURE's health regen is its FLAT archetype knob — both amplifiers below (VIT/Endurance
+    // and the HEARTH) are COLONIST recovery mechanics, not monster buffs, so BOTH are gated on NOT
+    // being a creature (Enemy). Until the KNITFLESH (the first creature with a health regen) every
+    // creature carried regen 0, so the amplifiers were a harmless x0 on them; a REGENERATING
+    // creature would otherwise heal faster by its own toughness OR heal DOUBLE standing in a hearth
+    // — the very spot you're told to burst it down (an unintended attrition stalemate). Gating BOTH
+    // here is the root fix, so a future regenerating creature needs no per-archetype workaround.
+    // Bit-identical: a colonist's boost is unchanged; every OTHER creature regens 0 so the gate is
+    // 0 either way; and the knitflesh is Endurance 1 (bonus 0) so its VIT term was already 1.0.
+    float boost = 1.0f;
+    if (!reg.all_of<Enemy>(e)) {
+      // Tougher characters heal faster (VIT), reusing the endurance_bonus fetched at the loop top.
+      // Same shape as update_stamina and the mana regen above.
+      boost = 1.0f + endurance_bonus * kHealthRegenPerEndurance;
+      // ...and faster still by a HEARTH: a colonist resting within one's radius mends quicker
+      // (stacks on the VIT boost). Shares the in_a_hearth reach with chase_prey's ward, so "healed
+      // by the fire" and "hidden from the hunt" are the same glow. No hearth in reach -> x1.0.
+      // Reads the entity's own Transform; a Stats entity without one skips it.
+      if (const Transform* tf = reg.try_get<Transform>(e);
+          tf != nullptr && in_a_hearth(reg, tf->position))
+        boost *= kHearthRegenBoost;
+    }
     recover(s.health, dt, boost);
     // Health only ever ticks back up, so it recovers here. Stamina is different —
     // it's spent by moving — so it has its own system (update_stamina) instead of
