@@ -1371,6 +1371,10 @@ void regenerate_vitals(entt::registry& reg, float dt) {
   // the three tune independently. (No hearth boost yet — mana isn't part of the fireside recovery
   // set; a possible follow-up.)
   constexpr float kManaRegenPerEndurance = 0.10f;  // ponytail: playtest value
+  // The ATTUNEMENT skill's OWN direct effect: each level past the first speeds mana regen (the mana
+  // twin of Recovery's kRecoveryPerLevel for stamina). Half the Endurance rate so the two paths
+  // (Attunement -> Endurance -> regen, and Attunement -> regen directly) compound gently. A knob.
+  constexpr float kAttunementPerLevel = 0.05f;
   // A HEARTH multiplies the health regen of a COLONIST resting within its radius (not a creature's
   // — the fire is a recovery seed, not a monster buff; gated on !Enemy below) — the base-building
   // recovery seed. Modest, and NOT an invincible camp even though chase_prey won't hunt you into
@@ -1403,7 +1407,15 @@ void regenerate_vitals(entt::registry& reg, float dt) {
     // energy isn't food, so a starving mage still recharges. No one reads mp unless they can cast,
     // so this is bit-identical for every non-caster (and any Endurance-1 caster). Downed is already
     // excluded by the view (an unconscious caster doesn't recharge).
-    recover(s.mp, dt, 1.0f + endurance_bonus * kManaRegenPerEndurance);
+    // ATTUNEMENT speeds it further: a practised caster's mana recovers faster still, read DIRECTLY
+    // from the skill level (the Recovery pattern), composing multiplicatively with the Endurance
+    // boost. No Attunement skill / level 1 (every non-caster and fresh caster) -> x1.0 ->
+    // bit-identical. Fetch Skills here (regenerate_vitals doesn't otherwise need it).
+    float mp_boost = 1.0f + endurance_bonus * kManaRegenPerEndurance;
+    if (const Skills* sk = reg.try_get<Skills>(e))
+      if (const Skill* att = sk->find(SkillId::Attunement))
+        mp_boost *= 1.0f + static_cast<float>(att->level - 1) * kAttunementPerLevel;
+    recover(s.mp, dt, mp_boost);
 
     // No mending on an empty stomach. This gate is load-bearing: drain_hunger runs BEFORE
     // this system in step(), so hunger.current is already this tick's value. Skipping heal
@@ -2000,6 +2012,8 @@ const SkillDef& skill_def(SkillId id) {
   // non-magic sibling). Preparing a meal trains it, and its main attr feeds the INT that scales the
   // meal, so a cook sharpens by cooking the way a mage sharpens by casting. Main-only for now.
   static const SkillDef kCooking{AttrId::Intellect, {}};
+  static const SkillDef kAttunement{AttrId::Endurance,
+                                    {}};  // the MP resource-skill, Recovery's twin
   switch (id) {
     case SkillId::Conditioning:
       return kConditioning;
@@ -2035,6 +2049,8 @@ const SkillDef& skill_def(SkillId id) {
       return kHealing;
     case SkillId::Cooking:
       return kCooking;
+    case SkillId::Attunement:
+      return kAttunement;
   }
   return kConditioning;  // unreachable (exhaustive) — a new SkillId is caught by -Wswitch
 }
@@ -3174,11 +3190,15 @@ void magic_bolt(entt::registry& reg, entt::entity caster) {
   // stamina throw. Strict <, so a cast at exactly the cost still fires.
   if (stats->mp.current < kSpellManaCost) return;
   stats->mp.current -= kSpellManaCost;
-
   // A connecting cast trains Spellcasting -> Intellect, so a mage grows the INT that sharpens the
   // bolt by casting it — the learn-by-doing loop, mirror of a throw training Throwing -> DEX.
   CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
   grant_skill_xp(*skills, *attrs, SkillId::Spellcasting, kSpellcastingPerCast, character);
+  // Casting ALSO trains ATTUNEMENT -> Endurance: spending mana deepens the pool (its main-attr
+  // Endurance grows mp.max + base regen) and quickens the recharge (Attunement's own direct boost
+  // in regenerate_vitals) — the design's MP resource-skill, grown by USE, at every spell's mana
+  // spend. 10 XP/cast, matching the other per-cast grants.
+  grant_skill_xp(*skills, *attrs, SkillId::Attunement, Fixed::from_int(10), character);
 
   // INT-vs-WIS damage (the design's magical contest): base + earned-Intellect delta, softened by
   // the target's WISDOM — not its VIT/armour — so magic PIERCES the plate that blunts a blade (see
@@ -3349,6 +3369,9 @@ void heal_spell(entt::registry& reg, entt::entity caster) {
   // casting it — the learn-by-doing loop, mirror of a bolt training Spellcasting -> INT.
   CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
   grant_skill_xp(*skills, *attrs, SkillId::Healing, kHealingPerCast, character);
+  grant_skill_xp(
+      *skills, *attrs, SkillId::Attunement, Fixed::from_int(10),
+      character);  // casting trains the mana skill (Attunement -> Endurance), as at the bolt
 
   // The mend: base + earned-Wisdom delta, scaled by the caster's need_efficiency (a starving healer
   // mends weaker too — no support loophole, matching the bolt). Added to the ally, CLAMPED at max
@@ -3437,6 +3460,9 @@ void cleanse_spell(entt::registry& reg, entt::entity caster) {
   // A connecting cure trains Healing -> Wisdom, so a healer grows by curing as it does by mending.
   CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
   grant_skill_xp(*skills, *attrs, SkillId::Healing, kHealingPerCast, character);
+  grant_skill_xp(
+      *skills, *attrs, SkillId::Attunement, Fixed::from_int(10),
+      character);  // casting trains the mana skill (Attunement -> Endurance), as at the bolt
 
   // The cure: lift the venom WHOLE. Done AFTER the search loop above, so removing from the Poisoned
   // view is safe (the loop has finished iterating it). remove (not remove-if) — patient carries
@@ -3554,6 +3580,9 @@ void shield_spell(entt::registry& reg, entt::entity caster) {
   // knob, not a redesign.
   CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
   grant_skill_xp(*skills, *attrs, SkillId::Spellcasting, kSpellcastingPerCast, character);
+  grant_skill_xp(
+      *skills, *attrs, SkillId::Attunement, Fixed::from_int(10),
+      character);  // casting trains the mana skill (Attunement -> Endurance), as at the bolt
 
   // Raise (or refresh) the barrier: base + earned-Intellect delta, scaled by the caster's
   // need_efficiency — a STARVING (or parched, or freezing) mage wards WEAKER too, no defensive

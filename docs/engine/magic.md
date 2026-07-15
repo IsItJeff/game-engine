@@ -37,7 +37,12 @@ the way Strength sharpens a swing.
 (a cast) and **regenerates** steadily (`regenerate_vitals`), *faster the hardier the caster* —
 Endurance speeds mp regen just as it speeds HP and stamina, so VIT governs the capacity **and** the
 regen of all three resources (it already grows `mp.max`, so a bigger pool now also refills faster
-rather than sustaining worse as you level). Its regen sits *before* the
+rather than sustaining worse as you level). And a caster grows that mana by **casting**: the
+**`Attunement`** skill — trained at *every* spell's mana spend, main attribute **Endurance** — both
+**deepens** the pool (its Endurance feed grows `mp.max`) and **quickens** the recharge *directly*
+(`kAttunementPerLevel`, the mana twin of stamina's `Recovery` skill), so a *pure* caster's mana
+finally lengthens and recharges by **use**, not only by the moving/fighting that grows Endurance
+otherwise. Its regen sits *before* the
 starvation/venom gate that suppresses *healing* — a fed-and-clean body mends, but magic energy isn't
 food, so a starving mage still recharges. Everyone has the bar; it just sits full and unused until
 you can cast, so a world with no caster is **bit-identical** to before mana existed.
@@ -193,9 +198,8 @@ support / defence / cure** kit is complete, and a colonist mage now casts all fo
 `npc_heal` / `npc_shield` / `npc_cleanse`), the full player==NPC parity. Growing from here: **more
 spells** (an area blast, each its own book), a
 **dedicated Healing/Abjuration tome**
-so the support and ward skills have their own learn-paths (today they ride the Spellcasting gate), the
-**Focus / Attunement** skills that give the mana pool its OWN per-skill capacity and regen (its
-*capacity* already grows with VIT/Endurance like the health and stamina pools — see
-[progression](progression.md) — but a dedicated attunement skill and VIT-scaled regen are still to
-come), and the **tech** branch (an Energy battery on gear, the design's twin trunk). Each is a small
-add on this foundation.
+so the support and ward skills have their own learn-paths (today they ride the Spellcasting gate), a
+**`Focus`** capacity skill (the **`Attunement`** *regen* skill now ships — casting grows the mana pool
+via Endurance and speeds its recharge directly; a separate Focus would only double-feed Endurance, so
+it waits for a distinct per-skill `mp.max` bump if one is ever wanted), and the **tech** branch (an
+Energy battery on gear, the design's twin trunk). Each is a small add on this foundation.

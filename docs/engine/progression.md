@@ -4,7 +4,7 @@
 
 Characters grow by *doing*. A **skill** improves with the activity that trains it,
 skills roll up into broad **attributes**, and attributes shape what you feel in play.
-Seventeen strands are wired end to end so far, across all seven attributes:
+Eighteen strands are wired end to end so far, across all seven attributes:
 
 - staying active trains **Conditioning**, **surviving damage** trains **Toughness**,
   **resting to recover** spent stamina trains **Recovery** (`update_stamina` — and, like Survivalist,
@@ -17,7 +17,10 @@ Seventeen strands are wired end to end so far, across all seven attributes:
   **Survivalist** (drive your fatigue to the edge and the *skill* itself then *slows* how fast
   **every** need drains — fatigue, hunger, AND water, via the shared `survivalist_relief`, so hard
   living lets you last longer in the field on all fronts; it's the Survivalist *skill level* that
-  buffers, not Endurance — VIT stays pure combat, never a survival-need buffer) — all six raise
+  buffers, not Endurance — VIT stays pure combat, never a survival-need buffer), and **casting a
+  spell** trains **Attunement** (`regenerate_vitals` — the mana twin of Recovery: its *level* speeds
+  mana regen DIRECTLY on top of feeding Endurance, so a caster **deepens and quickens** its mana bar
+  by casting, the design's MP resource-skill) — all seven raise
   **Endurance**, which grows your **max health, stamina, and mana** (the design's "VIT governs
   HP/Stamina/MP" — all three pools off the one attribute, so a hardy caster carries a bigger reserve
   too), speeds how fast stamina comes back, softens the venom you take, eases the **stamina cost** of
@@ -215,8 +218,8 @@ You flagged NPC growth as something to tune, and this is built so tuning is a
   train at the **same** rates as the player; a per-entity or per-faction multiplier
   is the knob that keeps their growth in check, and it slots into step 1.
 - Each strand is one skill → one attribute → one effect, and they compose freely:
-  Endurance already has two feeders (Conditioning, Toughness), and Strength is the
-  second attribute (via Striking → reach). More skills/attributes are more of the
+  Endurance already has **seven** feeders (Conditioning, Toughness, Recovery, Guarding, Resistance,
+  Survivalist, Attunement), and Strength is the second attribute (via Striking → reach). More skills/attributes are more of the
   same fields plus the activity that trains each — the shape widens, it doesn't change.
 
 ## Where it goes next
@@ -228,7 +231,7 @@ attribute → stat — is what stays as it widens into a full character sheet.
 
 ## Key files
 
-- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck, Wisdom, Charisma), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (`Conditioning`, `Toughness`, `Striking`, `Recovery`, `Evasion`, `Scavenging`, `Throwing`, `Foraging`, `Leadership`, `Guarding`, `Resistance`, `Athletics`, `Survivalist`).
+- `engine/sim/components.hpp` — `Skill`, `Skills`, `Attributes` (Endurance, Strength, Dexterity, Luck, Wisdom, Charisma), the `AttrId` enum, `CharacterLevel`; the `SkillId` enum (18 skills across all seven attributes, from `Conditioning` through the newest, `Attunement` — the MP resource-skill).
 - `engine/sim/systems.cpp` (anon namespace) — the `SkillDef` table, `attr_ref`, and `grant_skill_xp` (the one funnel every skill→attribute XP grant flows through: the skill's XP sped by its **main attribute's level** (learning-proficiency, +5%/level ×2), then flat main + contributor + character shares).
 - `engine/sim/systems.hpp` / `systems.cpp` — `xp_to_next`, `advance_progression` (movement→Conditioning / resting→Recovery), `update_stamina` (Endurance speeds recovery), `train_on_damage` (the damage → Toughness feeder), `perform_attack` (the shared swing resolver) and `npc_attack` (NPCs fight too).
 - `engine/sim/command.hpp` / `world.cpp` — the `Attack` command (the striking feeder, computes reach from Strength); progression components on the player and NPCs.
