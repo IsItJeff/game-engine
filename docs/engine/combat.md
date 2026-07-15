@@ -567,6 +567,17 @@ re-grabbed is the **same** blade, not reset to plain fresh steel — the design'
 the *instance* not just the def. (*ponytail:* the dropped blade renders generic steel-grey; colouring
 it by its trait is a cosmetic follow-up.)
 
+**A third weapon type — the vampiric blade.** A dark blood-red **vampiric weapon** is the *sustain*
+fork. Its landed hits **DRINK**: if your `Equipped` carries `weapon_leech` (folded from the blade's
+`Weapon::leech`), `perform_attack` heals the wielder that fraction of the damage a hit deals — the
+*player-side* mirror of the **leech** creature's heal-on-bite (the blood-red echo is deliberate), and
+the on-**hit** twin of kill-vigor's on-**kill** heal. It drinks only what the foe *actually* lost (a
+huge overkill on a near-dead foe can't over-heal off HP that wasn't there), capped at your max. Like
+the venom blade it pays for the proc with a notch of raw `strength_bonus` (`spawn_vampiric_weapon`),
+so it's **never pure-upside**: you trade **burst for sustain** — out-heal a war of attrition instead
+of ending it fast. Seeded once in the opening scene (south-east of centre); NPCs drink too if one ever
+wields it, via the shared `perform_attack`.
+
 **A second slot — armour.** Gear is now a real offense-vs-defense *choice*, not just a weapon
 on/off. A dull-bronze **`Armour`** piece wears in its own slot alongside the weapon: it adds
 flat **defence** (folded into `defence_of`, so it softens *every* blow at both damage sites for
@@ -669,18 +680,20 @@ build is **renewable**, not a one-off.
 
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), hardcoded defs (plain
-    steel, a venom fang, a plain, a *warded*, and an *evasive* armour, and two rolled steel variants —
-    *venomous* and *keen*) each pairing a boon (`+Attribute`/`+defence`/`+venom`/`+crit`/`+thorns`/`+evasion`)
-    with a bane, so
+    steel, a venom fang, a *vampiric* blade, a plain, a *warded*, and an *evasive* armour, and two
+    rolled steel variants — *venomous* and *keen*) each pairing a boon
+    (`+Attribute`/`+defence`/`+venom`/`+crit`/`+leech`/`+thorns`/`+evasion`) with a bane, so
     weapon and armour banes stay *distinct* even as the blades share a kind. Each archetype's kill
     already feeds this loop as *creature loot* (the four `DropKind`s). The rest of the design's
     Equipment — NPC armour-*seeking*, the `Item{def, quality, durability, traits[]}` model (`quality`
-    scales the boon at equip AND rolls per fine drop; **four named traits** exist — venom via existing
-    fields and keen via an added `crit_bonus` on the weapon, warded via a `thorns_per_hit` *and* evasive
-    via an `evasion_bonus` on the armour; **all four** roll on a fine battlefield drop
-    (`handle_deaths`) — the two *weapon* traits on a steel drop, and *warded* + *evasive* on a
-    **sentinel**'s armour drop (two mutually-exclusive bands off one portable draw, so both armour
-    builds are renewable like the venom one); a `traits[]`
+    scales the boon at equip AND rolls per fine drop; **five named traits** exist — venom via existing
+    fields, keen via an added `crit_bonus`, and leech via an added `leech` on the weapon; warded via a
+    `thorns_per_hit` *and* evasive via an `evasion_bonus` on the armour; **four of them roll** on a
+    fine battlefield drop (`handle_deaths`) — the two *weapon* traits (venom/keen) on a steel drop, and
+    *warded* + *evasive* on a **sentinel**'s armour drop (two mutually-exclusive bands off one portable
+    draw, so both armour builds are renewable like the venom one). The fifth, **leech**, is a
+    hand-placed opener for now — a slain-**leech**-creature drop is its natural renewable source,
+    unwired (a loot-roll would perturb the seeded drop stream, so it's deferred). A `traits[]`
     *list*
     waits until two
     traits must STACK on one item, which the mutually-exclusive roll avoids), the `+skill/+aspect`

@@ -588,6 +588,11 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // nimbler hits that envenom the foe. A brute's steel drop is the raw-power alternative, and a
   // slain spitter drops another of these, so the poison build has a renewable source too.
   spawn_venom_weapon(reg, Vec2{center.x - 120.0f, center.y + 60.0f});
+  // A VAMPIRIC blade (blood-red dot) as a third weapon TYPE: E it for a SUSTAIN build — its hits
+  // DRINK, healing you a slice of the damage dealt, at the cost of less raw Strength. The
+  // player-side answer to the leech creature that heals on its bite: out-heal a war of attrition
+  // rather than end it fast. Clear of the mire (west), cold zone (east) and hazard field (north).
+  spawn_vampiric_weapon(reg, Vec2{center.x + 60.0f, center.y + 120.0f});
   // A WARDED plate (spiked-iron dot) north of centre — armour's trait counterpart to the venom
   // blade: E it for a stand-and-tank build that soaks a little less but chips back every creature
   // that hits you. Placed clear of the mire (west) and cold zone (east) so it's a clean third pick.
@@ -888,9 +893,9 @@ void World::apply_command(const Command& cmd) {
         if (registry_.all_of<Downed>(p)) continue;  // helpless — can't drop
         Equipped& eq = players.get<Equipped>(p);
         if (eq.strength_bonus == 0 && eq.move_penalty == 0.0f && eq.weapon_venom == 0.0f &&
-            eq.crit_bonus == 0.0f)
-          continue;  // no weapon to shed (crit_bonus included so a keen slot always counts as
-                     // armed)
+            eq.crit_bonus == 0.0f && eq.weapon_leech == 0.0f)
+          continue;  // no weapon to shed (crit/leech included so a keen or vampiric slot always
+                     // counts as armed)
         droppers.push_back(p);
       }
       for (const entt::entity p : droppers) {
@@ -906,6 +911,7 @@ void World::apply_command(const Command& cmd) {
         dropped.move_penalty = eq.move_penalty;      // ...its heft...
         dropped.venom_per_second = eq.weapon_venom;  // ...a venom blade's proc...
         dropped.crit_bonus = eq.crit_bonus;          // ...a keen blade's crit edge...
+        dropped.leech = eq.weapon_leech;             // ...a vampiric blade's lifedrain...
         dropped.durability =
             eq.weapon_durability;  // ...and how much life it has LEFT (worn, not new)
         dropped.quality =
@@ -916,6 +922,9 @@ void World::apply_command(const Command& cmd) {
         eq.move_penalty = 0.0f;
         eq.weapon_venom = 0.0f;  // ...and the venom with it...
         eq.crit_bonus = 0.0f;    // ...and a keen blade's crit edge too...
+        eq.weapon_leech = 0.0f;  // ...and a vampiric blade's lifedrain too (else an armoured
+                                 // dropper KEEPS the cache and drinks bare-handed forever -- the
+                                 // phantom-lifedrain bug; the twin of the shatter-site clear)
         eq.weapon_durability =
             0.0f;  // ...and the blade's remaining life (0 = no weapon), so no
                    // phantom durability lingers for mend_gear to grow back or

@@ -473,6 +473,11 @@ void spawn_armour(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 // identically — the same no-drift discipline as spawn_weapon. Draws no RNG.
 void spawn_venom_weapon(entt::registry& reg, Vec2 pos);
 
+// Spawn a VAMPIRIC blade on the ground at `pos` — the third weapon TRAIT (a sustain build: hits
+// DRINK, healing the wielder a fraction of the damage dealt), bought with a -Strength notch so it's
+// never pure-upside. The player-side mirror of the leech creature's on-bite heal. Draws no RNG.
+void spawn_vampiric_weapon(entt::registry& reg, Vec2 pos);
+
 // Spawn a VENOMOUS STEEL blade — a fine steel weapon that rolled the venomous trait
 // (handle_deaths). Distinct from spawn_venom_weapon's light fang: this keeps steel's FULL heft
 // (move_penalty 0.25) and trades only ONE notch of Strength (+3 not +4) for a modest venom, so it's
