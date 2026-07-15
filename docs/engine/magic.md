@@ -68,8 +68,10 @@ yellow bolt). What sets it apart:
 - **Intellect scales it, Wisdom wards it** — `kBaseSpellDamage` (14) + a per-`Intellect`-level delta,
   softened by the target's **Wisdom** — *not* its VIT or worn plate (`magic_defence_of`, the WIS twin
   of `defence_of`). This is the design's magical **INT-vs-WIS** contest, the mirror of physical
-  STR-vs-VIT: a bolt **pierces the armour that blunts a blade**, so a plate-tough but un-attuned brute
-  (high VIT, WIS 1) *melts* to magic while shrugging off steel — magic's identity. The mirror foe is the
+  STR-vs-VIT: a bolt **pierces the armour that blunts a blade** — and **slips a raised guard** too (a
+  physical block turns a thrown weapon or a creature's spit, but never a bolt: `Projectile::from_magic`
+  in `advance_projectiles`, see [combat](combat.md)) — so a plate-tough but
+  un-attuned brute (high VIT, WIS 1) *melts* to magic while shrugging off steel — magic's identity. The mirror foe is the
   **[warden](combat.md)** — a creature built with high WISDOM, so it *wards* the bolt and barely feels
   it (the anti-mage creature: close and melee it instead). That earned-Intellect
   delta **compounds with the caster's character level** through the same [veteran layer](progression.md)
