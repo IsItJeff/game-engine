@@ -4301,10 +4301,27 @@ void decay_bonds(entt::registry& reg) {
   // elapses. ponytail/BALANCE: kBondDecayPeriod is a fast knob for now (bonds could well be
   // stickier than reputation — tune at playtest). Touches only its own edges, no other component.
   constexpr std::int32_t kBondDecayPeriod = 3600;  // ~60 game-seconds per step toward 0 (a knob)
+  // CHARISMA holds a colony together: a charismatic edge-OWNER's bonds cool SLOWER — the
+  // social-glue stat's THIRD effect. It already FORGES bonds (bond_witnesses' camaraderie depth AND
+  // reach both read CHA); now it also KEEPS them, lengthening this decay period by 1+(CHA-1)*k up
+  // to a ×2 ceiling (the same ceiling the witness devotion uses). Persistence is a DISTINCT kind of
+  // CHA effect from the witness depth/reach — not "how strong/wide a bond forms" but "how long it
+  // lasts". CHA 1, or no Attributes (every entity in the decay test), -> factor 1.0 -> the full
+  // 3600 -> bit-identical.
+  constexpr float kBondPersistencePerCharisma =
+      0.1f;                                    // each CHA level past 1 lengthens the period 10%...
+  constexpr float kBondPersistenceCap = 2.0f;  // ...up to double, then it plateaus (a knob)
   auto view = reg.view<Relationships>();
   for (const entt::entity e : view) {
     Relationships& rel = view.get<Relationships>(e);
-    if (++rel.decay_ticks < kBondDecayPeriod) continue;  // still accruing — no step this tick
+    float persistence = 1.0f;
+    if (const Attributes* attrs = reg.try_get<Attributes>(e)) {
+      persistence += static_cast<float>(attrs->charisma.level - 1) * kBondPersistencePerCharisma;
+      if (persistence > kBondPersistenceCap) persistence = kBondPersistenceCap;
+    }
+    const std::int32_t period =
+        static_cast<std::int32_t>(static_cast<float>(kBondDecayPeriod) * persistence);
+    if (++rel.decay_ticks < period) continue;  // still accruing — no step this tick
     rel.decay_ticks = 0;
     for (Relation& edge : rel.edges) {
       if (bond_latched(edge.affinity)) continue;  // a deep bond or grudge holds fast

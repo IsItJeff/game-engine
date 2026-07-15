@@ -295,7 +295,10 @@ appends as a second `Relation` field the day its own event lands. The derived `b
 already names the ladder those events climb, and **`decay_bonds`** already lets cold ties fade toward
 neutral (a grudge cools too) — the affinity twin of the standing leak, every kBondDecayPeriod ticks
 one step toward 0 — while a **latched** Partner or Nemesis (`bond_latched`) holds fast, so only the
-deepest ties last. Then the social `perceive` layer reads affinity *and*
+deepest ties last. A charismatic edge-owner's ties fade **slower**: `decay_bonds`' period lengthens
+with the owner's **Charisma** (up to ×2), so the social-glue stat that *forges* bonds (`bond_witnesses`)
+now also *holds* them — Charisma 1, or an owner with no `Attributes`, keeps the base period
+(bit-identical). Then the social `perceive` layer reads affinity *and*
 standing to choose stances (befriend / protect / exploit).
 
 ## Key files

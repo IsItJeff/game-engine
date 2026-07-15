@@ -3628,6 +3628,34 @@ TEST_CASE("bonds decay toward neutral but the deepest latch: a Partner and Nemes
   REQUIRE(aff(nemesis) == -80);          // ...and so did the Nemesis
 }
 
+TEST_CASE("Charisma slows a colony's bond decay: a charismatic owner's ties cool slower", "[sim]") {
+  // CHARISMA's THIRD effect: it FORGES bonds (bond_witnesses' camaraderie depth + reach), and now
+  // also KEEPS them -- a charismatic edge-OWNER's decay period lengthens 1+(CHA-1)*0.1 up to x2, so
+  // its ties cool slower toward neutral (persistence, a distinct kind from the witness
+  // depth/reach). CHA 1, or no Attributes at all, -> the full 3600 -> bit-identical. We pin
+  // decay_ticks just below a threshold and tick ONCE, testing the PERIOD directly rather than
+  // looping 3600 times.
+  const auto affinity_after_tick = [](int charisma, std::int32_t start_ticks) {
+    entt::registry reg;
+    const entt::entity owner = reg.create();
+    auto& rel = reg.emplace<eng::sim::Relationships>(owner);
+    rel.edges.push_back(
+        eng::sim::Relation{reg.create(), std::int8_t{30}});  // a casual (unlatched) tie
+    rel.decay_ticks = start_ticks;                           // pre-loaded near a threshold
+    if (charisma > 0) reg.emplace<eng::sim::Attributes>(owner).charisma.level = charisma;
+    eng::sim::decay_bonds(reg);  // one tick -> decay_ticks = start_ticks + 1
+    return static_cast<int>(reg.get<eng::sim::Relationships>(owner).edges[0].affinity);
+  };
+  // At the base period (3600), a CHA-1 / Attributes-less owner's tie cools one step --
+  // bit-identical.
+  REQUIRE(affinity_after_tick(0, 3599) == 29);  // no Attributes -> base 3600 -> cooled
+  REQUIRE(affinity_after_tick(1, 3599) == 29);  // CHA 1 -> base 3600 -> cooled (bit-identical)
+  // A charismatic owner (CHA 20, capped x2 -> period 7200) has NOT cooled yet at 3600...
+  REQUIRE(affinity_after_tick(20, 3599) == 30);  // slower decay: the tie still holds
+  // ...but it DOES cool, once past its longer period (a persistence, not immortality).
+  REQUIRE(affinity_after_tick(20, 7199) == 29);  // by the doubled period, it finally steps
+}
+
 TEST_CASE("standing weights each deed dimension by the design's signed factors", "[sim]") {
   // The full ×5 formula ships now though only Charity is fed by a deed yet, so pin EVERY term's
   // weight and SIGN — a wrong factor on an as-yet-unfed dimension would otherwise ship silently and
