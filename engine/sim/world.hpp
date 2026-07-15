@@ -34,8 +34,10 @@ inline constexpr float kFieldHeight = 720.0f;
 
 // Keep a steady threat coming: every kCreatureSpawnInterval seconds the world spawns
 // a hunting creature, up to kMaxCreatures alive at once, so the fight never runs dry.
+// kMaxCreatures matches the count of hand-placed opener archetypes in build_scene (brute,
+// swarmer, spitter, leech, warden, knitflesh), so the scene starts exactly at cap.
 inline constexpr float kCreatureSpawnInterval = 6.0f;
-inline constexpr int kMaxCreatures = 5;
+inline constexpr int kMaxCreatures = 6;
 
 // Keep the colony alive too: colonists wander in on a SLOWER timer (creatures now hunt
 // NPCs, so without replenishment the field slowly empties of the people whose skirmishes

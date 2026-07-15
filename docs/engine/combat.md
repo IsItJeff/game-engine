@@ -170,21 +170,23 @@ give waves texture:
 | **Brute** (red) | 40 | 70 | 15 | 0% | slow, tanky, hits hard — wear it down, kite it |
 | **Swarmer** (orange) | 15 | 130 | 8 | ~21% | fast, fragile (~one strike), weak, *slippery*, and **venomous** — corners you in numbers, and its bite lingers |
 | **Spitter** (violet) | 25 | 55 | 4 | 0% | slow, fragile, feeble in melee — but **ranged** and **venomous**: plinks you with a homing spit that **envenoms** on hit, from beyond your reach, so you must close on it or throw back; drops a **venom fang** when felled |
-| **Leech** (blood-red) | 22 | 75 | 8 | 0% | middling — but it **DRINKS**: every bite it lands **heals it 4** (`lifesteal_per_hit`), the *only* creature self-heal, so it out-sustains a slow chip. **Burst it or kite it** — don't stand and trade |
+| **Leech** (blood-red) | 22 | 75 | 8 | 0% | middling — but it **DRINKS**: every bite it lands **heals it 4** (`lifesteal_per_hit`), the only creature that heals **on a bite** (the knitflesh heals passively instead), so it out-sustains a slow chip. **Burst it or kite it** — don't stand and trade |
 | **Warden** (teal) | 35 | 60 | 10 | 0% | middling melee — but **WARDED against magic**: a high **WISDOM** (`magic_defence_of`) blunts a bolt hard, so a mage's plink barely dents it, while a blade lands full (VIT 1). The **anti-mage** foe — **close and melee it**, don't cast |
+| **Knitflesh** (wound-pink) | 30 | 60 | 8 | 0% | middling melee — but it **KNITS its wounds**: a passive `health.regen_per_second` (4/sec, healed by the shared `regenerate_vitals`), so chip-and-retreat only lets it heal back. **Commit and burst it down** — the passive-heal twin of the leech's heal-on-bite (heals *always*, not just when it hits) |
 
 The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips ~1 strike in
 5, its innate Dexterity) *and venomous*, the spitter is **RANGED** *and venomous*, the leech
 **SUSTAINS**, and the warden is **WIS-warded** (shrugs off bolts) — so they threaten you for different
 reasons: the brute up front, the swarm on the retreat, the spitter's envenoming spit from a distance
-you can't melee, the leech's self-heal that punishes a war of attrition, and the warden that makes a
-pure-magic build close to melee. (A slow, heavily-plated **sentinel** — 60 HP, VIT 5 — rounds out the
-reinforcement mix and drops armour.)
+you can't melee, the leech's self-heal that punishes a war of attrition, the warden that makes a
+pure-magic build close to melee, and the knitflesh that knits its wounds shut unless you commit. (A
+slow, heavily-plated **sentinel** — 60 HP, VIT 5 — rounds out the reinforcement mix and drops armour.)
 
-- **HP** (a `Stats` component) that strikes whittle down; **no regen** — *except* the **leech**, whose
-  landed bites heal it (`lifesteal_per_hit`, "procs as data"), so you must out-damage its drink or
-  deny its hits — for every other archetype you can simply wear it down. **VIT** (an `Attributes`
-  component) softens the blows it takes.
+- **HP** (a `Stats` component) that strikes whittle down; **no regen** for most — but **two** self-heal:
+  the **leech**, whose landed bites heal it (`lifesteal_per_hit`), and the **knitflesh**, which regens
+  passively (`health.regen_per_second`, healed by `regenerate_vitals`). Against those two you must
+  **out-damage the heal** — chip-and-flee only lets them recover — while every *other* archetype you
+  can simply wear down. **VIT** (an `Attributes` component) softens the blows it takes.
 - **`chase_prey`** homes its velocity on the **nearest person** each tick — the player
   *or* an NPC — at the creature's own `chase_speed`, so a swarmer runs you down while a
   brute lumbers. It **skips anyone sheltering in a `Hearth`** (`in_a_hearth`, the same reach

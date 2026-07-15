@@ -176,6 +176,27 @@ TEST_CASE("regenerate_vitals heals the health vital over time, capped at max", "
   REQUIRE(health.current == Approx(health.max));  // capped at 100, never overshot
 }
 
+TEST_CASE("a knitflesh creature regenerates: regenerate_vitals heals a regen-bearing Enemy",
+          "[sim]") {
+  // The KNITFLESH mechanic -- a creature (Enemy) spawned with a non-zero health regen slowly knits
+  // its wounds shut, because regenerate_vitals runs over ANY Stats entity (creatures are NOT
+  // excluded). Every other creature carries regen 0, so they stay wearable-down (bit-identical); a
+  // knitflesh climbs back, so you must BURST it rather than chip-and-retreat. No new system -- just
+  // a creature with a regen, healed by the shared system.
+  const auto healed_after = [](float regen) {
+    entt::registry reg;
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Enemy>(foe);  // a CREATURE (regenerate_vitals doesn't exclude Enemy)...
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{20.0f, 40.0f, regen});  // ...wounded 20/40
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < eng::sim::kTicksPerSecond; ++i) eng::sim::regenerate_vitals(reg, dt);  // 1s
+    return reg.get<eng::sim::Stats>(foe).health.current;
+  };
+  REQUIRE(healed_after(4.0f) > 20.0f);  // a knitflesh (regen 4) knits its wounds back...
+  REQUIRE(healed_after(0.0f) ==
+          Approx(20.0f));  // ...a plain creature (regen 0) stays wearable-down
+}
+
 TEST_CASE("a hearth speeds nearby health regen: mend by the fire", "[sim]") {
   // The base-building recovery seed: a wounded character resting within a hearth's radius mends
   // faster than one out in the cold, but is rooted to the spot (a positioning trade). Same wound
@@ -7194,10 +7215,10 @@ TEST_CASE("a worn-down creature enrages and hits harder", "[sim]") {
 }
 
 TEST_CASE("a leech drinks: a landed bite heals the creature up to its max", "[sim]") {
-  // The LEECH archetype's sustain: every blow it LANDS heals it `lifesteal_per_hit` (the only
-  // creature self-heal — creatures otherwise never regen), capped at its own max. A plain creature
-  // (lifesteal 0) heals nothing (the gate). Measured on the CREATURE's health after one landed
-  // bite.
+  // The LEECH archetype's sustain: every blow it LANDS heals it `lifesteal_per_hit` (the leech's
+  // ON-BITE self-heal; the knitflesh heals PASSIVELY instead), capped at its own max. A plain
+  // creature (lifesteal 0) heals nothing (the gate). Measured on the CREATURE's health after one
+  // landed bite.
   const auto leech_healed = [](float lifesteal, float start_hp) {
     entt::registry reg;
     const entt::entity victim = reg.create();
@@ -9287,8 +9308,10 @@ TEST_CASE("a creature's blow harms an NPC too, not just the player", "[sim]") {
   REQUIRE(evasion->xp.to_double() > 0.0);
 }
 
-TEST_CASE("the opening archetypes spawn with their own numbers: brute swarmer spitter leech warden",
-          "[sim]") {
+TEST_CASE(
+    "the opening archetypes spawn with their own numbers: brute swarmer spitter leech warden "
+    "knitflesh",
+    "[sim]") {
   // make_brute/make_swarmer/make_spitter are file-local, but a fresh World seeds one of each. Pin
   // their HP/speed/damage here: make_creature takes three adjacent float params (hp, chase_speed,
   // attack_damage) that a future archetype could transpose silently — this is the guard that would
@@ -9302,6 +9325,7 @@ TEST_CASE("the opening archetypes spawn with their own numbers: brute swarmer sp
   bool saw_spitter = false;
   bool saw_leech = false;
   bool saw_warden = false;
+  bool saw_knitflesh = false;
   for (const entt::entity e : reg.view<eng::sim::Enemy>()) {
     const float hp = reg.get<eng::sim::Stats>(e).health.max;
     const eng::sim::Enemy& en = reg.get<eng::sim::Enemy>(e);
@@ -9337,6 +9361,16 @@ TEST_CASE("the opening archetypes spawn with their own numbers: brute swarmer sp
       REQUIRE(dex == 1);                 // no dodge
       REQUIRE(en.spit_range == 0.0f);    // melee-only
       REQUIRE(en.lifesteal_per_hit == 0.0f);  // not a leech
+    } else if (hp == Approx(30.0f)) {         // knitflesh: middling melee — but KNITS its wounds
+      saw_knitflesh = true;
+      REQUIRE(en.chase_speed == Approx(60.0f));
+      REQUIRE(en.attack_damage == Approx(8.0f));
+      REQUIRE(reg.get<eng::sim::Stats>(e).health.regen_per_second ==
+              Approx(4.0f));                  // the sustain — passive regen (only the knitflesh)
+      REQUIRE(dex == 1);                      // no dodge
+      REQUIRE(en.spit_range == 0.0f);         // melee-only
+      REQUIRE(en.lifesteal_per_hit == 0.0f);  // not a leech (heals over TIME, not on-hit)
+      REQUIRE(at.endurance.level == 1);       // defence 1 -> regen isn't Endurance-amplified
     } else {                                  // swarmer: fragile, fast, weak — and slippery
       saw_swarmer = true;
       REQUIRE(hp == Approx(15.0f));
@@ -9351,4 +9385,5 @@ TEST_CASE("the opening archetypes spawn with their own numbers: brute swarmer sp
   REQUIRE(saw_spitter);
   REQUIRE(saw_leech);
   REQUIRE(saw_warden);
+  REQUIRE(saw_knitflesh);
 }

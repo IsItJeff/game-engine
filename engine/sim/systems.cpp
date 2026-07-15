@@ -5016,7 +5016,8 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       if (enemy.poison_per_second > 0.0f) apply_venom(reg, p, enemy.poison_per_second);
 
       // LIFESTEAL: a LEECH archetype DRINKS on a landed blow — it heals lifesteal_per_hit (capped
-      // at its own max), the ONLY creature self-heal in the game (creatures otherwise never regen).
+      // at its own max), the only creature that heals ON A BITE (the knitflesh heals PASSIVELY via
+      // regenerate_vitals instead).
       // So a leech REVERSES the wear-down: chip it slowly and it out-sustains you, feeding on every
       // hit it lands, so you must BURST it or DENY its bites (kite it) rather than trade blows.
       // "Procs as data": a non-leech creature (lifesteal_per_hit 0, every archetype today) heals
@@ -5027,8 +5028,10 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // guard's riposte above (thorns is BELOW this drink, so it can't be the same-swing cause) —
       // still lands this last dying swing (the intended quirk), but WITHOUT this guard its
       // lifesteal would heal it back above 0, so handle_deaths (later this tick) would never reap
-      // it and the kill would be undone. 0 HP is inert: the drink is the one creature self-heal, so
-      // this is the one place the wear-down could be reversed from the grave.
+      // it and the kill would be undone. 0 HP is inert: the leech's drink is an ON-HIT self-heal,
+      // so this is the one place a dying blow could reverse the wear-down from the grave (the
+      // knitflesh's passive regen can't — regenerate_vitals excludes a Downed body and a reaped one
+      // is gone).
       if (enemy.lifesteal_per_hit > 0.0f) {
         if (Stats* cs = reg.try_get<Stats>(c); cs != nullptr && cs->health.current > 0.0f) {
           cs->health.current += enemy.lifesteal_per_hit;
