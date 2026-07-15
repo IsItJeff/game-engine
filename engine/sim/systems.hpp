@@ -408,6 +408,10 @@ void decay_bonds(entt::registry& reg);
 // reg.valid.
 void nudge_affinity(entt::registry& reg, entt::entity from, entt::entity toward, std::int8_t delta);
 
+// The peaceful BEFRIEND path: colonists sharing a hearth warm to each other over time (up to
+// Friend, never the earned Partner tier). Called staggered from World::step. See the .cpp.
+void socialize(entt::registry& reg);
+
 // The reader counterpart of nudge_affinity: how `from` feels about `toward` (its directed
 // affinity), or 0 if there is no tie. A const, no-op-when-absent lookup used by the bond/grudge
 // readers.

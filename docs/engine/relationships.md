@@ -14,13 +14,15 @@ affinity-moving events:
 - **`Relationships`** — a lazy, sparse, append-ordered `std::vector<Relation>` on the
   subject: how *this* character regards others.
 - **`nudge_affinity(from, toward, delta)`** — the single write-point every affinity-moving
-  event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Five fire it today:
+  event funnels through (the [`record_deed`](morality.md#how-it-works) twin). Six fire it today:
   a **rescue** forms a **mutual** bond between rescuer and saved *and* (if witnessed) earns the
   rescuer **admiration** from onlookers, a **cruel strike** forms a grudge, **felling a foe near
   allies** forges *camaraderie* (nearby colonists warm to the hero), and a **first lesson**
   forges a **mutual** mentorship tie — *gratitude* (the student bonds to its mentor) *and* *pride*
   (the mentor bonds back to the protege, a touch gentler), so mentorship joins the rescue as a
-  both-ways bond.
+  both-ways bond. The sixth is the only **peaceful** one — **sharing a hearth**: colonists who
+  linger by the same fire slowly warm into friends (*befriend*), so ties no longer form *only* from
+  drama.
 
 ## Why it matters
 
@@ -55,7 +57,7 @@ reason — the *schema* is painful to retrofit, so it is locked from the first l
 
 ## How it works
 
-**Five events** move affinity today — four that bond, one that grudges. The first positive one lives
+**Six events** move affinity today — five that bond, one that grudges. The first positive one lives
 at the **rescue** in `handle_deaths` — the same line that already credits the rescuer with
 **Charity**:
 
@@ -135,6 +137,22 @@ bond-follow rung actually acts on it rather than lapsing after one. Both sides l
 master drifts toward the protege it lifted — yet both unlatched, so the tie fades if the
 apprenticeship doesn't continue. (The rescue was the only mutual forge-tie before; mentorship now
 joins it, closing the one-way gap gratitude used to have.)
+
+The sixth tie is the **peaceful** one — **`socialize`**, the affinity event-delta the design's
+future perceive() *BEFRIEND* stance will read (the stance layer itself is a later ring). Every five
+game-seconds (`kSocialPeriod`, throttled from `step`), colonists **within the same hearth** warm to
+each other by `+1` — the mundane "we spend time together, we become friends" that needed no fight,
+rescue, or lesson. It's **personality-shaped for free**: `nudge_affinity` seeds a first tie by
+`personality_match`, so like-minded hearth-mates warm faster — and a strongly-*opposite* pair can even
+start a hair cool (an inert `−3`) and warm up from there. It's **capped below the Friend tier** (it
+only warms an edge still under `kBondFriendAt`), so mere proximity earns Acquaintances and Friends but
+never the *latching* **Partner** — that stays earned by deeds. Proximity also mends a *casual* coolness
+(a mild rivalry drifts back toward neutral, quicker than decay for hearth-mates), but a **latched
+Nemesis resists it** exactly as it resists `decay_bonds` — a sworn grudge doesn't thaw from mere
+co-loitering. Every bond reader (pull, defend, courage, decay) acts on the resulting tie exactly as on
+a drama-forged one, so the fireside quietly grows the colony's social fabric between the fights.
+(Colony-internal for now: the scan is over `Npc`s, so a *player* warming to colonists by the fire is a
+later ring.)
 
 A witnessed heroic act — a kill *or* a rescue — is scaled by the hero's **Charisma** (see
 [progression](progression.md)) in **two** ways. *How much* devotion each witness feels:
@@ -229,7 +247,7 @@ felt strongly about the one who died, in whichever direction they felt.
 
 ## The tradeoffs
 
-- **Five events, a few readers**, and no *stored* bond stages — the ladder is the derived `bond_tier`,
+- **Six events, a few readers**, and no *stored* bond stages — the ladder is the derived `bond_tier`,
   not a slot — just the smallest struct those grow into. (Ties do now **decay**, the deepest **latch**,
   and a new tie is **seeded by personality-match** — all see above.) Exactly as the
   morality seed shipped a couple of deeds and let the rest wire themselves.
@@ -239,7 +257,7 @@ felt strongly about the one who died, in whichever direction they felt.
   slice of the design's *PROTECT* stance). The *remaining* deeper ones — fleeing *with* a friend,
   refusing to *fight* them, healing them *first* — are still later work.
 - **Unbounded edge list.** Bounded in practice (ties form only on a rescue, a grudge, a shared kill,
-  or a first lesson — a finite set of triggers), but formally open — a `ponytail:` comment names the
+  a first lesson, or sharing a hearth — a finite set of triggers), but formally open — a `ponytail:` comment names the
   `cap-N + evict-weakest` upgrade so it's tracked debt, not silent.
 - **`int8`, not the ledger's `int32`.** Affinity *saturates into bands*; it doesn't
   accumulate over a life toward a gate the way `standing` does. So it takes the
@@ -253,9 +271,10 @@ trait-scaled-radius shape every other axis uses — so a loyal colonist crosses 
 near a bonded ally while a fickle one follows only a friend underfoot. **All six personality
 axes are now wired.**
 
-Beyond that, the write-point is the whole point: five events already prove it out (a rescue bonds the
+Beyond that, the write-point is the whole point: six events already prove it out (a rescue bonds the
 saved *and* wins the rescuer admiration, a cruel strike grudges, a shared kill forges camaraderie, a
-first lesson forges gratitude), so each further event — a **shared meal**, a **broken promise** — is
+first lesson forges gratitude, and sharing a hearth quietly befriends), so each further event — a
+**shared meal**, a **broken promise** — is
 just one more `nudge_affinity` call,
 and `trust`
 appends as a second `Relation` field the day its own event lands. The derived `bond_tier` above
@@ -271,7 +290,8 @@ standing to choose stances (befriend / protect / exploit).
   lazy sparse edge list), placed beside `BehaviorLedger`/`standing`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `nudge_affinity` (the single write-point, the
   `record_deed` twin), `affinity_toward` (its read-side counterpart), and `allies_of` (the incoming
-  count the HUD shows); the bond formed at
+  count the HUD shows); `socialize` (the peaceful *befriend* path — hearth-mates warm over time,
+  staggered from `step` every `kSocialPeriod`); the bond formed at
   `handle_deaths`' rescue branch, the victim grudge **and** the witness-grudge spread (`kWitnessGrudge`)
   at `perform_attack`'s cruel-strike branch, and `bond_witnesses` (camaraderie) at `perform_attack`'s
   AND `advance_projectiles`' killing-blow branches; the bond-pull rung in

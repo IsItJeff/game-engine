@@ -3473,6 +3473,39 @@ TEST_CASE("nudge_affinity forms one directed edge and deepens it, clamped", "[si
   REQUIRE(reg.get<eng::sim::Relationships>(a).edges[1].affinity == 100);  // clamped on append
 }
 
+TEST_CASE("colonists who share a hearth become friends: the peaceful bond path", "[sim]") {
+  // BEFRIEND -- bonds no longer form ONLY from drama (a shared kill, a rescue, a lesson). Two
+  // colonists lingering at the same hearth warm to each other over time (socialize), up to the
+  // Friend tier -- but never the LATCHING Partner tier (that stays earned by deeds). A colonist
+  // with no hearth-mate befriends no one. RED before: no proximity bond path existed (socialize was
+  // a no-op).
+  entt::registry reg;
+  const entt::entity hearth = reg.create();
+  reg.emplace<eng::sim::Transform>(hearth, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Hearth>(hearth, eng::sim::Hearth{80.0f});
+  const auto colonist = [&](eng::Vec2 pos) {
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Transform>(e, pos);
+    reg.emplace<eng::sim::Npc>(e);
+    reg.emplace<eng::sim::Personality>(e);  // default (neutral) -> personality_match bias 0
+    return e;
+  };
+  const entt::entity a = colonist(eng::Vec2{10.0f, 0.0f});  // both well inside the fire (r 80)...
+  const entt::entity b = colonist(eng::Vec2{-10.0f, 0.0f});
+  const entt::entity loner = colonist(eng::Vec2{5000.0f, 0.0f});  // ...far from any hearth
+
+  for (int i = 0; i < 100; ++i) eng::sim::socialize(reg);  // linger together a good long while
+
+  // a and b warmed to each other, BOTH ways, into a real bond that pulls them together...
+  REQUIRE(eng::sim::affinity_toward(reg, a, b) >= eng::sim::kBondAcquaintanceAt);
+  REQUIRE(eng::sim::affinity_toward(reg, b, a) >= eng::sim::kBondAcquaintanceAt);
+  // ...but proximity alone never earns the LATCHING Partner tier (it caps at Friend).
+  REQUIRE(eng::sim::affinity_toward(reg, a, b) < eng::sim::kBondPartnerAt);
+  REQUIRE(eng::sim::affinity_toward(reg, a, b) <= eng::sim::kBondFriendAt);
+  // ...while the loner, warming at no fire, befriended no one.
+  REQUIRE(eng::sim::affinity_toward(reg, loner, a) == 0);
+}
+
 TEST_CASE("allies_of counts the colonists bonded to an entity: the camaraderie payoff", "[sim]") {
   // The INCOMING-bond count, the mirror of affinity_toward's single-tie read (and of the HUD's
   // OUTGOING closest bond). Every colonist bonded TO the player (affinity >= kBondPull) is one ally
