@@ -14,9 +14,10 @@ Seventeen strands are wired end to end so far, across all seven attributes:
   Endurance by *blocking* a hit rather than *surviving* it), and **enduring venom** trains
   **Resistance** (`tick_poison`, Toughness's *poison* twin — keep shrugging off venom and you grow
   the very VIT that shaves it, immunity through exposure), and **pushing into exhaustion** trains
-  **Survivalist** (`tick_fatigue` — drive your fatigue to the edge and you grow the Endurance that
-  then *slows* how fast fatigue drains, so hard living lengthens your stamina in the field) — all six
-  raise
+  **Survivalist** (drive your fatigue to the edge and the *skill* itself then *slows* how fast
+  **every** need drains — fatigue, hunger, AND water, via the shared `survivalist_relief`, so hard
+  living lets you last longer in the field on all fronts; it's the Survivalist *skill level* that
+  buffers, not Endurance — VIT stays pure combat defence) — all six raise
   **Endurance**, which grows your **max health, stamina, and mana** (the design's "VIT governs
   HP/Stamina/MP" — all three pools off the one attribute, so a hardy caster carries a bigger reserve
   too), speeds how fast stamina comes back, softens the venom you take, *and* lets you **bear armour**

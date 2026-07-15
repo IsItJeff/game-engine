@@ -828,6 +828,35 @@ TEST_CASE("a trained Survivalist tires slower: the skill lengthens the fatigue t
   REQUIRE(fatigue_left_after_moving(11) > fatigue_left_after_moving(1));
 }
 
+TEST_CASE("a trained Survivalist hungers and thirsts slower too: the skill buffers every need",
+          "[sim]") {
+  // The design: needs are buffered by "gear + the Survivalist skill" (Endurance is now pure combat
+  // defence and does NOT buffer needs), so Survivalist -- the ONE need-buffer -- should ease hunger
+  // and water, not only fatigue. A veteran survivor keeps more of each need over the same run; a
+  // novice (no skill) drains the full rate (survivalist_relief 1.0 -> bit-identical). RED before:
+  // drain_hunger/drain_water ignored the skill.
+  const auto need_left = [](int survivalist_level, bool water) {
+    entt::registry reg;
+    const entt::entity e = reg.create();
+    reg.emplace<eng::sim::Stats>(e);  // hunger + water full
+    if (survivalist_level > 1)
+      reg.emplace<eng::sim::Skills>(e).train(eng::sim::SkillId::Survivalist).level =
+          survivalist_level;
+    const float dt = static_cast<float>(eng::sim::kSecondsPerTick);
+    for (int i = 0; i < 10 * eng::sim::kTicksPerSecond; ++i) {
+      if (water)
+        eng::sim::drain_water(reg, dt);
+      else
+        eng::sim::drain_hunger(reg, dt);
+    }
+    const eng::sim::Stats& s = reg.get<eng::sim::Stats>(e);
+    return water ? s.water.current : s.hunger.current;
+  };
+  REQUIRE(need_left(11, false) >
+          need_left(1, false));                       // a veteran keeps more HUNGER over the run...
+  REQUIRE(need_left(11, true) > need_left(1, true));  // ...and more WATER
+}
+
 TEST_CASE("pushing into exhaustion trains Survivalist but a rested one learns nothing", "[sim]") {
   // You learn to endure only by ENDURING: advance_progression trains Survivalist -> Endurance ONLY
   // while fatigue is low (below kExhaustionLearnAt). A rested mover (fatigue high) trains none of

@@ -925,10 +925,11 @@ enum class SkillId : std::uint16_t {
   Resistance,    // trained by ENDURING venom (tick_poison); main attribute Endurance (a VIT skill)
   Athletics,     // trained by SPRINTING (a burst of speed); main attribute Dexterity (agility)
   Survivalist,   // trained by pushing into EXHAUSTION (low fatigue); main attribute Endurance. Its
-                 // level LENGTHENS the fatigue timer (slows the drain) — the design's "growth
-                 // lengthens but never removes the timer", the ONE thing that buffers a need (VIT/
-                 // Endurance stays pure combat defence). Added LAST so existing SkillId values keep
-                 // their numbers.
+                 // level LENGTHENS every TIMER need (fatigue, hunger, AND water) via the shared
+                 // survivalist_relief that slows each drain: the design's "growth lengthens but
+                 // never removes the timer", the ONE need-buffer (VIT/Endurance stays pure combat
+                 // defence; warmth is spatial, eased by the fire not the skill). Added LAST so
+                 // existing SkillId values keep their numbers.
   Spellcasting,  // the MAGIC gate: an entity that HAS this skill has LEARNED to cast (magic_bolt
                  // checks for it), so magic is learned-not-innate. Main attribute Intellect (the
                  // design's magic domain); trained by casting, and its main-attr feeds the INT that
