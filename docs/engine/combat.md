@@ -627,11 +627,11 @@ it, and it clears when the plate shatters. A stand-and-tank build — soak a lit
 for swinging — never pure-upside.
 
 And like the venom/keen blade, warded plate **rolls as loot**: ~15% of a fine **sentinel** armour drop
-now comes out warded, the rest plain — its own *portable* raw `mt19937` draw (`kWardedDropThreshold`)
-off the same dedicated drop stream, the armour twin of the steel trait roll. Until now it was only a
-fixed def that could never actually drop, so the tank build was unreachable in play; now the field
-hands it to you. (One trait, so a single threshold splits warded from plain — no mutually-exclusive
-band like the blade's venom/keen.)
+comes out warded (another ~15% rolls *evasive* — see below), the rest plain — its own *portable* raw
+`mt19937` draw (`kWardedDropThreshold`) off the same dedicated drop stream, the armour twin of the steel
+trait roll. Until now it was only a fixed def that could never actually drop, so the tank build was
+unreachable in play; now the field hands it to you. (Armour now has **two** traits — warded and evasive
+— so **two mutually-exclusive bands** split them from plain, exactly like the blade's venom/keen.)
 
 Armour's **second flavourful trait** follows — the **evasive** (light) plate (`spawn_evasive_armour`, a
 pale light-steel dot), so armour now mirrors the blade's *two* traits. Where warded stands and chips
@@ -648,9 +648,12 @@ DEX, yet never a *guaranteed* dodge (a stream of hits still lands). So a nimble 
 reuses the whole armour path exactly as warded does: `Armour`/`Equipped` each gain one
 `evasion_bonus`/`armour_evasion` field (appended last, default 0 → bit-identical; the dodge draw stays
 gated on `chance > 0`, so an un-evasive world's RNG stream is untouched), the equip fold copies it, and
-it clears when the plate shatters. Never pure-upside — you soak much less to dodge more. For now it's a
-**hand-placed opener** (beside the warded plate) so the dodge build is reachable for playtest; rolling
-it as loot the way warded does is a clean follow-up.
+it clears when the plate shatters. Never pure-upside — you soak much less to dodge more. It appears
+both as a **hand-placed opener** (beside the warded plate) AND — like warded — **rolls as loot**: a
+fine sentinel-armour drop now rolls **~15% warded, ~15% evasive, the rest plain** (two
+mutually-exclusive bands off one portable draw, exactly like steel's venom/keen; `kEvasiveDropThreshold`
+sits *just past* the warded band, so warded-seed drops are unchanged — bit-identical). So the dodge
+build is **renewable**, not a one-off.
 
 !!! note "The minimal slice of P5, growing"
     Two slots as flat field-pairs (no `Slot` enum until a third slot earns it), hardcoded defs (plain
@@ -662,10 +665,10 @@ it as loot the way warded does is a clean follow-up.
     Equipment — NPC armour-*seeking*, the `Item{def, quality, durability, traits[]}` model (`quality`
     scales the boon at equip AND rolls per fine drop; **four named traits** exist — venom via existing
     fields and keen via an added `crit_bonus` on the weapon, warded via a `thorns_per_hit` *and* evasive
-    via an `evasion_bonus` on the armour; **three** of the four roll on a fine battlefield drop
-    (`handle_deaths`) — the two *weapon* traits on a steel drop, and *warded* on a **sentinel**'s armour
-    drop (its own portable draw into the armour-drop branch, so a warded build is renewable like the
-    venom one), while *evasive* is a hand-placed opener for now (its loot roll a follow-up); a `traits[]`
+    via an `evasion_bonus` on the armour; **all four** roll on a fine battlefield drop
+    (`handle_deaths`) — the two *weapon* traits on a steel drop, and *warded* + *evasive* on a
+    **sentinel**'s armour drop (two mutually-exclusive bands off one portable draw, so both armour
+    builds are renewable like the venom one); a `traits[]`
     *list*
     waits until two
     traits must STACK on one item, which the mutually-exclusive roll avoids), the `+skill/+aspect`
