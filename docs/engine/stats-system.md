@@ -301,11 +301,13 @@ hub — health, stamina, gear, *and*
 fatigue — a real reason to fall back to base when you're worn down. No hearth in reach → the base
 recovery rate → bit-identical.
 
-And you can **grow** the timer: the **Survivalist** skill *eases the fatigue drain* (via the same
-`eased_bane` half-floor the STR carry / Endurance armour masteries use), so a seasoned survivor tires
-slower and lasts longer before collapsing — never *removing* the timer, only lengthening it, the
+And you can **grow** the timer: the **Survivalist** skill *eases the drain of **every** need* —
+fatigue, hunger, and water alike, through the shared `survivalist_relief` (the same `eased_bane`
+half-floor the STR carry / Endurance armour masteries use), so a seasoned survivor tires, hungers, and
+thirsts slower and lasts longer on all three — never *removing* a timer, only lengthening it, the
 design's "growth lengthens but never removes". It's the **one** thing that buffers a need, keeping
-`Endurance`/VIT as pure combat defence. And you earn it the hard way — `advance_progression` trains
+`Endurance`/VIT as pure combat defence. (Warmth is spatial — the fire, not the skill — so Survivalist
+eases the three *timer* needs; the cold you flee.) And you earn it the hard way — `advance_progression` trains
 Survivalist only while you're **already exhausted** (fatigue below `kExhaustionLearnAt`): you learn to
 endure by enduring, so a rested colony trains none of it (bit-identical) and only the truly worn-down
 toughen. That completes the Fatigue triad-member: a bar that drains with exertion, recovers with rest

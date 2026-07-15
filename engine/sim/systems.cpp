@@ -1532,6 +1532,22 @@ void update_stamina(entt::registry& reg, float dt) {
   }
 }
 
+namespace {
+// The Survivalist skill's NEED-BUFFER multiplier, in [0.5, 1.0]: a trained survivor's needs drain
+// SLOWER — the design's "growth lengthens but never removes the timer, sourced from gear + the
+// Survivalist skill" (and the ONE need-buffer now that Endurance is pure combat defence).
+// eased_bane caps the relief at HALF, so a need still empties, just later. No Skills, or no
+// Survivalist skill (level 1) -> eased_bane(1, 1) = 1.0 -> the FULL drain -> bit-identical to
+// before Survivalist buffered anything. Shared by all THREE need-drains (hunger, water, fatigue) so
+// the buffer can't drift between them.
+float survivalist_relief(const entt::registry& reg, entt::entity e) {
+  const Skills* sk = reg.try_get<Skills>(e);
+  if (sk == nullptr) return 1.0f;
+  const Skill* surv = sk->find(SkillId::Survivalist);
+  return surv != nullptr ? eased_bane(1.0f, surv->level) : 1.0f;
+}
+}  // namespace
+
 void drain_hunger(entt::registry& reg, float dt) {
   // Baseline hunger lost per second at rest, plus extra while moving (the design's
   // "exertion drains needs" rule — the same moving/idle split as update_stamina). Gentle
@@ -1567,6 +1583,7 @@ void drain_hunger(entt::registry& reg, float dt) {
     // a walk. Sprinting is a player-set stance (MovePlayer); no Sprinting stance -> the walk drain
     // -> bit-identical. A sprinter is always moving, so this stacks on the move tier.
     if (reg.all_of<Sprinting>(e)) drain += kSprintNeedExertion;
+    drain *= survivalist_relief(reg, e);  // a trained survivor hungers slower (the ONE need-buffer)
     s.hunger.current -= drain * dt;
     if (s.hunger.current < 0.0f) s.hunger.current = 0.0f;  // never below empty
 
@@ -1603,6 +1620,7 @@ void drain_water(entt::registry& reg, float dt) {
     // drain, so exertion tiers rest < walk < sprint apply to thirst too. No Sprinting ->
     // bit-identical.
     if (reg.all_of<Sprinting>(e)) drain += kSprintNeedExertion;
+    drain *= survivalist_relief(reg, e);  // a trained survivor thirsts slower too (the same buffer)
     s.water.current -= drain * dt;
     if (s.water.current < 0.0f) s.water.current = 0.0f;  // never below empty
 
@@ -1696,18 +1714,15 @@ void tick_fatigue(entt::registry& reg, float dt) {
     const Velocity* v = reg.try_get<Velocity>(e);
     if (v != nullptr && glm::length(v->value) > 0.0f) {
       // SURVIVALIST eases the drain — a trained survivor tires SLOWER, lengthening the fatigue
-      // timer (never removing it: eased_bane caps the relief at half). This is the design's growth
-      // source and the ONE thing that buffers a need — VIT/Endurance stays pure combat defence, so
-      // survival stamina is its own trained thing. `relief` is the (1 - eased) multiplier: no
-      // Survivalist skill (level 1, or none) -> eased_bane(1, level) = 1.0 -> the FULL drain, so
-      // the two subtractions below are EXACTLY the pre-Survivalist ones (bit-identical, walkers AND
-      // sprinters — applying the factor per-component keeps the old float rounding). Trained in
-      // advance_progression, gated on low fatigue: you learn to endure only by pushing into
-      // exhaustion.
-      float relief = 1.0f;
-      if (const Skills* sk = reg.try_get<Skills>(e); sk != nullptr)
-        if (const Skill* surv = sk->find(SkillId::Survivalist))
-          relief = eased_bane(1.0f, surv->level);
+      // timer (never removing it: the relief caps at half). This is the design's growth source and
+      // the ONE thing that buffers a need — VIT/Endurance stays pure combat defence, so survival
+      // stamina is its own trained thing. `relief` is the shared survivalist_relief multiplier (now
+      // the SAME buffer hunger and water use, so the three needs can't drift): no Survivalist skill
+      // (level 1, or none) -> 1.0 -> the FULL drain, so the two subtractions below are EXACTLY the
+      // pre-Survivalist ones (bit-identical, walkers AND sprinters — applying the factor
+      // per-component keeps the old float rounding). Trained in advance_progression, gated on low
+      // fatigue: you learn to endure only by pushing into exhaustion.
+      const float relief = survivalist_relief(reg, e);
       s.fatigue.current -= kMoveDrainPerSecond * relief * dt;  // moving spends fatigue...
       if (reg.all_of<Sprinting>(e))
         s.fatigue.current -= kSprintDrainPerSecond * relief * dt;  // ...sprint more
