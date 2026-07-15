@@ -4689,15 +4689,18 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
   for (const Vec2& pos : armour_drops) {
     // Armour rolls its own named trait, mirroring the weapon loop above: a raw PORTABLE draw first
     // (bit-identical on every stdlib, unlike the uniform_real quality that follows), off the same
-    // dedicated drop stream. ~15% roll WARDED (thorns, paired -defence); the rest are plain. A
-    // SINGLE trait, so one threshold splits warded from plain — no mutually-exclusive band like
-    // steel's venom/keen. Drawn after the weapon loop in fixed order, so the sequence replays
-    // identically.
+    // dedicated drop stream. ~15% roll WARDED (thorns, paired -defence), ~15% EVASIVE (+dodge,
+    // paired -defence), the rest plain — two MUTUALLY-EXCLUSIVE bands now, exactly like steel's
+    // venomous/keen. The evasive band sits JUST PAST the warded one, so the warded band is
+    // unchanged (a warded-seed drop stays warded). Drawn after the weapon loop in fixed order, so
+    // the sequence replays identically.
     const auto roll = rng();
     const float q = fine_quality(rng);  // then the rolled quality (band-tested, not exact)
     if (roll < kWardedDropThreshold)
       spawn_warded_armour(reg, pos,
                           q);  // thorns plate (-defence, reflects a chip onto an attacker)
+    else if (roll < kWardedDropThreshold + kEvasiveDropThreshold)
+      spawn_evasive_armour(reg, pos, q);  // evasive plate (-defence, +dodge — the light build)
     else
       spawn_armour(reg, pos, q);  // plain plate (today's path)
   }

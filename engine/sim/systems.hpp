@@ -379,10 +379,16 @@ inline constexpr float kKeenCritBonus = 0.15f;  // +15% crit chance while wielde
 // already wired through the equip fold -> `Equipped.armour_thorns` -> `resolve_creature_contacts`,
 // and unit-tested). Its only spawn was a single hardcoded seed, so warded plate could never appear
 // as loot — this lets it drop like the weapon traits do. Rolled off the SAME dedicated drop stream
-// by ONE portable raw draw; ~15% warded, the rest plain. Only ARMOUR rolls this (steel rolls
-// venomous/keen instead), and it's a SINGLE trait, so one threshold splits warded from plain — no
-// mutually-exclusive band like the weapon's venom/keen. Knobs.
+// by ONE portable raw draw; ~15% warded, ~15% EVASIVE (the second armour trait, below), the rest
+// plain — two MUTUALLY-EXCLUSIVE bands now, exactly like the weapon's venomous/keen (an armour drop
+// rolls warded OR evasive OR plain, never two). Knobs.
 inline constexpr std::uint32_t kWardedDropThreshold =  // ~15% of mt19937's full 2^32 output range
+    static_cast<std::uint32_t>(0.15 * 4294967296.0);
+// The EVASIVE band, sitting JUST PAST the warded band (like keen sits past venomous): a raw draw in
+// [kWardedDropThreshold, kWardedDropThreshold + kEvasiveDropThreshold) rolls an evasive plate
+// (+dodge, -defence). Placed ABOVE warded so the warded band [0, kWardedDropThreshold) is unchanged
+// — a warded-seed drop stays warded, bit-identical. ~15% too. Knob.
+inline constexpr std::uint32_t kEvasiveDropThreshold =  // ~15% of mt19937's full 2^32 output range
     static_cast<std::uint32_t>(0.15 * 4294967296.0);
 
 // React to death. A player at 0 health goes DOWNED — helpless where they fell for a

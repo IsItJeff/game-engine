@@ -8364,6 +8364,29 @@ TEST_CASE("a sentinel's armour drop can roll WARDED: the thorns plate joins the 
           0.0f);  // ...plain band -> an ordinary plate (no thorns), today's path
 }
 
+TEST_CASE("a sentinel's armour drop can roll EVASIVE too: the light plate joins the loot table",
+          "[sim]") {
+  // The SECOND armour trait joins the loot roll (the evasive plate had only a hand-placed opener
+  // before). A fine sentinel-armour drop now rolls WARDED or EVASIVE or plain — two
+  // mutually-exclusive bands, exactly like steel's venomous/keen. The evasive band sits JUST PAST
+  // the warded one, so a warded-seed drop is unchanged (see the WARDED test above, still green); a
+  // seed whose first drop-rng draw lands in [kWardedDropThreshold, +kEvasiveDropThreshold) rolls an
+  // evasive plate (+dodge, -defence). seed 5's first mt19937 output lands in the evasive band;
+  // seed 1's lands in the plain band (past both traits).
+  const auto dropped_evasion = [](unsigned seed) {
+    entt::registry reg;
+    const entt::entity sentinel = reg.create();
+    reg.emplace<eng::sim::Transform>(sentinel, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(sentinel, eng::sim::Vital{0.0f, 40.0f, 0.0f});  // dead
+    reg.emplace<eng::sim::Enemy>(sentinel).drop = eng::sim::DropKind::Armour;
+    std::mt19937 rng{seed};
+    eng::sim::handle_deaths(reg, eng::Vec2{0.0f, 0.0f}, 1.0f / 60.0f, rng);
+    return reg.get<eng::sim::Armour>(*reg.view<eng::sim::Armour>().begin()).evasion_bonus;
+  };
+  REQUIRE(dropped_evasion(5) > 0.0f);   // evasive band -> a light plate that slips more blows...
+  REQUIRE(dropped_evasion(1) == 0.0f);  // ...plain band -> an ordinary plate (no evasion)
+}
+
 TEST_CASE("venomous steel is a named trait: venom bought with a notch of Strength the heft intact",
           "[sim]") {
   // The FIRST named equipment trait, tested at its canonical spawn (no roll). Venomous steel keeps
