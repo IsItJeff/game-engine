@@ -903,6 +903,9 @@ enum class AspirationKind : std::uint8_t {
   Provider,  // dreams of plenty — an idle one works the land, harvesting a ripe plot into a meal
   Scholar,   // dreams of magic — an unlearned one seeks a Spellbook to LEARN Spellcasting, then
              // casts
+  Healer,    // dreams of mercy — a compassionate one seeks the nearest HURT ally (wounded or
+             // poisoned) to tend, so npc_heal / npc_cleanse can reach it. Appended LAST so existing
+             // Aspiration{...} values hold.
 };
 struct Aspiration {
   AspirationKind kind = AspirationKind::Warrior;

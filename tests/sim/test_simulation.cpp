@@ -1940,6 +1940,34 @@ TEST_CASE("an idle warrior charges the nearest creature: a proactive aspiration 
   REQUIRE(hunt_vx(false) == Approx(0.0f));  // no aspiration -> no hunt -> stays put (the gate)
 }
 
+TEST_CASE("an idle healer rushes to a hurt ally to tend it: the mercy aspiration steers", "[sim]") {
+  // The warrior's support twin: a colonist that DREAMS of mercy (an Aspiration of kind Healer),
+  // with nothing to fear or need, rushes to the nearest HURT ally -- one that's WOUNDED (health
+  // below max) OR POISONED -- so npc_heal / npc_cleanse can reach it. The Aspiration is the gate:
+  // without it the same idle colonist stays put (every existing scene has none -> bit-identical).
+  const auto mercy_vx = [](bool is_healer, bool poisoned_not_wounded) {
+    entt::registry reg;
+    const entt::entity ally = reg.create();
+    reg.emplace<eng::sim::Transform>(ally, eng::Vec2{200.0f, 0.0f});  // to the RIGHT, in range
+    reg.emplace<eng::sim::Stats>(ally);
+    if (poisoned_not_wounded)
+      reg.emplace<eng::sim::Poisoned>(ally, eng::sim::Poisoned{5.0f, 10.0f});  // hurt = poisoned...
+    else
+      reg.get<eng::sim::Stats>(ally).health.current = 20.0f;  // ...or hurt = wounded (below max)
+    const entt::entity colonist = reg.create();
+    reg.emplace<eng::sim::Transform>(colonist, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(colonist);
+    reg.emplace<eng::sim::Npc>(colonist);
+    if (is_healer) reg.emplace<eng::sim::Aspiration>(colonist, eng::sim::AspirationKind::Healer);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(colonist).value.x;
+  };
+  REQUIRE(mercy_vx(true, false) > 0.0f);  // a healer rushes RIGHT toward a WOUNDED ally...
+  REQUIRE(mercy_vx(true, true) > 0.0f);   // ...and toward a POISONED one too
+  REQUIRE(mercy_vx(false, false) ==
+          Approx(0.0f));  // no aspiration -> no rush -> stays put (the gate)
+}
+
 TEST_CASE("an idle provider walks to a food plot to work it: the peaceful aspiration steers",
           "[sim]") {
   // The Warrior's peaceful twin: a colonist that DREAMS of plenty (an Aspiration of kind Provider),
