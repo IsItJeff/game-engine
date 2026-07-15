@@ -2734,6 +2734,39 @@ TEST_CASE("mentorship needs a real gap: fresh colonists teach nothing", "[sim]")
   REQUIRE_FALSE(taught(5, 500.0f));  // ...a veteran but no student in reach -> teaches no one
 }
 
+TEST_CASE("a mentor teaches its friends first: affinity outweighs a nearer stranger", "[sim]") {
+  // Relationships reach mentorship (like the rescue rung weights whom-to-save): a bonded pupil
+  // FEELS closer, so a mentor teaches the protege it likes over a NEARER stranger -- who you teach
+  // is shaped by who you're close to, not just where they stand. RED before: teach picked purely by
+  // raw distance, so the nearer stranger always won regardless of bonds.
+  entt::registry reg;
+  const entt::entity mentor = reg.create();
+  reg.emplace<eng::sim::Npc>(mentor);
+  reg.emplace<eng::sim::Transform>(mentor, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(mentor);
+  reg.emplace<eng::sim::CharacterLevel>(mentor);
+  reg.emplace<eng::sim::Skills>(mentor).train(eng::sim::SkillId::Striking).level =
+      5;  // a real craft
+  const auto novice = [&](eng::Vec2 pos) {
+    const entt::entity s = reg.create();
+    reg.emplace<eng::sim::Npc>(s);
+    reg.emplace<eng::sim::Transform>(s, pos);
+    reg.emplace<eng::sim::Attributes>(s);
+    reg.emplace<eng::sim::CharacterLevel>(s);
+    reg.emplace<eng::sim::Skills>(s);  // level 1 -> trails the mentor, eligible to learn
+    return s;
+  };
+  const entt::entity friend_pupil = novice(eng::Vec2{12.0f, 0.0f});  // FARTHER, but bonded...
+  const entt::entity stranger = novice(eng::Vec2{-10.0f, 0.0f});     // ...nearer, but unbonded
+  eng::sim::nudge_affinity(reg, mentor, friend_pupil, 40);  // a Friend-tier bond, mentor->pupil
+
+  eng::sim::teach(reg);
+
+  // The bond overcame the extra distance: the friend got the lesson, the nearer stranger didn't.
+  REQUIRE(reg.get<eng::sim::Skills>(friend_pupil).find(eng::sim::SkillId::Striking) != nullptr);
+  REQUIRE(reg.get<eng::sim::Skills>(stranger).find(eng::sim::SkillId::Striking) == nullptr);
+}
+
 TEST_CASE("a first lesson bonds the student to the mentor: gratitude", "[sim]") {
   // A shared-events-forge-ties bond (beside camaraderie, admiration, and the grudge): the tick a
   // student LEARNS a craft it never had from its mentor (here Striking, 0 -> 1) bonds it TO the

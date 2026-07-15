@@ -2069,7 +2069,18 @@ void teach(entt::registry& reg) {
     float nearest = kMentorReach;
     for (const entt::entity s : folk) {
       if (s == mentor) continue;
-      const float d = glm::distance(mpos, folk.get<Transform>(s).position);
+      // TEACH YOUR FRIENDS FIRST: a bonded pupil FEELS closer, so it wins the lesson over a nearer
+      // stranger — the same affinity-discount the rescue rung weights whom-to-save by (a bonded
+      // ally is worth a longer trek). Neutral affinity 0 -> distance unchanged -> bit-identical
+      // (every existing mentorship test pairs unbonded colonists); a positive tie shrinks the
+      // effective distance (a strong bond can even pull a pupil slightly BEYOND the base
+      // kMentorReach into range, up to 2x — the reach-stretch the rescue rung gives a bonded ally),
+      // a resented one (negative) inflates it, so a mentor favours the protege it likes and may
+      // skip one it resents. The relationships model reaching mentorship — who you teach is shaped
+      // by who you're close to, not just where they stand.
+      const float raw_d = glm::distance(mpos, folk.get<Transform>(s).position);
+      const std::int8_t aff = affinity_toward(reg, mentor, s);
+      const float d = raw_d * (1.0f - static_cast<float>(aff) / 200.0f);
       if (d >= nearest) continue;
       const Skill* has = folk.get<Skills>(s).find(best);
       const int s_level = has != nullptr ? has->level : 1;
