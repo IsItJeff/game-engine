@@ -468,6 +468,13 @@ struct Enemy {
   // class. 0 = doesn't drink (every other archetype — bit-identical). Placed LAST so existing
   // positional `Enemy{...}` initialisers keep their meaning.
   float lifesteal_per_hit = 0.0f;
+  // If > 0 this creature DETONATES on death: when it's reaped (handle_deaths), every PERSON within
+  // a blast radius takes this much damage — the BOMBER archetype, so you kill it at RANGE
+  // (throw/bolt) or eat the blast finishing it in melee. The death-effect twin of the knitflesh's
+  // passive regen and the leech's on-hit drink: "procs as data", an archetype knob, not a creature
+  // class. 0 = no blast (every other archetype — bit-identical). Placed LAST so existing positional
+  // `Enemy{...}` initialisers keep their meaning.
+  float death_blast_damage = 0.0f;
 };
 
 // A lingering damage-over-time left by a venomous blow (resolve_creature_contacts). Unlike a hit,

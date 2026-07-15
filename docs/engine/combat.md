@@ -173,14 +173,18 @@ give waves texture:
 | **Leech** (blood-red) | 22 | 75 | 8 | 0% | middling — but it **DRINKS**: every bite it lands **heals it 4** (`lifesteal_per_hit`), the only creature that heals **on a bite** (the knitflesh heals passively instead), so it out-sustains a slow chip. **Burst it or kite it** — don't stand and trade |
 | **Warden** (teal) | 35 | 60 | 10 | 0% | middling melee — but **WARDED against magic**: a high **WISDOM** (`magic_defence_of`) blunts a bolt hard, so a mage's plink barely dents it, while a blade lands full (VIT 1). The **anti-mage** foe — **close and melee it**, don't cast |
 | **Knitflesh** (wound-pink) | 30 | 60 | 8 | 0% | middling melee — but it **KNITS its wounds**: a passive `health.regen_per_second` (4/sec, healed by the shared `regenerate_vitals`), so chip-and-retreat only lets it heal back. **Commit and burst it down** — the passive-heal twin of the leech's heal-on-bite (heals *always*, not just when it hits) |
+| **Bomber** (amber) | 18 | 65 | 6 | 0% | fragile melee — but it **DETONATES on death**: when `handle_deaths` reaps it, every living **person** (player or colonist) still standing within a melee-range `kBlastRadius` (90) takes a flat **15** (`death_blast_damage`) — not other creatures, and not the already-Downed. Its threat is *dying*, not living — **kill it at range**, or back off the instant it drops, or its corpse hits harder than it ever did alive |
 
 The brute is **VIT-tanky** (soaks hits), the swarmer is **DEX-slippery** (slips ~1 strike in
 5, its innate Dexterity) *and venomous*, the spitter is **RANGED** *and venomous*, the leech
-**SUSTAINS**, and the warden is **WIS-warded** (shrugs off bolts) — so they threaten you for different
-reasons: the brute up front, the swarm on the retreat, the spitter's envenoming spit from a distance
-you can't melee, the leech's self-heal that punishes a war of attrition, the warden that makes a
-pure-magic build close to melee, and the knitflesh that knits its wounds shut unless you commit. (A
-slow, heavily-plated **sentinel** — 60 HP, VIT 5 — rounds out the reinforcement mix and drops armour.)
+**SUSTAINS**, the warden is **WIS-warded** (shrugs off bolts), the knitflesh **REGENERATES** (knits
+what you don't finish), and the bomber is **VOLATILE** (blows up when slain) — so they threaten you
+for different reasons: the brute up front, the swarm on the
+retreat, the spitter's envenoming spit from a distance you can't melee, the leech's self-heal that
+punishes a war of attrition, the warden that makes a pure-magic build close to melee, the knitflesh
+that knits its wounds shut unless you commit, and the bomber whose *death* is the danger — the one
+kill you want to land from outside its blast, not in its face. (A slow, heavily-plated **sentinel** —
+60 HP, VIT 5 — rounds out the reinforcement mix and drops armour.)
 
 - **HP** (a `Stats` component) that strikes whittle down; **no regen** for most — but **two** self-heal:
   the **leech**, whose landed bites heal it (`lifesteal_per_hit`), and the **knitflesh**, which regens
@@ -437,7 +441,7 @@ target; a straight-line shot you must *lead* is a gameplay refinement, not a plu
 
 Killing everything used to leave the world quiet. `spawn_creature_if_due` (end of
 `step()`) tops the population up on a timer — every `kCreatureSpawnInterval` (6 s), if
-under `kMaxCreatures` (5), it spawns a creature at a random **field edge** (so it
+under `kMaxCreatures` (7), it spawns a creature at a random **field edge** (so it
 arrives from outside, never on top of you) — mostly swarmers with the occasional
 brute, rolled from the seeded RNG. Deterministic.
 
@@ -839,7 +843,7 @@ the fighting is, who's trading hits, which colonist is getting worn down.
 - `engine/sim/components.hpp` — `Enemy` (with `poison_per_second`), `Poisoned`, `Blocking` (the raised guard) and `Sprinting` (its offensive twin, the SHIFT dash), `Projectile` (a thrown bolt in flight), `Pickup`; `Hazard`.
 - `engine/sim/systems.hpp` / `systems.cpp` — `perform_attack` (which crits, *executes* a worn-down foe for bonus damage, *backstabs* a foe whose back is turned, and *cleaves* a fraction of the blow into a second clustered foe), `perform_throw` (the stamina-costed ranged option — launches a `Projectile`), `advance_projectiles` (flies each bolt home and lands it), `creature_spit` (a ranged enemy launches a spit through the same `Projectile`), `chase_prey`, `resolve_creature_contacts` (which applies venom, enrages a worn-down foe, softens a `Blocking` victim's blow, *backstabs* a fleeing victim via the shared `backstab_multiplier`, and lets a cast `Shielded` barrier soak the blow — see [magic](magic.md)), `tick_poison`, `collect_pickups`, and `handle_deaths` (which drops the loot via `spawn_pickup`); the `mitigate` / `defence_of` (physical, VIT + armour) / `magic_defence_of` (magical, WIS) / `dodge_chance` / `accuracy` (the attacker-aim counter to dodge) / `crit_chance` helpers; `stamp_flash` (at the damage sites) and `decay_flashes` (ages the hit-flash). The guard itself is set by the `MovePlayer` command's `guard` flag (and the SHIFT sprint by its `sprint` flag) in `world.cpp`'s `apply_command`; the `Attack` (J), `Throw` (F), guard (K), and sprint (SHIFT) inputs come from `game/app/main.cpp`.
 - `engine/sim/components.hpp` — `HitFlash`, the presentation-only hit-blink; `game/app/main.cpp` `draw_entities` whitens the dot by its remaining time.
-- `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` / `make_spitter` / `make_sentinel` / `make_leech` / `make_warden` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
+- `engine/sim/world.cpp` — `make_creature` (+ the `make_brute` / `make_swarmer` / `make_spitter` / `make_sentinel` / `make_leech` / `make_warden` / `make_regenerator` / `make_bomber` archetypes), `spawn_creature_if_due` / `spawn_npc_if_due` (each on its own seeded stream), and the system order in `step()`.
 - `engine/sim/command.hpp` / `world.cpp` — the player's `Attack` (`J`), `Equip` (`E`), and `Drop` (`Q`) commands; `spawn_weapon` (shared by brute drops and `Drop`).
 - `engine/sim/components.hpp` — `Weapon` and `Armour` (dropped gear) and `Equipped` (the two-slot mods cache); `engine/sim/systems.cpp` `equip_nearest_gear` (the non-clobbering fold), `spawn_armour`, and the `defence_of` / `update_stamina` hooks.
 - `tests/sim/test_simulation.cpp` — STR-vs-VIT damage, VIT-softened blows, DEX dodge (both sides) + Evasion training, LCK crits + Scavenging training, creature spawn/cap, loot drop + collect + fade, weapon drop/wield/reach/damage/heft.
