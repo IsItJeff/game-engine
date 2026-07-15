@@ -4722,18 +4722,57 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
   // BOMBER DETONATIONS: apply each dead bomber's blast now — every PERSON (Stats, not a creature,
   // not already Downed) within kBlastRadius of the corpse takes the flat damage, so finishing a
   // bomber in MELEE hurts (kill it at RANGE instead). Applied AFTER the reap loop (the bombers are
-  // in `dead`, destroyed below) over a SEPARATE people view; a value write on each victim's health,
-  // so it can't invalidate a view (stamp_flash's HitFlash is in neither pool). If it drops a victim
-  // to 0 the normal death path reaps it (a player Downs, an NPC permadies). No RNG; no bomber
-  // (every current archetype) -> blasts empty -> bit-identical.
+  // in `dead`, destroyed below) over a SEPARATE people view. VIEW-SAFETY: the health damage is a
+  // value write; the in-pass reap below only EMPLACES Downed / REMOVES stances / pushes the `dead`
+  // vector — none touch the leading Stats/Transform pools the view drives on (Downed is only an
+  // exclude filter, re-checked per candidate, so emplacing it on the already-yielded current entity
+  // can't skip or double-yield another), the same mid-iteration pattern the crumple/grief/rescue
+  // emplaces already rely on. No RNG; no bomber (every current archetype) -> blasts empty ->
+  // bit-identical.
+  //
+  // A LETHAL blast must reap its victim in THIS pass, not defer to next tick's death check: the
+  // player Down/reap decisions already ran ABOVE this loop, and collect_pickups + regenerate_vitals
+  // run LATER in the same step() — so a body merely clamped to 0 here would be lifted straight back
+  // off the floor (a fed victim's own regen, or the bomber's dropped HealthOrb it's standing on)
+  // before next tick ever sees it, silently negating the whole detonation. So we crumple/permakill
+  // HERE, mirroring the mortal-blow path above: a player CRUMPLES (Downed + stances dropped +
+  // halted), an NPC PERMADIES (into `dead`, which the grief loop and the destroy loop below both
+  // process). Two guards keep it from double-reaping: `was_alive` (the blast must be what FELLED
+  // it, so a second overlapping blast on an already-0 victim doesn't re-fell it) AND, for the NPC
+  // push, a `dead`-membership check — because a colonist already reaped this tick by EXHAUSTION
+  // sits in `dead` with health STILL > 0, so was_alive alone would let a coincident blast push it
+  // twice.
   constexpr float kBlastRadius = 90.0f;  // ponytail: a melee-range detonation (a knob)
   for (const auto& [bpos, bdmg] : blasts)
     for (const entt::entity p : reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>)) {
       if (glm::distance(bpos, reg.get<Transform>(p).position) < kBlastRadius) {
         Vital& h = reg.get<Stats>(p).health;
+        const bool was_alive = h.current > 0.0f;
         h.current -= bdmg;
         if (h.current < 0.0f) h.current = 0.0f;
-        stamp_flash(reg, p);  // the caught person blinks
+        stamp_flash(reg, p);                      // the caught person blinks
+        if (was_alive && h.current <= 0.0f) {     // the blast just felled it -> reap this pass
+          if (reg.all_of<PlayerControlled>(p)) {  // a player crumples (mirror of the mortal blow)
+            reg.emplace<Downed>(p);
+            reg.remove<Blocking>(p);
+            reg.remove<Sprinting>(p);
+            reg.remove<PowerAttack>(p);
+            if (Velocity* v = reg.try_get<Velocity>(p)) v->value = Vec2{0.0f, 0.0f};
+          } else if (std::find(dead.begin(), dead.end(), p) == dead.end()) {
+            // An NPC permadies now: into `dead`, grieved + destroyed by the loops below. The `dead`
+            // membership check is LOAD-BEARING, not belt-and-suspenders: a colonist already reaped
+            // this tick by EXHAUSTION (fatigue 0) sits in `dead` with health STILL > 0 (the reap
+            // pushes it before any health drops), so `was_alive` alone wouldn't catch it — a blast
+            // finishing that same colonist would push it a SECOND time and the destroy loop would
+            // reg.destroy() a stale handle (double-free). This guard closes that.
+            dead.push_back(p);
+            // ponytail: unlike the npcs reap loop above, a blast-killed colonist does NOT drop its
+            // KIT here (gear outlives its bearer) — a minor parity gap, not a regression (pre-fix
+            // it was resurrected, so it never dropped either). Deferred to a follow-up that
+            // extracts a shared drop_kit() helper for all three drop sites (this, the npcs loop,
+            // the Drop cmd) rather than adding a third copy of the slot-non-empty block.
+          }
+        }
       }
     }
 

@@ -965,6 +965,69 @@ TEST_CASE(
           Approx(plain_before));  // a plain creature's death is SILENT (only the bomber blows up)
 }
 
+TEST_CASE("a lethal bomber blast reaps its victim THIS pass: a fed player Downs an NPC permadies",
+          "[sim]") {
+  // The blast is applied AFTER handle_deaths' own Down/reap decisions have run for the tick, so a
+  // victim it clamps to 0 must be reaped in the SAME pass -- else collect_pickups and
+  // regenerate_vitals (both run LATER in step()) lift the fed body back off the floor before next
+  // tick's death check ever sees it, silently NEGATING the detonation. So a felled player must go
+  // Downed and a felled colonist must permadie, right here. RED before the fix: the blast left both
+  // at 0 HP but the player un-Downed and the NPC still valid (to be resurrected by regen next).
+  entt::registry reg;
+  const eng::Vec2 origin{0.0f, 0.0f};
+  const entt::entity bomber = reg.create();  // a slain bomber, primed
+  reg.emplace<eng::sim::Transform>(bomber, origin);
+  reg.emplace<eng::sim::Stats>(bomber).health.current = 0.0f;
+  reg.emplace<eng::sim::Enemy>(bomber).death_blast_damage = 15.0f;
+
+  const entt::entity player = reg.create();  // a FED player at low HP inside the blast
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{50.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(player);
+  reg.emplace<eng::sim::PlayerControlled>(player);
+  reg.emplace<eng::sim::Stats>(player).health.current = 10.0f;  // < the 15 blast -> felled
+
+  const entt::entity npc = reg.create();  // a FED colonist at low HP inside the blast
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 40.0f});
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc).health.current = 6.0f;  // < 15 -> felled
+
+  eng::sim::handle_deaths(reg, origin, 1.0f / 60.0f);
+
+  REQUIRE(
+      reg.all_of<eng::sim::Downed>(player));  // the player CRUMPLED this call (not lifted by regen)
+  REQUIRE(reg.get<eng::sim::Stats>(player).health.current == Approx(0.0f));  // ...at 0, helpless
+  REQUIRE_FALSE(
+      reg.valid(npc));  // the NPC PERMADIED this call (reaped + destroyed, not resurrected)
+}
+
+TEST_CASE("a bomber blast on an already-exhausted colonist doesn't double-reap it", "[sim]") {
+  // The double-reap trap the in-pass reap must dodge: an NPC that dies of EXHAUSTION (fatigue 0) is
+  // pushed to `dead` by the reap loop with health STILL > 0, so it's still in the blast view. A
+  // coincident lethal blast must NOT push it a SECOND time, or the destroy loop reg.destroy()s a
+  // stale handle (double-free). One reap, one destroy. RED before the `dead`-membership guard: a
+  // debug EnTT assert / ASan double-free abort.
+  entt::registry reg;
+  const eng::Vec2 origin{0.0f, 0.0f};
+  const entt::entity bomber = reg.create();
+  reg.emplace<eng::sim::Transform>(bomber, origin);
+  reg.emplace<eng::sim::Stats>(bomber).health.current = 0.0f;
+  reg.emplace<eng::sim::Enemy>(bomber).death_blast_damage = 15.0f;
+
+  const entt::entity npc = reg.create();  // exhausted but still HP-alive, inside the blast
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{50.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  auto& s = reg.emplace<eng::sim::Stats>(npc);
+  s.health.current = 5.0f;   // alive by HP...
+  s.fatigue.current = 0.0f;  // ...but collapsing from exhaustion -> reaped into `dead` this tick
+
+  eng::sim::handle_deaths(reg, origin, 1.0f / 60.0f);  // must not double-destroy
+
+  REQUIRE_FALSE(
+      reg.valid(npc));  // reaped exactly ONCE (a second reg.destroy would abort under ASan)
+}
+
 TEST_CASE("collapsing drops every combat stance not just the guard: no stale power swing on revive",
           "[sim]") {
   // handle_deaths already drops Blocking when a player crumples ("a crumpled body isn't guarding").
