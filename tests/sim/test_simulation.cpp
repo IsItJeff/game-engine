@@ -4389,6 +4389,36 @@ TEST_CASE(
   REQUIRE_FALSE(reg.valid(shot));  // the wasted shot is dropped, exactly like a gone-target shot
 }
 
+TEST_CASE("a raised guard soaks a physical spit but a magic bolt pierces it", "[sim]") {
+  // The RANGED half of the melee block: a Blocking victim turns a PHYSICAL projectile (a thrown
+  // weapon or a creature's spit) via the same guard_block_factor as a melee blow -- but a MAGIC
+  // bolt PIERCES the guard (a bolt is warded by Wisdom, not stopped by a shield or a guard). Same
+  // shot on the same victim; only from_magic and the guard stance vary. RED before:
+  // advance_projectiles read Shielded but never Blocking, so a guard did nothing against a spit.
+  const auto damage_taken = [](bool from_magic, bool blocking) {
+    entt::registry reg;
+    const entt::entity victim = reg.create();
+    reg.emplace<eng::sim::Transform>(victim, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(victim);  // full health
+    if (blocking) reg.emplace<eng::sim::Blocking>(victim);
+    const entt::entity shot = reg.create();
+    reg.emplace<eng::sim::Transform>(shot, eng::Vec2{0.0f, 0.0f});  // on the victim -> impacts now
+    // Projectile{target, owner, damage, speed, poison, from_magic}
+    reg.emplace<eng::sim::Projectile>(
+        shot, eng::sim::Projectile{victim, entt::null, 20.0f, 600.0f, 0.0f, from_magic});
+    const float before = reg.get<eng::sim::Stats>(victim).health.current;
+    eng::sim::advance_projectiles(reg, 1.0f);
+    return before - reg.get<eng::sim::Stats>(victim).health.current;
+  };
+  // A physical shot is SOFTENED by a raised guard...
+  REQUIRE(damage_taken(false, true) < damage_taken(false, false));
+  // ...but a magic bolt PIERCES it: the guard changes nothing.
+  REQUIRE(damage_taken(true, true) == Approx(damage_taken(true, false)));
+  // An unguarded victim takes the same full hit whether the shot is physical or magic -- the block
+  // is the ONLY difference, so nothing about the shot type matters until you raise a guard.
+  REQUIRE(damage_taken(false, false) == Approx(damage_taken(true, false)));
+}
+
 TEST_CASE("touching a hazard damages the player and consumes the hazard", "[sim]") {
   eng::sim::World world;
   const entt::entity player = world.player();

@@ -2374,6 +2374,22 @@ float evasion_of(const entt::registry& reg, entt::entity e) {
   return eq != nullptr ? eq->armour_evasion : 0.0f;
 }
 
+// The fraction of a PHYSICAL blow that gets through a raised GUARD — the design's active-block
+// soak, SHARED by a melee blow (resolve_creature_contacts) and a blocked physical projectile
+// (advance_projectiles) so the two can't drift. A Blocking victim takes only kBlockDamageFactor of
+// the hit, and GUARDING eases even that (a trained guard TURNS MORE, via the eased_bane half-floor,
+// so a master still takes ~a fifth — softened, never a wall). The CALLER checks Blocking and passes
+// the victim's already-fetched Skills (nullptr, or no Guarding skill, -> the flat
+// kBlockDamageFactor
+// -> bit-identical). Pure read: no XP grant (each site trains Guarding itself), no RNG.
+float guard_block_factor(const Skills* gsk) {
+  float factor = kBlockDamageFactor;
+  if (gsk != nullptr)
+    if (const Skill* guard = gsk->find(SkillId::Guarding))
+      factor = eased_bane(factor, guard->level);
+  return factor;
+}
+
 // Chance in [0, kCap] that a strike CRITS (deals extra damage), from the attacker's LCK —
 // the offensive-fortune mirror of dodge_chance. Level 1 = 0 (no head start, and the
 // chance > 0 guard at the call site means an untrained attacker never even draws), each
@@ -3134,7 +3150,10 @@ void magic_bolt(entt::registry& reg, entt::entity caster) {
   reg.emplace<Transform>(shot, origin);
   reg.emplace<PrevTransform>(shot, origin);
   reg.emplace<RenderDot>(shot, Vec3{0.6f, 0.3f, 0.95f}, 4.0f);  // arcane violet bolt
-  reg.emplace<Projectile>(shot, Projectile{target, caster, applied, kProjectileSpeed});
+  // from_magic = true: a bolt PIERCES a raised guard (it's warded by Wisdom, not blocked). poison 0
+  // (a plain bolt carries no venom). The trailing fields are spelled out because from_magic differs
+  // from the default.
+  reg.emplace<Projectile>(shot, Projectile{target, caster, applied, kProjectileSpeed, 0.0f, true});
 }
 
 void npc_cast(entt::registry& reg) {
@@ -3459,12 +3478,33 @@ void advance_projectiles(entt::registry& reg, float dt) {
         // (resolve_creature_contacts): `absorb` comes off the carried damage, floored at 0. The
         // ward is a GENERAL damage buffer, not melee-only -- npc_shield raises it when a creature
         // closes, and a spitter IS that creature, so its venom bolt must be soaked or the mana was
-        // spent for nothing against the one ranged threat. Unshielded (no Shielded -> every
-        // existing throw and spit) takes the full p.damage, bit-identical. Read HERE, before the
-        // chip, so the alive->dead transition below (and its Valor/vigor credit) weighs the SOAKED
-        // damage. Like the melee ward it stops DAMAGE, not CONTACT: the venom below still lands (a
-        // poison-ward is a separate spell -- see resolve_creature_contacts).
+        // spent for nothing against the one ranged threat. Unshielded (no Shielded) subtracts no
+        // absorb here, so the carried damage (as softened by any guard block just below) passes
+        // through — every existing throw and spit, with no shield and no guard, is bit-identical.
+        // Read HERE, before the chip, so the alive->dead transition below (and its Valor/vigor
+        // credit) weighs the SOAKED damage. Like the melee ward it stops DAMAGE, not CONTACT: the
+        // venom below still lands (a poison-ward is a separate spell -- see
+        // resolve_creature_contacts).
         float dealt = p.damage;
+        // A raised GUARD turns a PHYSICAL projectile too — a thrown weapon or a creature's spit —
+        // the RANGED half of the melee block (resolve_creature_contacts), via the SAME shared
+        // guard_block_factor (only kBlockDamageFactor gets through, eased by Guarding). A magic
+        // bolt PIERCES the guard (from_magic: a bolt is warded by Wisdom, not stopped by a shield
+        // or a guard). Applied BEFORE the Shielded ward, so a guard soaks the physical shot and the
+        // ward then mops up any remainder. Like the melee block and the ward it stops DAMAGE, not
+        // CONTACT
+        // -- the venom below still lands. No riposte (the shooter is out of reach), but facing the
+        // shot TRAINS Guarding, exactly as a turned melee blow does. Not Blocking, or a magic bolt,
+        // -> factor 1.0 / skipped -> the full p.damage, bit-identical.
+        if (!p.from_magic && reg.all_of<Blocking>(p.target)) {
+          Skills* gsk = reg.try_get<Skills>(p.target);
+          dealt *= guard_block_factor(gsk);
+          if (Attributes* tattrs = reg.try_get<Attributes>(p.target);
+              gsk != nullptr && tattrs != nullptr) {
+            grant_skill_xp(*gsk, *tattrs, SkillId::Guarding, Fixed::from_int(10),
+                           reg.try_get<CharacterLevel>(p.target));  // matches a turned melee blow
+          }
+        }
         if (const Shielded* shield = reg.try_get<Shielded>(p.target); shield != nullptr) {
           dealt -= shield->absorb;
           if (dealt < 0.0f) dealt = 0.0f;
@@ -4771,20 +4811,14 @@ void resolve_creature_contacts(entt::registry& reg, float dt, std::mt19937& rng)
       // for the mobility it costs. Applies to anyone Blocking — the player (MovePlayer) and a
       // hardened NPC bulwark (npc_guard) alike, so both soak, riposte, and train Guarding.
       if (reg.all_of<Blocking>(p)) {
-        // Only kBlockDamageFactor of the blow gets through a raised guard. GUARDING eases even
-        // that: a trained guard TURNS MORE of it (less through), via the same half-floor mastery
-        // helper the STR-carry / fatigue banes use — so the skill that until now only fed Endurance
-        // XP finally sharpens the block it is earned by. Level 1, or no Guarding skill (a bare
-        // Blocking victim),
-        // -> relief 0 -> the flat 0.4 -> bit-identical. eased_bane caps the relief at half, so a
-        // master still takes a fifth of the blow — a guard is softened, never a wall. Fetch Skills
-        // once here; the training grant just below reuses it.
+        // Only kBlockDamageFactor of the blow gets through a raised guard, eased further by
+        // GUARDING (a trained guard turns MORE) — the shared guard_block_factor, the SAME soak a
+        // blocked physical projectile gets in advance_projectiles, so melee and ranged blocks can't
+        // drift. A master still takes ~a fifth (eased_bane caps relief at half): softened, never a
+        // wall. Fetch Skills once here; guard_block_factor reads it and the training grant just
+        // below reuses it.
         Skills* gsk = reg.try_get<Skills>(p);
-        float block_factor = kBlockDamageFactor;
-        if (gsk != nullptr)
-          if (const Skill* guard = gsk->find(SkillId::Guarding))
-            block_factor = eased_bane(block_factor, guard->level);
-        attack_dmg *= block_factor;
+        attack_dmg *= guard_block_factor(gsk);
         // Turning a blow TRAINS you to guard: a raised guard under fire builds the Guarding skill
         // -> Endurance (the design's VIT skill, Toughness's active twin — Toughness grows Endurance
         // by SURVIVING a hit, Guarding by TURNING one). So blocking, the ONE combat action that

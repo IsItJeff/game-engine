@@ -498,13 +498,14 @@ struct Shielded {
   float absorb = 0.0f;     // damage soaked off each blow while it lasts
 };
 
-// Marks a character holding a GUARD (a raised block). While present, incoming creature blows are
-// softened to kBlockDamageFactor of their damage — but the guarded stance ROOTS you to
-// kGuardMoveScale of your speed, so it's a real trade (plant-and-tank vs move-and-dodge), not free
-// upside. Set/cleared each tick by the MovePlayer command's `guard` flag (a held key), so it lasts
-// exactly as long as you hold it. An ACTIVE, input-driven choice, so today only the player guards;
-// the softening system already applies to anyone Blocking, so an NPC-guard behaviour is a
-// follow-up.
+// Marks a character holding a GUARD (a raised block). While present, an incoming creature blow
+// (resolve_creature_contacts) — AND a physical ranged shot, a thrown weapon or a spit
+// (advance_projectiles) — is softened to kBlockDamageFactor of its damage via the shared
+// guard_block_factor; a MAGIC bolt pierces the guard (Projectile::from_magic). But the guarded
+// stance ROOTS you to kGuardMoveScale of your speed, so it's a real trade (plant-and-tank vs
+// move-and-dodge), not free upside. Set/cleared each tick by the MovePlayer command's `guard` flag
+// (the player) and by npc_guard (a hardened bulwark colonist rooting under threat), so BOTH the
+// player and NPCs guard — the softening system reads Blocking on any entity.
 struct Blocking {};
 inline constexpr float kBlockDamageFactor =
     0.4f;  // fraction of a blow that gets through a raised guard
@@ -554,6 +555,13 @@ struct Projectile {
   // it 0. Placed LAST so the existing positional Projectile{target, owner, damage, speed} inits
   // keep meaning.
   float poison_per_second = 0.0f;
+  // TRUE for a MAGIC projectile (magic_bolt), FALSE for a PHYSICAL one (a thrown weapon or a
+  // creature's spit). A raised GUARD turns a physical shot (advance_projectiles reads this) but a
+  // magic bolt PIERCES it — a bolt is warded by Wisdom (magic_defence_of), not stopped by a shield
+  // or a guard: the design's "a bolt pierces plate". Placed LAST and defaulting FALSE so the
+  // existing positional Projectile{...} inits (throw + spit) stay physical and unchanged; only
+  // magic_bolt sets it true.
+  bool from_magic = false;
 };
 inline constexpr float kProjectileHitRadius = 10.0f;  // how close counts as an impact
 inline constexpr float kProjectileSpeed = 600.0f;     // a thrown shot's travel speed

@@ -374,6 +374,16 @@ blocking — a defensive build to sit beside the offensive STR/DEX/crit ones.
 *ponytail:* `kRiposteDamage` / `kRiposteStaminaCost` stay flat knobs (scale them with the Guarding
 skill or shield gear later); only the block *fraction* is skill-eased so far.
 
+And the guard now reaches **beyond melee**: a raised guard also **turns a physical ranged shot** — a
+thrown weapon or a creature's **spit** — cutting it by the *same* `guard_block_factor` (the shared
+`kBlockDamageFactor`-eased-by-Guarding soak, so `advance_projectiles` and the melee blow can't drift).
+A **magic bolt pierces it**, though (`Projectile::from_magic`): a bolt is warded by **Wisdom** (see
+[magic](magic.md)), not stopped by a shield or a guard — the design's *a bolt pierces plate*. Like the
+melee block and the magic ward, it stops **damage, not contact**, so a venom spit's poison still lands
+even as the glob's impact is softened; and there's **no riposte** (the shooter is out of reach), but
+facing a blocked shot still **trains Guarding**, exactly as a turned melee blow does. Not blocking, or
+a magic bolt → the full hit → bit-identical for every existing throw and spit.
+
 And the guard **reads on the field**: a `Blocking` entity's dot gets a steel-blue **ring** in
 `draw_entities` (the same hue as the panel's "GUARDING" line), so you can see who has their guard up
 mid-fight without glancing at the panel — the dot cue every other status already has (personality
