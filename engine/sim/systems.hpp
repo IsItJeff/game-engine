@@ -452,6 +452,11 @@ std::int8_t affinity_toward(const entt::registry& reg, entt::entity from, entt::
 // registry scan the HUD calls; the sim never reads it.
 int allies_of(const entt::registry& reg, entt::entity e);
 
+// How many entities hold a GRUDGE against `e` (an INCOMING affinity at/below kGrudgeThreshold) —
+// the negative mirror of allies_of: the enmity a cruel character has sown, the "who won't cross the
+// field to save you" count. A read-only whole-registry scan the HUD calls; the sim never reads it.
+int foes_of(const entt::registry& reg, entt::entity e);
+
 // Spawn a Weapon on the ground at `pos` — the one canonical grounded-weapon entity, shared by
 // a slain brute's drop (handle_deaths) and the player's Drop command so both look and behave
 // identically. `quality` scales the item's boon (1.0 = baseline; a tough kill drops finer). No RNG.
