@@ -290,6 +290,16 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
                 static_cast<double>(wm.max));
     ImGui::ProgressBar(wm.current /
                        wm.max);  // drains in a cold zone, refills at the hearth; 0 freezes
+    // FAILING NEED: once any need drops into the penalty zone (need_efficiency < 1.0 — the SAME
+    // threshold that starts the field pallor and the combat debuff), NAME the one that's binding
+    // (STARVING / PARCHED / FREEZING / EXHAUSTED) in alarm red, so you read WHICH need is dragging
+    // the character down rather than scanning four bars. The WORD twin of the pallor's COLOUR, off
+    // the same binding need. Hidden while comfortable (efficiency 1.0), so a well-kept colonist
+    // shows nothing.
+    if (eng::sim::need_efficiency(*stats) < 1.0f) {
+      ImGui::TextColored(ImVec4{1.0f, 0.4f, 0.3f, 1.0f}, "FAILING: %s",
+                         eng::sim::need_label(eng::sim::binding_need(*stats)));
+    }
   }
 
   // Progression: the attribute the player has grown, and progress toward the next

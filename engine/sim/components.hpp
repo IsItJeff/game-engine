@@ -846,6 +846,56 @@ inline float need_pallor(const Stats& s) {
   return 2.0f * (1.0f - need_efficiency(s));  // eff in [0.5, 1.0] -> pallor in [0, 1]
 }
 
+// The four survival needs, so a query can NAME which one is dragging a character down.
+enum class NeedKind { Hunger, Water, Warmth, Fatigue };
+
+// Which need is BINDING — the most-depleted of the four, EXACTLY the one need_efficiency reads as
+// "worst" and need_pallor greys the dot for. So the HUD can NAME the failing need (STARVING /
+// PARCHED / FREEZING / EXHAUSTED) rather than only greying it — the WORD twin of the pallor's
+// COLOUR, both off the same binding need, so they can never disagree. A pure query over the sheet
+// (no RNG, the sim never reads it), unit-testable like need_efficiency. Ties break in the fixed
+// scan order hunger < water < warmth < fatigue via strict `<` — the same order (and the same
+// 0-max-reads-full guard) as need_efficiency's worst scan, so the named need is always the one
+// actually binding. NOTE: this RE-IMPLEMENTS that four-frac scan rather than sharing it
+// (need_efficiency throws away the identity, keeping only the min VALUE) — so if its need set or
+// frac formula ever changes, update this in LOCKSTEP or the label and the pallor will drift apart.
+inline NeedKind binding_need(const Stats& s) {
+  const float hunger_frac = s.hunger.max > 0.0f ? s.hunger.current / s.hunger.max : 1.0f;
+  const float water_frac = s.water.max > 0.0f ? s.water.current / s.water.max : 1.0f;
+  const float warmth_frac = s.warmth.max > 0.0f ? s.warmth.current / s.warmth.max : 1.0f;
+  const float fatigue_frac = s.fatigue.max > 0.0f ? s.fatigue.current / s.fatigue.max : 1.0f;
+  NeedKind worst = NeedKind::Hunger;
+  float worst_frac = hunger_frac;
+  if (water_frac < worst_frac) {
+    worst_frac = water_frac;
+    worst = NeedKind::Water;
+  }
+  if (warmth_frac < worst_frac) {
+    worst_frac = warmth_frac;
+    worst = NeedKind::Warmth;
+  }
+  if (fatigue_frac < worst_frac) {
+    worst_frac = fatigue_frac;
+    worst = NeedKind::Fatigue;
+  }
+  return worst;
+}
+
+// The screaming-caps label for a binding need — the word the HUD shows when a colonist is failing.
+inline const char* need_label(NeedKind kind) {
+  switch (kind) {
+    case NeedKind::Hunger:
+      return "STARVING";
+    case NeedKind::Water:
+      return "PARCHED";
+    case NeedKind::Warmth:
+      return "FREEZING";
+    case NeedKind::Fatigue:
+      return "EXHAUSTED";
+  }
+  return "";  // unreachable — the switch is exhaustive (a -Wswitch guard for a new NeedKind)
+}
+
 // A fixed drinking spot — a pond or well the `drink` system tops nearby thirsty characters up from,
 // WITHOUT being consumed (unlike a one-shot food orb). `radius` is how close you must be to drink.
 // The seed of the design's water economy (wells now, irrigated crops later); a thirsty NPC walks to
