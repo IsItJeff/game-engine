@@ -1206,4 +1206,33 @@ inline const char* temperament_title(std::int8_t bravery) {
   return "Steady";                          // -19..+19 — neutral, the common case
 }
 
+// A BREADTH-derived title — the generalist counterpart to build_title's PEAK. Where build_title
+// names your ONE dominant COMBAT attribute (a specialist's KIND of fighter), this rewards the
+// opposite shape: a character trained BROADLY. It reads ALL SEVEN attributes — including the
+// non-combat Wisdom/Charisma/Intellect that build_title deliberately ignores (the
+// "Naturalist-style" title its comment promised for later) — and counts how many are meaningfully
+// trained (level >= kVersatileAt). Enough breadth earns a badge; a specialist earns NONE
+// (build_title already names their single peak), so — like deed_epithet, and unlike the always-on
+// veteran/temperament bands — this returns nullptr below the bar rather than a filler band. The
+// SIXTH derived recognition, beside standing_title (good/bad), build_title (which peak),
+// deed_epithet (known for), veteran_title (how experienced) and temperament_title (how brave). A
+// pure const char* query over Attributes (never a stored slot), so it always matches the levels
+// behind it; the HUD shows it and the sim never reads it, so it can't touch replay. A fresh
+// character — every attribute at the starting level 1 — clears nothing, counts 0 and gets no badge,
+// so the whole title is bit-identical to before it existed. Deterministic (plain level compares, no
+// RNG). Ready to grow — finer bands, a weight by how FAR past the bar each attribute sits — the
+// same way its siblings will.
+inline const char* versatile_title(const Attributes& attrs) {
+  constexpr int kVersatileAt = 5;  // an attribute counts as "meaningfully trained" at level 5 — a
+                                   // clear investment past the level-1 start (a tuning knob)
+  const int trained =              // how many of the seven have cleared the bar (bool sums to int)
+      (attrs.endurance.level >= kVersatileAt) + (attrs.strength.level >= kVersatileAt) +
+      (attrs.dexterity.level >= kVersatileAt) + (attrs.luck.level >= kVersatileAt) +
+      (attrs.wisdom.level >= kVersatileAt) + (attrs.charisma.level >= kVersatileAt) +
+      (attrs.intellect.level >= kVersatileAt);
+  if (trained >= 5) return "the Polymath";   // 5+ of 7 broadly mastered — a rare all-rounder
+  if (trained >= 3) return "the Versatile";  // 3-4 developed sides — a generalist
+  return nullptr;  // a specialist (or still green) — no breadth badge; build_title names the peak
+}
+
 }  // namespace eng::sim

@@ -7138,6 +7138,60 @@ TEST_CASE("deed_epithet names you by your most-repeated deed once it crosses the
   REQUIRE(std::string(eng::sim::deed_epithet(tied)) == "the Butcher");
 }
 
+TEST_CASE("versatile_title rewards BREADTH: a generalist earns it a specialist earns nothing",
+          "[sim]") {
+  // The SIXTH derived recognition, and the generalist counterpart to build_title's PEAK: it reads
+  // ALL SEVEN attributes (build_title reads only the four combat ones) and counts how many are
+  // meaningfully trained (level >= kVersatileAt = 5). 3-4 -> "the Versatile", 5+ -> "the Polymath",
+  // and — like deed_epithet — a specialist (or a fresh character) earns NO badge (nullptr). Pin the
+  // fresh default, the specialist-gets-nothing case, both count-band edges, and the top band, so a
+  // retuned threshold can't drift silently. The non-combat Wisdom/Charisma/Intellect (which
+  // build_title ignores) count here — proven by building breadth purely out of them.
+  eng::sim::Attributes fresh{};  // every attribute at the level-1 spawn default -> no breadth
+  REQUIRE(eng::sim::versatile_title(fresh) == nullptr);
+
+  eng::sim::Attributes
+      specialist{};  // one towering peak, nothing else -> build_title's turf, no badge
+  specialist.strength.level = 40;
+  REQUIRE(eng::sim::versatile_title(specialist) == nullptr);
+
+  eng::sim::Attributes two{};  // two trained sides — still one shy of the "Versatile" bar
+  two.strength.level = 5;
+  two.dexterity.level = 5;
+  REQUIRE(eng::sim::versatile_title(two) == nullptr);
+
+  eng::sim::Attributes
+      edge{};  // exactly at the bar (level 5) on exactly three -> earns "the Versatile"
+  edge.strength.level = 5;
+  edge.dexterity.level = 5;
+  edge.endurance.level = 5;
+  REQUIRE(std::string(eng::sim::versatile_title(edge)) == "the Versatile");
+
+  eng::sim::Attributes four{};  // four developed sides -> still "the Versatile" (top of that band)
+  four.strength.level = 9;
+  four.dexterity.level = 12;
+  four.endurance.level = 6;
+  four.luck.level = 5;
+  REQUIRE(std::string(eng::sim::versatile_title(four)) == "the Versatile");
+
+  // Breadth built ENTIRELY from the non-combat trio build_title ignores still counts here — five
+  // sides mastered (the three non-combat + two more) -> "the Polymath", the top band.
+  eng::sim::Attributes polymath{};
+  polymath.wisdom.level = 7;
+  polymath.charisma.level = 7;
+  polymath.intellect.level = 7;
+  polymath.strength.level = 5;
+  polymath.endurance.level = 5;
+  REQUIRE(std::string(eng::sim::versatile_title(polymath)) == "the Polymath");
+
+  // One shy of level 5 on an attribute does NOT count — the bar is a firm >=, not a near-miss.
+  eng::sim::Attributes shy{};
+  shy.strength.level = 5;
+  shy.dexterity.level = 5;
+  shy.endurance.level = 4;  // just under the bar -> only two clear -> no badge
+  REQUIRE(eng::sim::versatile_title(shy) == nullptr);
+}
+
 TEST_CASE("facing a creature's swing trains Evasion and Dexterity, even when it lands", "[sim]") {
   // The bootstrap: at Dexterity 1 you can't dodge yet, so the blow lands — but facing
   // it still trains Evasion and its Dexterity, which is what eventually lets you dodge.

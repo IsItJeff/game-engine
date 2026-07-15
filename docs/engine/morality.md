@@ -216,7 +216,7 @@ record nothing.
 
 ## Where it goes next
 
-Three **titles** are already here, all pure queries — the design's "titles are derived queries,
+The first three **titles** here are all pure queries — the design's "titles are derived queries,
 never stored slots" — and they read three *orthogonal* things about you. `standing_title(standing)`
 names your *repute* from **deeds** — *Unproven* → *Known* → *Renowned*, and its villain mirror
 *Suspect* → *Notorious* that Cruelty deeds now reach (strike your own and the title falls). Its twin
@@ -239,6 +239,16 @@ reshape your **bravery**. It's the panel-text twin of the `personality_tint` tha
 cools your dot by that same axis, so your temperament now reads in *words* as well as colour — the
 first title off the **personality** axes, orthogonal to the deed/build/repute trio, and it makes the
 design's "the war changed him" legible: an always-present band that shifts as the character is shaped.
+
+One more reads **how BROADLY** you've grown rather than how high: `versatile_title(attributes)` is
+the generalist counterpart to `build_title`'s peak. Where `build_title` names your single dominant
+*combat* attribute, this counts how many of **all seven** are meaningfully trained (past
+`kVersatileAt`) — including the non-combat **Wisdom / Charisma / Intellect** that `build_title`
+deliberately ignores (the *Naturalist*-style title its comment always promised) — and names the
+*shape*: **the Versatile** (3–4 developed sides) → **the Polymath** (5+). Like the epithet, and
+unlike the always-present bands, a specialist earns **nothing** (`nullptr`) — `build_title` already
+names their one peak — so the HUD shows *breadth* only once you've genuinely spread yourself wide. A
+fresh character has trained nothing past level 1, so the badge is absent and bit-identical until earned.
 
 The write-point is the whole point: **Violence** just became one more `record_deed` call at the
 lethal-cruelty site (exactly as Cruelty and Loyalty landed), leaving only **Honesty** to wire the day
@@ -268,8 +278,9 @@ bit-identical to before decay existed.
   function, `renown_scale` (the presentation twin of `personality_tint`), and the derived recognition
   titles `standing_title` (repute from deeds), `build_title` (from trained attributes), `deed_epithet`
   (what you're known for — the dominant single ledger dimension, past `kEpithetAt`), `veteran_title`
-  (how seasoned, from character level), and `temperament_title` (how brave, from the personality
-  bravery axis — the panel-text twin of `personality_tint`).
+  (how seasoned, from character level), `temperament_title` (how brave, from the personality
+  bravery axis — the panel-text twin of `personality_tint`), and `versatile_title` (how BROADLY
+  trained — the generalist counterpart to `build_title`'s peak, reading all seven attributes).
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point,
   which also **drifts** the actor's matching `Personality` axis via the shared `drift_axis` clamp);
   `decay_standing` (the slow leak toward neutral, run each `step()`); the Charity credit and the
@@ -282,11 +293,13 @@ bit-identical to before decay existed.
 - `game/app/main.cpp` — `draw_entities` scales a dot's radius by `renown_scale(standing(...))`
   so standing reads on screen *both ways* (heroes swell, villains shrink), and the debug HUD
   shows the player's `standing` number and its titles (`veteran_title` as *rank*, `standing_title`,
-  `build_title`, `temperament_title`, and the `known as` epithet, shown only once a deed kind crosses
+  `build_title`, its `breadth` twin `versatile_title` — shown only once you've trained 3+ attributes
+  wide — `temperament_title`, and the `known as` epithet, shown only once a deed kind crosses
   `kEpithetAt`).
 - `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired deeds with
-  player==NPC parity, the lazy no-deed-no-ledger path, `renown_scale`, and `deed_epithet` (threshold,
-  dominant-dimension pick, and the fixed tie order).
+  player==NPC parity, the lazy no-deed-no-ledger path, `renown_scale`, `deed_epithet` (threshold,
+  dominant-dimension pick, and the fixed tie order), and `versatile_title` (both count-band edges,
+  the specialist-earns-nothing case, and breadth built purely from the non-combat attributes).
 
 ## Go deeper
 
