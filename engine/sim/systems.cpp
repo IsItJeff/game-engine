@@ -4524,6 +4524,27 @@ int allies_of(const entt::registry& reg, entt::entity e) {
   return count;
 }
 
+namespace {
+// Drop a fallen colonist's KIT where it fell — its wielded weapon and/or worn armour land as
+// recoverable ground gear ("gear outlives its bearer"). SHARED by the two REAP sites (the
+// exhaustion/HP reap and the bomber-blast reap) so the "recoverable kit" rule can't drift between
+// them. Only a non-empty slot drops (a bare NPC leaves nothing — bit-identical); it drops PLAIN
+// (baseline, no trait, NO rng), so the drop_rng_ stream stays byte-aligned. Position captured from
+// the still-valid corpse (the destroy loop runs later). The player's `Drop` command is deliberately
+// NOT this — it RECONSTRUCTS the full traited weapon and spawns it immediately, a different op.
+void drop_kit(entt::registry& reg, entt::entity e, std::vector<Vec2>& weapon_drops,
+              std::vector<Vec2>& armour_drops) {
+  const Equipped* eq = reg.try_get<Equipped>(e);
+  if (eq == nullptr) return;
+  const Vec2 pos = reg.get<Transform>(e).position;
+  if (eq->strength_bonus != 0 || eq->move_penalty != 0.0f || eq->weapon_venom != 0.0f ||
+      eq->crit_bonus != 0.0f || eq->weapon_leech != 0.0f)
+    weapon_drops.push_back(pos);  // it was armed -> its weapon drops
+  if (eq->defence_bonus != 0.0f || eq->stamina_regen_penalty != 0.0f)
+    armour_drops.push_back(pos);  // it was armoured -> its plate drops
+}
+}  // namespace
+
 void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt19937& rng) {
   // A zero-health entity meets one of two fates, and which one is the game's core rule
   // made concrete: a PLAYER goes DOWNED (helpless where they fell, then rescued-in-place
@@ -4703,18 +4724,9 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
     // fell, so an ally's blade and plate are RECOVERABLE (the equipment economy's death end: gear
     // outlives its bearer, the twin of a slain brute paying out a weapon). Only a real slot drops
     // (an unarmed, bare NPC — every existing death test — leaves nothing, bit-identical), and it
-    // drops PLAIN: baseline quality, no trait, NO rng draw, matching the Drop command's "a dropped
-    // weapon is a plain one" simplification, so the drop_rng_ stream stays byte-aligned. The
-    // non-empty-slot checks mirror the Drop command's exactly. Position captured HERE (the corpse
-    // is still valid; the destroy loop is below).
-    if (const Equipped* eq = reg.try_get<Equipped>(e); eq != nullptr) {
-      const Vec2 pos = reg.get<Transform>(e).position;
-      if (eq->strength_bonus != 0 || eq->move_penalty != 0.0f || eq->weapon_venom != 0.0f ||
-          eq->crit_bonus != 0.0f || eq->weapon_leech != 0.0f)
-        kit_weapon_drops.push_back(pos);  // it was armed -> its weapon drops
-      if (eq->defence_bonus != 0.0f || eq->stamina_regen_penalty != 0.0f)
-        kit_armour_drops.push_back(pos);  // it was armoured -> its plate drops
-    }
+    // drops PLAIN: baseline quality, no trait, NO rng draw, so the drop_rng_ stream stays
+    // byte-aligned. Via the shared drop_kit so the blast reap below drops the SAME way.
+    drop_kit(reg, e, kit_weapon_drops, kit_armour_drops);
   }
   std::vector<std::pair<Vec2, float>>
       blasts;  // BOMBER detonations (pos, damage) — applied after
@@ -4793,11 +4805,10 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
             // finishing that same colonist would push it a SECOND time and the destroy loop would
             // reg.destroy() a stale handle (double-free). This guard closes that.
             dead.push_back(p);
-            // ponytail: unlike the npcs reap loop above, a blast-killed colonist does NOT drop its
-            // KIT here (gear outlives its bearer) — a minor parity gap, not a regression (pre-fix
-            // it was resurrected, so it never dropped either). Deferred to a follow-up that
-            // extracts a shared drop_kit() helper for all three drop sites (this, the npcs loop,
-            // the Drop cmd) rather than adding a third copy of the slot-non-empty block.
+            // ...and, like a normally-reaped colonist, it DROPS ITS KIT where it fell (gear
+            // outlives its bearer) — the same shared drop_kit the npcs loop uses, so a blast-felled
+            // ally's blade and plate are recoverable too, not silently evaporated.
+            drop_kit(reg, p, kit_weapon_drops, kit_armour_drops);
           }
         }
       }

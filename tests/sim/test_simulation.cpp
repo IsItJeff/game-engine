@@ -8821,6 +8821,42 @@ TEST_CASE("a slain colonist drops the kit it earned: a fallen ally's gear is rec
   REQUIRE(reg.get<eng::sim::Transform>(plate).position.x == Approx(soldier_pos.x));
 }
 
+TEST_CASE("a bomber blast that fells an armed colonist drops its kit too: gear outlives the blast",
+          "[sim]") {
+  // The blast-reap path must drop a felled colonist's KIT exactly as the normal reap does (gear
+  // outlives its bearer, via the shared drop_kit) -- else a bomber finishing an armed ally silently
+  // evaporates its recoverable blade and plate. The colonist is ALIVE by HP before the blast (so
+  // the npcs reap loop doesn't take it first); the blast fells it, and its gear lands where it
+  // fell. RED before the drop_kit wiring in the blast branch: the soldier is destroyed but drops
+  // nothing.
+  entt::registry reg;
+  const eng::Vec2 origin{0.0f, 0.0f};
+  const entt::entity bomber = reg.create();  // a slain bomber, primed
+  reg.emplace<eng::sim::Transform>(bomber, origin);
+  reg.emplace<eng::sim::Stats>(bomber).health.current = 0.0f;
+  reg.emplace<eng::sim::Enemy>(bomber).death_blast_damage = 15.0f;
+
+  const eng::Vec2 soldier_pos{50.0f, 0.0f};  // in the blast (< kBlastRadius 90)
+  const entt::entity soldier = reg.create();
+  reg.emplace<eng::sim::Npc>(soldier);
+  reg.emplace<eng::sim::Transform>(soldier, soldier_pos);
+  reg.emplace<eng::sim::Stats>(soldier).health.current =
+      10.0f;  // alive by HP -> felled by the 15 blast
+  eng::sim::Equipped& eq = reg.emplace<eng::sim::Equipped>(soldier);
+  eq.strength_bonus = 3;    // WIELDING a weapon...
+  eq.defence_bonus = 6.0f;  // ...and WEARING armour
+
+  eng::sim::handle_deaths(reg, origin, 1.0f / 60.0f);
+
+  REQUIRE_FALSE(reg.valid(soldier));  // the blast permakilled it...
+  REQUIRE(reg.storage<eng::sim::Weapon>().size() ==
+          1);  // ...and its blade dropped where it fell...
+  REQUIRE(reg.storage<eng::sim::Armour>().size() ==
+          1);  // ...and its plate (recoverable, not evaporated)
+  const entt::entity blade = *reg.view<eng::sim::Weapon>().begin();
+  REQUIRE(reg.get<eng::sim::Transform>(blade).position.x == Approx(soldier_pos.x));
+}
+
 TEST_CASE("each creature archetype drops its own loot on death", "[sim]") {
   // The loot economy, keyed on DropKind and resolving independently: a brute yields raw OFFENCE (a
   // steel weapon), a swarmer SUSTAIN (a health orb), a sentinel DEFENCE (armour), and a spitter a
