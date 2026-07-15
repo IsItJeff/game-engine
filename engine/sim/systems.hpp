@@ -216,7 +216,8 @@ void magic_bolt(entt::registry& reg, entt::entity caster);
 // (the parity). No RNG.
 void heal_spell(entt::registry& reg, entt::entity caster);
 
-// Cast a SHIELD — the DEFENSIVE spell of the trio (bolt = offence, mend = support). A learned
+// Cast a SHIELD — the DEFENSIVE spell of the caster's kit (bolt = offence, mend = support, cleanse
+// = cure). A learned
 // caster (Spellcasting) raises a timed BARRIER on ITSELF: for a few seconds, `absorb` is soaked off
 // each creature blow (resolve_creature_contacts reads it), thickness scaling with INTELLECT and
 // trained by casting -> Spellcasting -> INT. (Re)emplaces the caster's own Shielded
@@ -257,6 +258,24 @@ void npc_heal(entt::registry& reg);
 // lapse (the not-already-Shielded gate), not per recharge. MUST run after integrate_motion (current
 // positions). Draws no RNG.
 void npc_shield(entt::registry& reg);
+
+// Cast a CURE: a learned caster strips Poisoned off the nearest poisoned ally in range, spending
+// the same mana as a bolt/mend and training the same Healing -> Wisdom skill — the fourth of the
+// caster's kit (bolt / mend / barrier / CLEANSE), the restorative counter to a swarmer's or
+// spitter's venom (heal restores lost HP; cleanse stops the DoT draining it). Ally-only (not self,
+// like the mend), a 0-HP body is inert, and a non-caster / empty bar / no-poisoned-ally is a silent
+// no-op -> bit-identical. Unlike heal it MUTATES THE ENTITY SET (reg.remove<Poisoned>), done after
+// the search loop. Actor-agnostic: the player casts it via CastCleanse, an NPC via npc_cleanse. No
+// RNG.
+void cleanse_spell(entt::registry& reg, entt::entity caster);
+
+// NPCs cure: every Npc that has LEARNED Spellcasting and has a FULL mana bar strips the venom off
+// the nearest poisoned ally (via the shared cleanse_spell) — the fourth caster verb's NPC twin,
+// closing the player==NPC parity for the cure. Runs AFTER npc_heal and shares the full-bar
+// throttle, so a battle-mage bolts/mends first and cures in a lull. Collect-then-act (cleanse_spell
+// removes Poisoned, mutating the entity set). MUST run after integrate_motion (current positions).
+// No RNG.
+void npc_cleanse(entt::registry& reg);
 
 // NPCs farm: every Npc carrying a Provider Aspiration reaps the nearest ripe food plot in reach
 // into a meal (via the shared, actor-agnostic harvest_nearest_crop the player's Harvest command

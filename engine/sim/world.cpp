@@ -612,6 +612,7 @@ void World::step() {
   npc_shield(registry_);               // ...a threatened colonist mage wards ITSELF first...
   npc_cast(registry_);                 // ...then flings a bolt at a hostile (under the barrier)...
   npc_heal(registry_);                 // ...or, in a lull, mends a wounded ally (support magic)...
+  npc_cleanse(registry_);              // ...or cures a poisoned ally's venom (the fourth verb)...
   advance_projectiles(registry_, dt);  // ...and thrown/spat/cast shots fly home and land
   handle_deaths(registry_, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.5f}, dt,
                 drop_rng_);        // ...then 0-HP reaped (drop_rng_ rolls any fine loot quality)
@@ -917,7 +918,7 @@ void World::apply_command(const Command& cmd) {
       break;
     }
     case CommandKind::CastShield: {
-      // The DEFENSIVE spell of the trio: the player wards ITSELF (shield_spell), spending MANA and
+      // The DEFENSIVE spell of the kit: the player wards ITSELF (shield_spell), spending MANA and
       // gated on the same learned Spellcasting skill. Same match-by-player-id and view as Cast;
       // shield_spell only emplaces/mutates the caster's own Shielded (no spawn), so the iteration
       // is trivially stable.
@@ -926,6 +927,20 @@ void World::apply_command(const Command& cmd) {
         if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
         if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't cast
         shield_spell(registry_, a);
+      }
+      break;
+    }
+    case CommandKind::CastCleanse: {
+      // The CURE spell of the kit: the player strips the venom off the nearest poisoned ally in
+      // range (cleanse_spell), spending MANA and gated on the same learned Spellcasting skill. Same
+      // match-by-player-id and view as Cast; cleanse_spell removes Poisoned from the PATIENT (not
+      // the caster in this view), and does so after its own search loop, so this iteration is
+      // stable.
+      auto casters = registry_.view<PlayerControlled, Transform, Attributes, Skills, Stats>();
+      for (const entt::entity a : casters) {
+        if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't cast
+        cleanse_spell(registry_, a);
       }
       break;
     }
