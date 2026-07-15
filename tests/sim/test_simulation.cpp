@@ -4881,6 +4881,70 @@ TEST_CASE("an unlearned caster cannot cast: magic is learned not innate", "[sim]
   REQUIRE(reg.get<eng::sim::Stats>(novice).mp.current == Approx(mana_before));  // ...no mana spent
 }
 
+TEST_CASE("cleanse strips venom off the nearest poisoned ally: the fourth spell", "[sim]") {
+  // The CURE verb — a learned caster removes Poisoned from the nearest poisoned ally, spending mana
+  // and training Healing (a restorative act, like the mend). It cures a POISONED ally even at full
+  // HP (unlike heal, which only mends the wounded), and a non-caster can't cure at all — the same
+  // learned gate that keeps a world of non-mages bit-identical.
+  entt::registry reg;
+  const entt::entity caster = reg.create();
+  reg.emplace<eng::sim::Transform>(caster, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(caster);  // full HP + full mana
+  reg.emplace<eng::sim::Attributes>(caster);
+  reg.emplace<eng::sim::Skills>(caster).train(eng::sim::SkillId::Spellcasting);  // a learned mage
+  const entt::entity ally = reg.create();
+  reg.emplace<eng::sim::Transform>(ally, eng::Vec2{50.0f, 0.0f});  // in range, full HP...
+  reg.emplace<eng::sim::Stats>(ally);
+  reg.emplace<eng::sim::Poisoned>(ally, eng::sim::Poisoned{5.0f, 10.0f});  // ...but envenomed
+
+  const float mp_before = reg.get<eng::sim::Stats>(caster).mp.current;
+  eng::sim::cleanse_spell(reg, caster);
+
+  REQUIRE_FALSE(reg.all_of<eng::sim::Poisoned>(ally));               // the venom is lifted whole...
+  REQUIRE(reg.get<eng::sim::Stats>(caster).mp.current < mp_before);  // ...mana was spent...
+  REQUIRE(reg.get<eng::sim::Skills>(caster).find(eng::sim::SkillId::Healing) !=
+          nullptr);  // ...and the cure trained Healing, like a mend
+
+  // A NON-caster can't cure: no learned Spellcasting -> the ally's venom stays (bit-identical
+  // world).
+  entt::registry reg2;
+  const entt::entity novice = reg2.create();
+  reg2.emplace<eng::sim::Transform>(novice, eng::Vec2{0.0f, 0.0f});
+  reg2.emplace<eng::sim::Stats>(novice);
+  reg2.emplace<eng::sim::Attributes>(novice);
+  reg2.emplace<eng::sim::Skills>(novice);  // NO Spellcasting
+  const entt::entity ally2 = reg2.create();
+  reg2.emplace<eng::sim::Transform>(ally2, eng::Vec2{50.0f, 0.0f});
+  reg2.emplace<eng::sim::Stats>(ally2);
+  reg2.emplace<eng::sim::Poisoned>(ally2, eng::sim::Poisoned{5.0f, 10.0f});
+  eng::sim::cleanse_spell(reg2, novice);
+  REQUIRE(reg2.all_of<eng::sim::Poisoned>(ally2));  // still poisoned — a novice can't cure
+}
+
+TEST_CASE("npc_cleanse cures a poisoned ally: the caster parity for the fourth spell", "[sim]") {
+  // The NPC twin — a learned colonist mage on a FULL mana bar cures a nearby poisoned ally through
+  // the shared cleanse_spell, exactly as the player does. Exercises the collect-then-act
+  // view-safety (npc_cleanse removes Poisoned while walking the schedule) and the full-bar
+  // throttle. Default Stats spawns with a full mana bar (mp 100/100), so the mage qualifies.
+  entt::registry reg;
+  const entt::entity mage = reg.create();
+  reg.emplace<eng::sim::Npc>(mage);
+  reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(mage);  // full mana
+  reg.emplace<eng::sim::Attributes>(mage);
+  reg.emplace<eng::sim::Skills>(mage).train(
+      eng::sim::SkillId::Spellcasting);  // a learned colony mage
+  const entt::entity ally = reg.create();
+  reg.emplace<eng::sim::Npc>(ally);
+  reg.emplace<eng::sim::Transform>(ally, eng::Vec2{50.0f, 0.0f});  // in range
+  reg.emplace<eng::sim::Stats>(ally);
+  reg.emplace<eng::sim::Poisoned>(ally, eng::sim::Poisoned{5.0f, 10.0f});  // envenomed
+
+  eng::sim::npc_cleanse(reg);
+
+  REQUIRE_FALSE(reg.all_of<eng::sim::Poisoned>(ally));  // the colony mage cured its ally's venom
+}
+
 TEST_CASE("an empty mana bar fizzles a cast: a bolt needs mana in hand", "[sim]") {
   // The mana gate, the magic echo of an exhausted thrower fizzling. A learned mage drained to 0
   // mana casts nothing — no bolt launched.

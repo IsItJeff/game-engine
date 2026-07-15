@@ -516,6 +516,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool cast_was_down = false;
   bool heal_was_down = false;
   bool shield_was_down = false;
+  bool cleanse_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -639,14 +640,25 @@ int main(int /*argc*/, char* /*argv*/[]) {
     }
     heal_was_down = heal_raw;
 
-    // B, edge-triggered, casts a SHIELD on yourself — the defensive third of the trio (bolt C, mend
-    // H, barrier B). Same mana bar and learned Spellcasting gate; it raises a timed Shielded that
-    // soaks part of each creature blow, so you cast it BEFORE wading in. An empty bar fizzles.
+    // B, edge-triggered, casts a SHIELD on yourself — the defensive spell of the kit (bolt C, mend
+    // H, barrier B, cleanse X). Same mana bar and learned Spellcasting gate; it raises a timed
+    // Shielded that soaks part of each creature blow, so you cast it BEFORE wading in. An empty bar
+    // fizzles.
     const bool shield_raw = keys[SDL_SCANCODE_B];
     if (shield_raw && !shield_was_down && accept_actions) {
       transport.send(eng::net::Message{eng::sim::cast_shield(eng::sim::kLocalPlayer)});
     }
     shield_was_down = shield_raw;
+
+    // X, edge-triggered, casts a CURE at the nearest poisoned ally in range — the fourth spell
+    // (bolt C, mend H, barrier B, cleanse X). Same mana bar and learned Spellcasting gate; it
+    // strips the ally's venom (heal restores HP, cleanse stops the DoT). No poisoned ally (or no
+    // mana) fizzles.
+    const bool cleanse_raw = keys[SDL_SCANCODE_X];
+    if (cleanse_raw && !cleanse_was_down && accept_actions) {
+      transport.send(eng::net::Message{eng::sim::cast_cleanse(eng::sim::kLocalPlayer)});
+    }
+    cleanse_was_down = cleanse_raw;
 
     // K, HELD (not edge-triggered), raises a GUARD: incoming creature blows are softened but you
     // move slower. A held stance rather than a one-shot action, so it rides the per-tick MovePlayer

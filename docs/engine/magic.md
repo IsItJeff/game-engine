@@ -17,6 +17,8 @@ mana, but it does nothing until you have *learned* to cast.
 | **`CastHeal` command** | the funnel path (press **H**) that runs `heal_spell` for the player |
 | **`shield_spell`** | the **defensive** spell — raises a timed `Shielded` barrier on yourself, `Intellect`-scaled |
 | **`CastShield` command** | the funnel path (press **B**) that runs `shield_spell` for the player |
+| **`cleanse_spell`** | the **cure** spell — strips `Poisoned` off the nearest poisoned ally, trains `Healing → Wisdom` |
+| **`CastCleanse` command** | the funnel path (press **X**) that runs `cleanse_spell` for the player |
 | **`Shielded` + `tick_shield`** | the first **timed buff** — soaks `absorb` off each blow, aged/reaped each tick |
 
 ## Why it matters
@@ -121,7 +123,7 @@ mage blasts monsters *and* patches up the wounded beside you.
 
 ### The defensive spell — `shield_spell`
 
-The third of the trio (press **B**, the `CastShield` command). Where the bolt reaches out to a foe
+The third spell (press **B**, the `CastShield` command). Where the bolt reaches out to a foe
 and the mend reaches to a friend, the **shield turns inward**: a learned caster raises a timed
 **barrier on itself**. It is the design's **"ward"-role** spell, named *Shield* here so it doesn't
 collide with warded **armour**'s thorns. What sets it apart:
@@ -154,19 +156,42 @@ collide with warded **armour**'s thorns. What sets it apart:
 The player casts it via `CastShield`, and — like the bolt and mend — an NPC casts the *same*
 `shield_spell` via **`npc_shield`**: a learned colonist mage with a full mana bar raises the barrier on
 itself when a creature closes within a threat range (and isn't already warded), completing the
-player==NPC parity for all three spells. It runs *before* `npc_cast` in the schedule, so a threatened
+player==NPC parity for the shield (`npc_cleanse` closes it for the cure). It runs *before* `npc_cast`
+in the schedule, so a threatened
 battle-mage **wards first, then bolts under the barrier** — and re-wards only after the ward lapses (the
 not-already-`Shielded` gate), never wasting mana on a re-cast while it holds.
+
+### The cure spell — `cleanse_spell`
+
+The **fourth** verb (press **X**, the `CastCleanse` command). Where the mend restores the HP a venom has
+*drained*, the cure **stops the drain**: it strips `Poisoned` clean off the nearest poisoned ally,
+lifting both the `tick_poison` chip and its regen-suppression in one cast — so a healer can finally
+**counter** a swarmer's or spitter's venom instead of only out-mending it (the support kit was one verb
+short of the design's mender). Built on the mend's exact shape (the learned `Spellcasting` gate, the same
+`kCleanseManaCost` 25, the 0-HP-inert guards, the nearest-ally-in-range search) and trains the **same**
+`Healing → Wisdom` skill. Two things set it apart:
+
+- **Its effect is DISCRETE** — the venom is lifted *whole*, not shaved (Resistance already shaves the
+  per-tick chip), so nothing scales it by Wisdom; the `Healing` XP still grows the WIS that sharpens the
+  caster's *mends*. It cures a poisoned ally **even at full HP** (unlike the mend, which only touches the
+  wounded).
+- **It mutates the entity set** — `reg.remove<Poisoned>` (not a value write like the mend), so the
+  removal is done *after* the target search, and `npc_cleanse` collects its casters first, never casting
+  mid-view.
+
+Parity again: `npc_cleanse` drives the *same* `cleanse_spell` for any learned NPC on a full mana bar,
+running *after* `npc_heal` — so a battle-mage bolts/mends first and cures a poisoned friend in a lull.
 
 ## What's next
 
 This is a seam, not the whole trunk. **Learning**, **NPC casters**, **support magic**, a **defensive
 ward**, and now **NPCs that seek magic out** exist (a `Spellbook` you read, a colonist mage that casts
-beside you, a mend that heals your allies, a barrier that soaks a blow, and a [`Scholar`-aspiration
-colonist](npc-behaviour.md) that walks to a tome to learn — from a **permanent library** that reading no
-longer consumes, so every Scholar reliably becomes a mage) — the **offence / support / defence** trio is
-complete, and a colonist mage now casts all three (`npc_cast` / `npc_heal` / `npc_shield`), the full
-player==NPC parity. Growing from here: **more spells** (an area blast, each its own book), a
+beside you, a mend that heals your allies, a barrier that soaks a blow, a cure that lifts a venom, and a
+[`Scholar`-aspiration colonist](npc-behaviour.md) that walks to a tome to learn — from a **permanent
+library** that reading no longer consumes, so every Scholar reliably becomes a mage) — the **offence /
+support / defence / cure** kit is complete, and a colonist mage now casts all four (`npc_cast` /
+`npc_heal` / `npc_shield` / `npc_cleanse`), the full player==NPC parity. Growing from here: **more
+spells** (an area blast, each its own book), a
 **dedicated Healing/Abjuration tome**
 so the support and ward skills have their own learn-paths (today they ride the Spellcasting gate), the
 **Focus / Attunement** skills that give the mana pool its OWN per-skill capacity and regen (its

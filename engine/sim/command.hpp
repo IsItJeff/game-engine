@@ -42,6 +42,7 @@ enum class CommandKind {
   Cast,          // cast a spell (a magic bolt) at the nearest hostile in range, spending mana
   CastHeal,      // cast a MEND at the nearest wounded ally in range, spending mana (support magic)
   CastShield,  // cast a BARRIER on yourself — soaks part of each blow for a time (defensive magic)
+  CastCleanse,  // cast a CURE at the nearest poisoned ally — strips its venom, spending mana
 };
 
 struct Command {
@@ -129,10 +130,15 @@ inline Command cast(PlayerId player) {
 inline Command cast_heal(PlayerId player) {
   return Command{CommandKind::CastHeal, player, {}, {}, 0.0f};
 }
-// CastShield: the DEFENSIVE spell of the trio — the caster wards ITSELF (no target to compute), so
+// CastShield: the DEFENSIVE spell of the kit — the caster wards ITSELF (no target to compute), so
 // the intent carries only who is casting.
 inline Command cast_shield(PlayerId player) {
   return Command{CommandKind::CastShield, player, {}, {}, 0.0f};
+}
+// CastCleanse: the CURE spell — the target (the nearest poisoned ally in range) is computed
+// server-side, so the intent carries only who is casting.
+inline Command cast_cleanse(PlayerId player) {
+  return Command{CommandKind::CastCleanse, player, {}, {}, 0.0f};
 }
 
 }  // namespace eng::sim

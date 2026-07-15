@@ -3332,26 +3332,107 @@ void npc_heal(entt::registry& reg) {
   for (const entt::entity n : healers) heal_spell(reg, n);
 }
 
+void cleanse_spell(entt::registry& reg, entt::entity caster) {
+  // The CURE — the FOURTH of the caster's kit (bolt / mend / barrier / CLEANSE). Where heal_spell
+  // restores lost HP, cleanse STOPS the venom draining it: it strips Poisoned off the nearest
+  // poisoned ally, lifting both the tick_poison DoT and its regen-suppression, so a healer can
+  // finally COUNTER a swarmer's or spitter's venom instead of only out-mending it — the support kit
+  // was one verb short of the design's mender. Reuses heal_spell's whole shape (the learned
+  // Spellcasting gate, a mana cost, the 0-HP-inert guards, the nearest-ally-in-range search) and
+  // trains the SAME Healing -> WISDOM skill (a cure is a restorative act, like a mend). Draws NO
+  // RNG. The effect is DISCRETE (venom is lifted whole, not shaved — Resistance already shaves the
+  // per-tick chip), so nothing scales it by Wisdom; the Healing XP still grows the WIS that
+  // sharpens the caster's mends.
+  constexpr float kCleanseRange = 300.0f;             // the same reach as a mend
+  constexpr float kCleanseManaCost = 25.0f;           // the same cost as a bolt / mend (a bar -> 4)
+  const Fixed kHealingPerCast = Fixed::from_int(10);  // trains Healing, exactly like a mend
+
+  const Transform* tf = reg.try_get<Transform>(caster);
+  Attributes* attrs = reg.try_get<Attributes>(caster);
+  Skills* skills = reg.try_get<Skills>(caster);
+  Stats* stats = reg.try_get<Stats>(caster);
+  if (tf == nullptr || attrs == nullptr || skills == nullptr || stats == nullptr) return;
+  // A 0-HP body is INERT — it can't cast (the bolt/mend guard): an NPC caster chipped to 0 this
+  // tick would otherwise still cure from beyond the grave before handle_deaths reaps it.
+  if (stats->health.current <= 0.0f) return;
+  // THE LEARNED GATE: shares Spellcasting with the whole kit, so a world of non-casters is
+  // bit-identical (a plain colonist can't cure).
+  if (skills->find(SkillId::Spellcasting) == nullptr) return;
+
+  // Nearest POISONED ally in range — a PERSON (Stats), not a creature, not a downed/0-HP body, not
+  // the caster itself (a self-cure is a different verb, like the mend is ally-only). Carries
+  // Poisoned by construction of the view. Deterministic strict-<.
+  const Vec2 origin = tf->position;
+  entt::entity patient = entt::null;
+  float nearest = kCleanseRange;
+  auto allies = reg.view<Poisoned, Stats, Transform>(entt::exclude<Enemy, Downed>);
+  for (const entt::entity a : allies) {
+    if (a == caster) continue;  // cure an ALLY, not yourself
+    if (allies.get<Stats>(a).health.current <= 0.0f)
+      continue;  // a same-tick 0-HP body is about to be reaped — don't cure the almost-dead
+    const float d = glm::distance(origin, allies.get<Transform>(a).position);
+    if (d < nearest) {
+      nearest = d;
+      patient = a;
+    }
+  }
+  if (patient == entt::null)
+    return;  // no one poisoned in reach — a held cast: no mana spent, no XP
+
+  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the bolt/mend.
+  if (stats->mp.current < kCleanseManaCost) return;
+  stats->mp.current -= kCleanseManaCost;
+
+  // A connecting cure trains Healing -> Wisdom, so a healer grows by curing as it does by mending.
+  CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
+  grant_skill_xp(*skills, *attrs, SkillId::Healing, kHealingPerCast, character);
+
+  // The cure: lift the venom WHOLE. Done AFTER the search loop above, so removing from the Poisoned
+  // view is safe (the loop has finished iterating it). remove (not remove-if) — patient carries
+  // Poisoned by the view's construction.
+  reg.remove<Poisoned>(patient);
+}
+
+void npc_cleanse(entt::registry& reg) {
+  // NPCs that have LEARNED to cast CURE a nearby poisoned ally — the fourth caster verb's NPC twin
+  // (bolt/mend/barrier/cleanse), reusing the shared cleanse_spell so a colonist healer cures
+  // EXACTLY as the player does (the player==NPC parity). Only an Npc carrying Spellcasting, and
+  // only on a FULL mana bar — the same throttle npc_cast/npc_heal use, so a healer cures then
+  // recharges rather than spamming. cleanse_spell gates on a poisoned ally in range AND the mana it
+  // spends, so a healer with no one poisoned (or no mana) is a silent no-op. Runs AFTER npc_heal,
+  // so a battle-mage bolts/mends first and only cures in a lull. Collect the casters FIRST (like
+  // npc_heal): cleanse_spell removes Poisoned (mutating the entity set), so we must not cast while
+  // iterating a live view.
+  std::vector<entt::entity> healers;
+  auto mages = reg.view<Npc, Transform, Attributes, Skills, Stats>();
+  for (const entt::entity n : mages) {
+    if (mages.get<Skills>(n).find(SkillId::Spellcasting) == nullptr) continue;  // never learned
+    const Vital& mp = mages.get<Stats>(n).mp;
+    if (mp.current < mp.max) continue;  // cure only on a full bar -> a cure, then a recharge
+    healers.push_back(n);
+  }
+  for (const entt::entity n : healers) cleanse_spell(reg, n);
+}
+
 void npc_shield(entt::registry& reg) {
   // NPCs that have LEARNED to cast raise a BARRIER on themselves when a creature is CLOSING — the
-  // defensive third of the caster's kit (npc_cast bolts a threat, npc_heal mends an ally,
-  // npc_shield wards), reusing the very same shield_spell so a colonist mage wards EXACTLY as the
-  // player does (the player==NPC parity). Gated like the others plus two of its own: Spellcasting
-  // (learned) + a FULL mana bar (the no-spam throttle) + a creature within kShieldThreatRange (a
-  // real threat to ward against — a mage at peace doesn't waste mana) + NOT already Shielded (so it
-  // wards ONCE when first threatened, then fights UNDER the barrier and re-wards only after it
-  // lapses, never re-casting every recharge while the ward still holds). Runs BEFORE npc_cast in
-  // the schedule, so a threatened mage WARDS first and then bolts under the barrier on later full
-  // bars. shield_spell only emplaces the caster's own Shielded (no spawn), so no collect-then-act
-  // is strictly needed, but we mirror npc_cast's shape. Draws no RNG.
-  // ponytail: the "wards AND still bolts" balance relies on kShieldDuration (5s) OUTLASTING the
-  // mana refill (~2.5s at cost 25 / regen 10), so npc_cast gets a full bar while the ward holds. If
-  // either is retuned so the ward is SHORTER than the refill, this (running first) would re-grab
-  // every full bar and starve offence — gate npc_shield behind "not casting a bolt this tick" if
-  // that happens. A creature this close is worth warding against (knob). Wider than npc_guard's
-  // contact-tight kGuardRange (30): a guard is a free per-tick toggle that reacts at the moment of
-  // impact, but a ward is a mana-costed 5s pre-cast, so it wants LEAD TIME to be up before the blow
-  // lands.
+  // defensive spell of the caster's kit (npc_cast bolts a threat, npc_heal mends an ally,
+  // npc_shield wards, npc_cleanse cures), reusing the very same shield_spell so a colonist mage
+  // wards EXACTLY as the player does (the player==NPC parity). Gated like the others plus two of
+  // its own: Spellcasting (learned) + a FULL mana bar (the no-spam throttle) + a creature within
+  // kShieldThreatRange (a real threat to ward against — a mage at peace doesn't waste mana) + NOT
+  // already Shielded (so it wards ONCE when first threatened, then fights UNDER the barrier and
+  // re-wards only after it lapses, never re-casting every recharge while the ward still holds).
+  // Runs BEFORE npc_cast in the schedule, so a threatened mage WARDS first and then bolts under the
+  // barrier on later full bars. shield_spell only emplaces the caster's own Shielded (no spawn), so
+  // no collect-then-act is strictly needed, but we mirror npc_cast's shape. Draws no RNG. ponytail:
+  // the "wards AND still bolts" balance relies on kShieldDuration (5s) OUTLASTING the mana refill
+  // (~2.5s at cost 25 / regen 10), so npc_cast gets a full bar while the ward holds. If either is
+  // retuned so the ward is SHORTER than the refill, this (running first) would re-grab every full
+  // bar and starve offence — gate npc_shield behind "not casting a bolt this tick" if that happens.
+  // A creature this close is worth warding against (knob). Wider than npc_guard's contact-tight
+  // kGuardRange (30): a guard is a free per-tick toggle that reacts at the moment of impact, but a
+  // ward is a mana-costed 5s pre-cast, so it wants LEAD TIME to be up before the blow lands.
   constexpr float kShieldThreatRange = 120.0f;
   std::vector<entt::entity> warders;
   auto mages = reg.view<Npc, Transform, Attributes, Skills, Stats>();
@@ -3376,7 +3457,8 @@ void npc_shield(entt::registry& reg) {
 }
 
 void shield_spell(entt::registry& reg, entt::entity caster) {
-  // The DEFENSIVE spell of the trio (bolt = offence, mend = support, shield = defence) — a learned
+  // The DEFENSIVE spell of the caster's kit (bolt = offence, mend = support, shield = defence,
+  // cleanse = cure) — a learned
   // caster raises a BARRIER on ITSELF, spending the same mana bar, that soaks part of each creature
   // blow for a few seconds. It's the design's "ward"-role spell, named Shield here so it doesn't
   // collide with warded ARMOUR's thorns. The game's FIRST timed BUFF: where the bolt reaches out to
@@ -3386,7 +3468,8 @@ void shield_spell(entt::registry& reg, entt::entity caster) {
   // own Shielded, which tick_shield ages and resolve_creature_contacts reads. Draws NO RNG. No
   // Transform needed (a self-ward has no position to aim), unlike the bolt/mend. Actor-agnostic
   // like the other two: the player casts it via CastShield, a colonist mage via npc_shield (just
-  // above, a threat-triggered self-ward) — the player==NPC parity, closed for all three spells.
+  // above, a threat-triggered self-ward) — the player==NPC parity, closed for the shield
+  // (npc_cleanse closes it for the fourth verb).
   constexpr float kShieldDuration = 5.0f;      // seconds the barrier holds (a knob)
   constexpr float kShieldManaCost = 25.0f;     // the same cost as a bolt/mend (a full 100 bar -> 4)
   constexpr float kBaseAbsorb = 6.0f;          // damage soaked per blow before Intellect
