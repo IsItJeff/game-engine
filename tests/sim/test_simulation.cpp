@@ -6231,6 +6231,48 @@ TEST_CASE("need_efficiency saps a starving or parched fighter toward a floor", "
   REQUIRE(need_efficiency(s) == Approx(0.75f));
 }
 
+TEST_CASE("binding_need names the most-depleted need the label twin of need_pallor", "[sim]") {
+  // binding_need returns WHICH of the four needs (hunger/water/warmth/fatigue) is BINDING -- the
+  // most-depleted, EXACTLY the one need_efficiency reads as "worst" and need_pallor greys the dot
+  // for. So the HUD can NAME the failing need instead of only greying it. Pin each need winning,
+  // the fixed tie-break (hunger<water<warmth<fatigue, matching need_efficiency's strict-< scan),
+  // and the screaming-caps label mapping. All-full -> hunger (the scan's first; harmless since the
+  // HUD only shows the word once a need is actually low, need_efficiency < 1.0).
+  const auto bind = [](float hunger, float water, float warmth, float fatigue) {
+    eng::sim::Stats s;  // all four needs default 100/100
+    s.hunger.current = hunger;
+    s.water.current = water;
+    s.warmth.current = warmth;
+    s.fatigue.current = fatigue;
+    return eng::sim::binding_need(s);
+  };
+  REQUIRE(bind(100, 100, 100, 100) ==
+          eng::sim::NeedKind::Hunger);  // all equal -> the first (harmless)
+  REQUIRE(bind(10, 100, 100, 100) == eng::sim::NeedKind::Hunger);   // hunger the worst
+  REQUIRE(bind(100, 10, 100, 100) == eng::sim::NeedKind::Water);    // water the worst
+  REQUIRE(bind(100, 100, 10, 100) == eng::sim::NeedKind::Warmth);   // warmth the worst
+  REQUIRE(bind(100, 100, 100, 10) == eng::sim::NeedKind::Fatigue);  // fatigue the worst
+  // Ties break in the fixed scan order (the earliest of the tied-worst wins), matching
+  // need_efficiency.
+  REQUIRE(bind(10, 10, 100, 100) == eng::sim::NeedKind::Hunger);  // hunger vs water tie -> hunger
+  REQUIRE(bind(100, 100, 10, 10) == eng::sim::NeedKind::Warmth);  // warmth vs fatigue tie -> warmth
+  // A clean four-way spread pins the min at a MIDDLE scan position, not just the first/last.
+  REQUIRE(bind(80, 60, 30, 90) == eng::sim::NeedKind::Warmth);  // warmth (30) is strictly the worst
+
+  // A need with max 0 reads as FULL (1.0), so it never falsely binds -- matching need_efficiency's
+  // divide-by-zero guard. Warmth is at 0/0 here, yet hunger (the genuine low) is named, not warmth.
+  eng::sim::Stats zeromax;
+  zeromax.warmth.max = 0.0f;
+  zeromax.warmth.current = 0.0f;   // 0/0 -> guarded to 1.0, so it can't win...
+  zeromax.hunger.current = 10.0f;  // ...while hunger is the real binding need
+  REQUIRE(eng::sim::binding_need(zeromax) == eng::sim::NeedKind::Hunger);
+
+  REQUIRE(std::string(eng::sim::need_label(eng::sim::NeedKind::Hunger)) == "STARVING");
+  REQUIRE(std::string(eng::sim::need_label(eng::sim::NeedKind::Water)) == "PARCHED");
+  REQUIRE(std::string(eng::sim::need_label(eng::sim::NeedKind::Warmth)) == "FREEZING");
+  REQUIRE(std::string(eng::sim::need_label(eng::sim::NeedKind::Fatigue)) == "EXHAUSTED");
+}
+
 TEST_CASE("a freezing colonist fights weaker too: warmth joins hunger and water in the need debuff",
           "[sim]") {
   // Cold's FIRST graded bite: warmth is a Need, so need_efficiency reads the worst of

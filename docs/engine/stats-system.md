@@ -185,6 +185,15 @@ freezing, or exhausted dot toward a **sallow grey**, by exactly how much the deb
 unchanged; one running on empty visibly gaunts, so you can read *who's about to fight weak* across
 the field at a glance, not just off the HUD bars. Presentation only — the sim never reads it.
 
+And the HUD now **names** it: `binding_need(stats)` returns *which* of the four needs is binding —
+the same most-depleted need `need_efficiency` reads as "worst" — and the panel flashes its
+screaming-caps label (**STARVING** / **PARCHED** / **FREEZING** / **EXHAUSTED**) in alarm red the
+moment `need_efficiency` dips below `1.0`. It's the **word** twin of the pallor's **colour**, off the
+very same binding need, so you read not just *that* a character is failing but *why* — no scanning
+four bars to spot which one crossed the line. A pure query the sim never reads; ties break in the
+fixed `need_efficiency` scan order (hunger → water → warmth → fatigue), and a comfortable colonist
+shows nothing.
+
 Health also drops from *gameplay*, and that shows the other half of the rule.
 Touching a `Hazard` (a drifting mote) hurts whoever overlaps it — the player or an
 NPC, anything with `Stats` — through the `resolve_contacts` **system**, which
