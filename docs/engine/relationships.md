@@ -240,6 +240,14 @@ drift) and **breaks you for a moment** (the panic) — a mourner may drop its gu
 very fight that took its friend. No `Panicked` marker (anyone not freshly bereaved) → `steer_npcs` is
 unchanged, so it stays bit-identical.
 
+And the rout now **reads on the field**: a `Panicked` survivor — usually a bereaved colonist, but a
+rescued player bonded to a fallen rescuer just the same — wears a stark **amber alarm ring**
+(`draw_entities`, drawn outermost so it's unmistakable in a chaotic fight and layers legibly over any
+guard/downed/shield ring), the one grief beat that had no on-screen tell, so you can finally *see*
+who's broken and bolted. It joins the field's other status rings (the guard's steel-blue, the downed
+body's pale beacon). Presentation-only: it reads the `Panicked` marker the sim already sets, never
+writes it, and fades with the rout.
+
 Death reads a bond **both ways**. The quiet mirror of grief is **vindication**: when a sworn
 **Nemesis** (`affinity ≤ kBondNemesisAt`, a *latched* deep grudge) is slain, `handle_deaths` drifts
 the survivor's **bravery *up*** a step (`kVindicationDrift`, the positive mirror of `kGriefDrift`) —

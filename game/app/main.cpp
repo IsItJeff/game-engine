@@ -182,6 +182,20 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
       dl->AddCircle(ImVec2{p.x, p.y}, radius + 5.0f, IM_COL32(90, 235, 220, 235), 0, 2.0f);
     }
 
+    // A grief-ROUTED being reads on the FIELD: anyone Panicked by a bonded friend's death
+    // (handle_deaths emplaces Panicked, tick_panic decays it) gets a stark AMBER alarm RING — the
+    // one grief beat that until now had NO on-screen tell, so you couldn't SEE who'd broken and
+    // bolted. Mostly a bereaved colonist, but a rescued player who's bonded to its rescuer can be
+    // routed too, so this lands on the player as readily as on an NPC. Amber, to read apart from
+    // the guard steel-blue / downed pale-white / shield cyan. Drawn OUTERMOST (radius+6, outside
+    // all three inner rings) so a routed being is unmistakable in a chaotic fight AND so any
+    // coincidence — a panicked-and-guarding or panicked-and-downed player, a shielded fleeing ally
+    // — stays a legible concentric ring, exactly as the shield's +5 already handles its own
+    // overlaps. Presentation-only: reads Panicked, never sets it; optional, so all_of guards it.
+    if (world.registry().all_of<eng::sim::Panicked>(e)) {
+      dl->AddCircle(ImVec2{p.x, p.y}, radius + 6.0f, IM_COL32(255, 150, 40, 235), 0, 2.0f);
+    }
+
     // A CASTER reads on the FIELD: any being that has LEARNED Spellcasting wears a small
     // arcane-violet CORE — an inner spark, NOT an outer status ring, so a mage is legible at a
     // glance. Persistent (a mage always knows magic), unlike the transient guard/downed/shield
