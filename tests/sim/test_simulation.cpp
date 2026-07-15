@@ -843,6 +843,58 @@ TEST_CASE("exhaustion reaps an NPC too: empty fatigue permakills a colonist pari
       reg.valid(npc));  // exhaustion permakilled it (RED before: health > 0 -> it survived)
 }
 
+TEST_CASE(
+    "a bomber detonates on death: its blast wounds the living nearby a plain creature's doesn't",
+    "[sim]") {
+  // The bomber archetype's payload (Enemy.death_blast_damage): when handle_deaths reaps a creature
+  // carrying a blast, everyone still standing within kBlastRadius takes that damage — "kill it at
+  // range or eat the blast". Three guarantees in one: the blast HITS a person in reach, SPARES one
+  // out of reach (it's a radius, not the whole field), and a plain creature (blast 0) reaps
+  // SILENTLY — so this is the bomber's own effect, not something every death does. RED-provable by
+  // neutering the blast branch (near victim then takes nothing) or zeroing death_blast_damage.
+  entt::registry reg;
+  const eng::Vec2 origin{0.0f, 0.0f};
+
+  // A bomber, already slain (health 0), primed to blow. handle_deaths reaps it this call.
+  const entt::entity bomber = reg.create();
+  reg.emplace<eng::sim::Transform>(bomber, origin);
+  auto& bstats = reg.emplace<eng::sim::Stats>(bomber);
+  bstats.health.current = 0.0f;  // dead -> reaped this tick -> detonates
+  reg.emplace<eng::sim::Enemy>(bomber).death_blast_damage = 15.0f;
+
+  // A plain creature, also slain, but carrying NO payload — the silent-death control.
+  const entt::entity plain = reg.create();
+  reg.emplace<eng::sim::Transform>(plain, eng::Vec2{500.0f, 0.0f});
+  reg.emplace<eng::sim::Stats>(plain).health.current = 0.0f;
+  reg.emplace<eng::sim::Enemy>(plain);  // death_blast_damage defaults 0 -> no blast
+
+  // Three people (non-Enemy, so the blast can catch them): one in the bomber's reach, one out of
+  // it, one hugging the plain creature. Only the first should be hurt.
+  const entt::entity near_bomber = reg.create();  // 50 units from the bomber (< kBlastRadius 90)
+  reg.emplace<eng::sim::Transform>(near_bomber, eng::Vec2{50.0f, 0.0f});
+  reg.emplace<eng::sim::Npc>(near_bomber);
+  const float near_before = reg.emplace<eng::sim::Stats>(near_bomber).health.current;
+
+  const entt::entity far_bomber = reg.create();  // 200 units from the bomber (> kBlastRadius)
+  reg.emplace<eng::sim::Transform>(far_bomber, eng::Vec2{0.0f, 200.0f});
+  reg.emplace<eng::sim::Npc>(far_bomber);
+  const float far_before = reg.emplace<eng::sim::Stats>(far_bomber).health.current;
+
+  const entt::entity near_plain = reg.create();  // 50 units from the PLAIN creature
+  reg.emplace<eng::sim::Transform>(near_plain, eng::Vec2{500.0f, 50.0f});
+  reg.emplace<eng::sim::Npc>(near_plain);
+  const float plain_before = reg.emplace<eng::sim::Stats>(near_plain).health.current;
+
+  eng::sim::handle_deaths(reg, origin, 1.0f / 60.0f);
+
+  REQUIRE(reg.get<eng::sim::Stats>(near_bomber).health.current ==
+          Approx(near_before - 15.0f));  // caught the blast
+  REQUIRE(reg.get<eng::sim::Stats>(far_bomber).health.current ==
+          Approx(far_before));  // out of reach -> unscathed
+  REQUIRE(reg.get<eng::sim::Stats>(near_plain).health.current ==
+          Approx(plain_before));  // a plain creature's death is SILENT (only the bomber blows up)
+}
+
 TEST_CASE("collapsing drops every combat stance not just the guard: no stale power swing on revive",
           "[sim]") {
   // handle_deaths already drops Blocking when a player crumples ("a crumpled body isn't guarding").
@@ -9417,7 +9469,7 @@ TEST_CASE("a creature's blow harms an NPC too, not just the player", "[sim]") {
 
 TEST_CASE(
     "the opening archetypes spawn with their own numbers: brute swarmer spitter leech warden "
-    "knitflesh",
+    "knitflesh bomber",
     "[sim]") {
   // make_brute/make_swarmer/make_spitter are file-local, but a fresh World seeds one of each. Pin
   // their HP/speed/damage here: make_creature takes three adjacent float params (hp, chase_speed,
@@ -9433,6 +9485,7 @@ TEST_CASE(
   bool saw_leech = false;
   bool saw_warden = false;
   bool saw_knitflesh = false;
+  bool saw_bomber = false;
   for (const entt::entity e : reg.view<eng::sim::Enemy>()) {
     const float hp = reg.get<eng::sim::Stats>(e).health.max;
     const eng::sim::Enemy& en = reg.get<eng::sim::Enemy>(e);
@@ -9478,7 +9531,21 @@ TEST_CASE(
       REQUIRE(en.spit_range == 0.0f);         // melee-only
       REQUIRE(en.lifesteal_per_hit == 0.0f);  // not a leech (heals over TIME, not on-hit)
       REQUIRE(at.endurance.level == 1);       // defence 1 -> regen isn't Endurance-amplified
-    } else {                                  // swarmer: fragile, fast, weak — and slippery
+    } else if (hp == Approx(18.0f)) {         // bomber: middling melee — but DETONATES on death
+      saw_bomber = true;
+      REQUIRE(en.chase_speed == Approx(65.0f));
+      REQUIRE(en.attack_damage == Approx(6.0f));
+      REQUIRE(en.death_blast_damage ==
+              Approx(15.0f));          // the payload — blows up when slain (only the bomber)
+      REQUIRE(dex == 1);               // no dodge
+      REQUIRE(en.spit_range == 0.0f);  // melee-only
+      REQUIRE(en.lifesteal_per_hit == 0.0f);                                 // not a leech
+      REQUIRE(reg.get<eng::sim::Stats>(e).health.regen_per_second == 0.0f);  // not a knitflesh
+      // ...and it must LOOK different from the swarmer (its identical hp-15 orange neighbour): the
+      // whole archetype rides on spotting it to range it, so its dot cannot be the swarmer's
+      // orange.
+      REQUIRE(reg.get<eng::sim::RenderDot>(e).color != eng::Vec3{0.95f, 0.5f, 0.15f});
+    } else {  // swarmer: fragile, fast, weak — and slippery
       saw_swarmer = true;
       REQUIRE(hp == Approx(15.0f));
       REQUIRE(en.chase_speed == Approx(130.0f));
@@ -9493,4 +9560,5 @@ TEST_CASE(
   REQUIRE(saw_leech);
   REQUIRE(saw_warden);
   REQUIRE(saw_knitflesh);
+  REQUIRE(saw_bomber);
 }

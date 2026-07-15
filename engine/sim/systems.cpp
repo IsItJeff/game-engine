@@ -4596,6 +4596,9 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
         kit_armour_drops.push_back(pos);  // it was armoured -> its plate drops
     }
   }
+  std::vector<std::pair<Vec2, float>>
+      blasts;  // BOMBER detonations (pos, damage) — applied after
+               // the reap loop, before the destroy, so it's view-safe
   auto creatures = reg.view<Stats, Enemy>();
   for (const entt::entity e : creatures) {
     if (creatures.get<Stats>(e).health.current <= 0.0f) {
@@ -4604,6 +4607,9 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
       // roll on the shared stream). Exhaustive switch, NO default: a new DropKind won't compile
       // until it's handled here. Capture the position BEFORE the destroy loop below.
       const Vec2 pos = reg.get<Transform>(e).position;
+      // A BOMBER detonates on death: stash its blast (pos + damage) to apply after the reap loop.
+      if (const float blast = creatures.get<Enemy>(e).death_blast_damage; blast > 0.0f)
+        blasts.push_back({pos, blast});
       switch (creatures.get<Enemy>(e).drop) {
         case DropKind::HealthOrb:
           orb_drops.push_back(pos);
@@ -4620,6 +4626,24 @@ void handle_deaths(entt::registry& reg, Vec2 respawn_point, float dt, std::mt199
       }
     }
   }
+  // BOMBER DETONATIONS: apply each dead bomber's blast now — every PERSON (Stats, not a creature,
+  // not already Downed) within kBlastRadius of the corpse takes the flat damage, so finishing a
+  // bomber in MELEE hurts (kill it at RANGE instead). Applied AFTER the reap loop (the bombers are
+  // in `dead`, destroyed below) over a SEPARATE people view; a value write on each victim's health,
+  // so it can't invalidate a view (stamp_flash's HitFlash is in neither pool). If it drops a victim
+  // to 0 the normal death path reaps it (a player Downs, an NPC permadies). No RNG; no bomber
+  // (every current archetype) -> blasts empty -> bit-identical.
+  constexpr float kBlastRadius = 90.0f;  // ponytail: a melee-range detonation (a knob)
+  for (const auto& [bpos, bdmg] : blasts)
+    for (const entt::entity p : reg.view<Stats, Transform>(entt::exclude<Enemy, Downed>)) {
+      if (glm::distance(bpos, reg.get<Transform>(p).position) < kBlastRadius) {
+        Vital& h = reg.get<Stats>(p).health;
+        h.current -= bdmg;
+        if (h.current < 0.0f) h.current = 0.0f;
+        stamp_flash(reg, p);  // the caught person blinks
+      }
+    }
+
   // GRIEF and VINDICATION: permadeath lands on the LIVING too. Before the dead are swept away (they
   // are still valid here — destroy is the next line), a survivor's nerve drifts when someone they
   // had strong FEELINGS about falls — and which WAY it drifts depends on the bond:

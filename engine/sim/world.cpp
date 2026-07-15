@@ -255,6 +255,22 @@ entt::entity make_regenerator(entt::registry& reg, Vec2 pos) {
   return e;
 }
 
+// A BOMBER creature — the VOLATILE foe. Fragile (18 HP) and a feeble melee (6), but it DETONATES
+// when reaped (handle_deaths): every person within kBlastRadius eats death_blast_damage. So the
+// threat isn't its bite, it's its DEATH — finish it in melee and the blast catches you; kill it at
+// RANGE (throw/bolt) or back off the instant it drops. The death-effect twin of the leech's on-hit
+// drink and the knitflesh's passive regen (procs-as-data, no creature class). A volatile amber dot.
+// A hand-placed OPENER (no RNG -> bit-identical, like the warden/knitflesh), NOT in the mix.
+entt::entity make_bomber(entt::registry& reg, Vec2 pos) {
+  constexpr float kBomberBlast = 15.0f;  // flat damage to every person in the blast radius on death
+  const entt::entity e =
+      make_creature(reg, pos, 18.0f, 65.0f, 6.0f, 1, Vec3{1.0f, 0.75f, 0.1f},
+                    8.0f);  // hot volatile amber-gold — reads APART from the
+                            // swarmer's ember-orange so you can spot it to range it
+  reg.get<Enemy>(e).death_blast_damage = kBomberBlast;  // it detonates when reaped
+  return e;
+}
+
 // Keep the fight alive: once the spawn timer runs out, add a creature at a field edge
 // (if we're under the cap) and reset it. Deterministic — the timer is a fixed per-tick
 // countdown and the position comes from the seeded rng, so every run spawns the same
@@ -530,13 +546,16 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // on it or throw back); the blood-red LEECH heals on every bite it lands, so BURST it or kite it
   // — don't stand and trade; the teal WARDEN shrugs off bolts (high WISDOM), so close and MELEE it
   // rather than cast; the wound-pink KNITFLESH knits its wounds shut (passive regen), so commit and
-  // BURST it down — chip-and-retreat only lets it heal back. The spawner keeps a mix coming.
+  // BURST it down — chip-and-retreat only lets it heal back; the volatile amber BOMBER DETONATES
+  // when it dies, so kill it at RANGE or back off the instant it drops — don't be in melee when it
+  // goes. The spawner keeps a mix coming.
   make_brute(reg, Vec2{kFieldWidth * 0.2f, kFieldHeight * 0.2f});
   make_swarmer(reg, Vec2{kFieldWidth * 0.8f, kFieldHeight * 0.8f});
   make_spitter(reg, Vec2{kFieldWidth * 0.85f, kFieldHeight * 0.15f});
   make_leech(reg, Vec2{kFieldWidth * 0.15f, kFieldHeight * 0.85f});
   make_warden(reg, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.15f});
   make_regenerator(reg, Vec2{kFieldWidth * 0.5f, kFieldHeight * 0.85f});
+  make_bomber(reg, Vec2{kFieldWidth * 0.7f, kFieldHeight * 0.5f});
 
   // A couple of armour pieces on the field (dull-bronze dots) — walk onto one and press E to
   // don it for +defence at the cost of a slower second wind, the defensive twin of a weapon.
