@@ -81,9 +81,13 @@ Eighteen strands are wired end to end so far, across all seven attributes:
   fighter build — it grows the colony's *bonds*.
 - **casting a spell** (a `magic_bolt`, the **C** command) trains **Spellcasting**, which raises
   **Intellect** — the **seventh** attribute, completing the set, and the design's **magic** stat. Each
-  level sharpens a bolt's damage, the arcane mirror of Strength on a swing. Magic is *learned*: only a
-  caster who carries the Spellcasting skill can cast at all (see [magic](magic.md)), so Intellect grows
-  by casting the way Strength grows by striking — but from a power you earned the right to use.
+  level sharpens a bolt's damage, the arcane mirror of Strength on a swing. It also **eases a spell's
+  mana cost** (`eased_mana_cost`, INT's *second* effect): a cleverer caster spends less per cast
+  through the same `eased_bane` half-floor VIT uses for a swing's stamina cost — a spell still costs mana
+  (never free), but a sharp mind casts more before the bar runs dry, the arcane twin of `eased_cost`
+  (and distinct from Attunement, which grows/regens the *pool*, not the *spend*). Magic is *learned*:
+  only a caster who carries the Spellcasting skill can cast at all (see [magic](magic.md)), so
+  Intellect grows by casting the way Strength grows by striking — from a power you earned the right to use.
 - **teaching a nearby novice** (`teach`) trains **Teaching**, the **second** feeder of **Charisma**
   beside Leadership — *leading by instruction*. This one is different in kind: it's the first strand a
   colonist grows from **another person**, not its own toil. A colonist far ahead in a skill passes it

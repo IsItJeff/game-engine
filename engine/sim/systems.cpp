@@ -3257,9 +3257,13 @@ void magic_bolt(entt::registry& reg, entt::entity caster) {
   if (target == entt::null) return;  // nothing in range — a held cast: no mana spent, no XP
 
   // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), the magic echo of the empty-
-  // stamina throw. Strict <, so a cast at exactly the cost still fires.
-  if (stats->mp.current < kSpellManaCost) return;
-  stats->mp.current -= kSpellManaCost;
+  // stamina throw. Strict <, so a cast at exactly the cost still fires. INTELLECT eases the spend
+  // (eased_mana_cost — a cleverer caster gets more casts per bar); INT 1 -> the full cost ->
+  // bit-identical. Read once for BOTH the gate and the subtract, like the throw's eased stamina
+  // cost.
+  const float mana_cost = eased_mana_cost(kSpellManaCost, attrs);
+  if (stats->mp.current < mana_cost) return;
+  stats->mp.current -= mana_cost;
   // A connecting cast trains Spellcasting -> Intellect, so a mage grows the INT that sharpens the
   // bolt by casting it — the learn-by-doing loop, mirror of a throw training Throwing -> DEX.
   CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
@@ -3431,9 +3435,11 @@ void heal_spell(entt::registry& reg, entt::entity caster) {
   }
   if (patient == entt::null) return;  // no one to mend — a held cast: no mana spent, no XP
 
-  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the bolt.
-  if (stats->mp.current < kHealManaCost) return;
-  stats->mp.current -= kHealManaCost;
+  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the bolt. INTELLECT
+  // eases the spend (eased_mana_cost); INT 1 -> the full cost -> bit-identical.
+  const float mana_cost = eased_mana_cost(kHealManaCost, attrs);
+  if (stats->mp.current < mana_cost) return;
+  stats->mp.current -= mana_cost;
 
   // A connecting mend trains Healing -> Wisdom, so a healer grows the WIS that sharpens the mend by
   // casting it — the learn-by-doing loop, mirror of a bolt training Spellcasting -> INT.
@@ -3523,9 +3529,11 @@ void cleanse_spell(entt::registry& reg, entt::entity caster) {
   if (patient == entt::null)
     return;  // no one poisoned in reach — a held cast: no mana spent, no XP
 
-  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the bolt/mend.
-  if (stats->mp.current < kCleanseManaCost) return;
-  stats->mp.current -= kCleanseManaCost;
+  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the bolt/mend. INTELLECT
+  // eases the spend (eased_mana_cost); INT 1 -> the full cost -> bit-identical.
+  const float mana_cost = eased_mana_cost(kCleanseManaCost, attrs);
+  if (stats->mp.current < mana_cost) return;
+  stats->mp.current -= mana_cost;
 
   // A connecting cure trains Healing -> Wisdom, so a healer grows by curing as it does by mending.
   CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
@@ -3636,9 +3644,11 @@ void shield_spell(entt::registry& reg, entt::entity caster) {
   // non-caster world bit-identical, a plain colonist can't shield).
   if (skills->find(SkillId::Spellcasting) == nullptr) return;
 
-  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the bolt/mend.
-  if (stats->mp.current < kShieldManaCost) return;
-  stats->mp.current -= kShieldManaCost;
+  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the bolt/mend. INTELLECT
+  // eases the spend (eased_mana_cost); INT 1 -> the full cost -> bit-identical.
+  const float mana_cost = eased_mana_cost(kShieldManaCost, attrs);
+  if (stats->mp.current < mana_cost) return;
+  stats->mp.current -= mana_cost;
 
   // Casting the ward trains Spellcasting -> Intellect (INT is both the bolt's damage AND this
   // barrier's thickness), so a mage hardens its shield by using it, the learn-by-doing loop the
