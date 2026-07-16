@@ -3650,6 +3650,56 @@ void npc_shield(entt::registry& reg) {
   for (const entt::entity n : warders) shield_spell(reg, n);
 }
 
+void npc_haste(entt::registry& reg) {
+  // NPCs that have LEARNED to cast QUICKEN themselves when a creature is CLOSING — the mobility
+  // spell of the caster's kit (the FIFTH verb, the last to gain an NPC caster: bolt = offence, mend
+  // = support, ward = defence, cleanse = cure, HASTE = mobility), reusing the very same haste_spell
+  // so a colonist mage hastes EXACTLY as the player does (completing the player==NPC parity, and
+  // the first NPC use of the utility verb). Structured like npc_shield (learned + a creature within
+  // kHasteThreatRange + not-already-Hasted, collect-then-cast), with TWO deliberate differences
+  // from that ward:
+  //   1. It fires only on a mage that is actually MOVING (a non-zero Velocity from steer_npcs this
+  //      tick, still readable here since integrate_motion doesn't clear it). Haste scales MOVEMENT,
+  //      so it does nothing for a STANDING mage — and, crucially, a threatened mage that stands its
+  //      ground to BOLT (steer_npcs only flees creatures when Panicked; otherwise it holds) would
+  //      otherwise burn 25 mana on a no-op AND starve npc_cast: npc_cast needs a FULL bar, and a
+  //      per-tick haste draw on top of the ward refresh keeps the bar from ever refilling (the
+  //      exact "re-grab every full bar and starve offence" trap npc_shield's comment warns of).
+  //      Gating on movement means only a mage on the MOVE — a Panicked flee, a wounded retreat to
+  //      the hearth, a DEFEND charge to a friend — hastes, while a stand-and-bolt mage keeps its
+  //      mana for offence.
+  //   2. No FULL-bar gate (haste needs only its own cost, which haste_spell checks), so a fleeing
+  //      mage that just WARDED (mana 75) can still run — it isn't bolting while it flees anyway.
+  // npc_shield runs first, a fixed deterministic order. Runs with the other npc_ casters (after
+  // integrate_motion), so the Hasted lands a tick before integrate_motion reads it — a 1-tick
+  // startup lag, nothing against haste's 5s. haste_spell draws no RNG; a non-caster / peaceful /
+  // STANDING / already-Hasted mage is untouched, so a world with no fleeing learned NPC is
+  // bit-identical.
+  constexpr float kHasteThreatRange =
+      120.0f;  // the same reach as the ward — a threat worth fleeing
+  std::vector<entt::entity> runners;
+  auto mages = reg.view<Npc, Transform, Attributes, Skills, Stats, Velocity>();
+  auto creatures = reg.view<Enemy, Transform>();
+  for (const entt::entity n : mages) {
+    if (mages.get<Skills>(n).find(SkillId::Spellcasting) == nullptr) continue;  // never learned
+    if (reg.all_of<Hasted>(n)) continue;  // already quick — don't re-cast while it holds
+    if (glm::length(mages.get<Velocity>(n).value) <= 0.0f)
+      continue;  // standing still — haste scales movement, so it'd be a no-op mana burn (and would
+                 // starve a stand-and-bolt mage's offence); only a MOVER (fleeing/retreating)
+                 // hastes
+    const Vec2 pos = mages.get<Transform>(n).position;
+    bool threatened = false;
+    for (const entt::entity c : creatures) {
+      if (glm::distance(pos, creatures.get<Transform>(c).position) < kHasteThreatRange) {
+        threatened = true;
+        break;
+      }
+    }
+    if (threatened) runners.push_back(n);
+  }
+  for (const entt::entity n : runners) haste_spell(reg, n);
+}
+
 void shield_spell(entt::registry& reg, entt::entity caster) {
   // The DEFENSIVE spell of the caster's kit (bolt = offence, mend = support, shield = defence,
   // cleanse = cure) — a learned
@@ -3732,10 +3782,9 @@ void haste_spell(entt::registry& reg, entt::entity caster) {
   // shield's shape (the learned Spellcasting gate + a mana cost + an INTELLECT-scaled effect
   // trained by casting) but instead of a Shielded it (re)emplaces the caster's own Hasted, which
   // tick_haste ages and integrate_motion reads. Draws NO RNG. No Transform needed (a self-buff has
-  // no position to aim), like the shield. Player-only for now: the player casts it via CastHaste,
-  // but no NPC wires it yet — the utility verb has no obvious threat-trigger the way
-  // npc_shield/npc_cast do, so a later npc_haste can close the parity when a use-case appears (a
-  // fleeing colonist, say).
+  // no position to aim), like the shield. Actor-agnostic like the rest of the kit: the player casts
+  // it via CastHaste, a threatened colonist mage via npc_haste (the mobility twin of npc_shield) —
+  // the player==NPC parity, now closed for the fifth verb too.
   constexpr float kHasteDuration = 5.0f;       // seconds the quickening holds (a knob)
   constexpr float kHasteManaCost = 25.0f;      // the same cost as a bolt/mend/shield
   constexpr float kBaseHaste = 1.4f;           // movement multiplier before Intellect (40% faster)

@@ -219,9 +219,15 @@ itself** to close a gap or break a chase. What sets it apart:
   left`** callout. A movement buff is the hardest to *feel* — unlike a soaked blow you never sense it
   directly — so the on-screen tell matters most here, the field/panel cue every other status carries.
 
-Unlike the other four, haste is **player-only for now** — the utility verb has no obvious threat-trigger
-the way `npc_shield` (a creature closes) or `npc_cast` (a hostile in range) do, so there is no
-`npc_haste` yet; a later one can close the parity once a use-case appears (a fleeing colonist, say).
+Like the rest of the kit, haste has an **NPC caster too**: `npc_haste` quickens a learned colonist
+mage that is **actually moving** (fleeing, retreating to the hearth, or charging to a friend's
+defence) when a creature closes within threat range — the mobility twin of the ward, and the first
+NPC use of the utility verb. The **moving** gate matters: haste scales *movement*, so it does nothing
+for a mage that stands its ground to bolt — and skipping that mage keeps its mana for `npc_cast`'s
+offence (a per-tick haste draw on top of the ward would otherwise keep the bar from ever refilling to
+the full charge a bolt needs). It also drops `npc_shield`'s full-bar throttle — haste needs only its
+own cost, so a fleeing mage that just warded (mana 75) can still run. That completes the player==NPC
+parity across all five spells.
 
 ## What's next
 
@@ -230,10 +236,10 @@ ward**, and now **NPCs that seek magic out** exist (a `Spellbook` you read, a co
 beside you, a mend that heals your allies, a barrier that soaks a blow, a cure that lifts a venom, and a
 [`Scholar`-aspiration colonist](npc-behaviour.md) that walks to a tome to learn — from a **permanent
 library** that reading no longer consumes, so every Scholar reliably becomes a mage) — the **offence /
-support / defence / cure** kit is complete, a colonist mage casts all four (`npc_cast` /
-`npc_heal` / `npc_shield` / `npc_cleanse`) for the full player==NPC parity, and a fifth **utility**
-verb — **haste** — opens the "magic does more than damage" door (player-only for now; no `npc_haste`
-yet). Growing from here: **more
+support / defence / cure / mobility** kit is complete, and a colonist mage casts **all five**
+(`npc_cast` / `npc_heal` / `npc_shield` / `npc_cleanse` / `npc_haste`) for the full player==NPC
+parity — the fifth **utility** verb, **haste**, opens the "magic does more than damage" door and now
+has its NPC caster too. Growing from here: **more
 spells** (an area blast, each its own book), a
 **dedicated Healing/Abjuration tome**
 so the support and ward skills have their own learn-paths (today they ride the Spellcasting gate), a

@@ -5772,6 +5772,79 @@ TEST_CASE("an NPC caster mends a wounded ally too: healing has player==NPC parit
   REQUIRE(reg.get<eng::sim::Stats>(ally).health.current > 30.0f);  // the NPC healer mended its ally
 }
 
+TEST_CASE("an NPC mage hastes itself when a creature closes: haste has player==NPC parity",
+          "[sim]") {
+  // The fifth spell's NPC parity (the last of the kit to gain an NPC caster): a learned Npc that is
+  // MOVING QUICKENS itself (npc_haste -> the shared haste_spell) when a creature is within threat
+  // range, so a fleeing/retreating mage covers ground faster — the mobility twin of npc_shield's
+  // ward. Gates: learned + a creature near + actually MOVING (haste is a no-op on a standing mage,
+  // and hasting a stand-and-bolt mage would starve npc_cast's full-bar offence). Returns whether
+  // the mage ended up Hasted; varies the learned, threat, and moving conditions.
+  const auto quickened = [](bool learned, bool creature_near, bool moving) {
+    entt::registry reg;
+    const entt::entity mage = reg.create();
+    reg.emplace<eng::sim::Npc>(mage);
+    reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mage);
+    reg.emplace<eng::sim::Stats>(mage);  // full mana -> it can act
+    reg.emplace<eng::sim::Velocity>(mage, moving
+                                              ? eng::Vec2{-50.0f, 0.0f}  // fleeing the creature...
+                                              : eng::Vec2{0.0f, 0.0f});  // ...or standing to bolt
+    auto& sk = reg.emplace<eng::sim::Skills>(mage);
+    if (learned) sk.train(eng::sim::SkillId::Spellcasting);
+    if (creature_near) {
+      const entt::entity beast = reg.create();
+      reg.emplace<eng::sim::Enemy>(beast);
+      reg.emplace<eng::sim::Transform>(beast, eng::Vec2{50.0f, 0.0f});  // within threat range (120)
+    }
+    eng::sim::npc_haste(reg);
+    return reg.all_of<eng::sim::Hasted>(mage);
+  };
+  REQUIRE(quickened(true, true, true));  // learned + a creature closing + MOVING -> hastes...
+  REQUIRE_FALSE(quickened(false, true, true));  // ...an unlearned one can't (the learned gate)...
+  REQUIRE_FALSE(quickened(true, false, true));  // ...a mage at peace doesn't waste mana hasting...
+  REQUIRE_FALSE(quickened(true, true, false));  // ...and a STANDING mage (bolting) keeps its mana
+
+  // No full-bar gate (the deliberate divergence from npc_shield): a moving threatened mage that
+  // just WARDED (mana 75, below full) can STILL haste — it needs only the 25 cost, not a full bar —
+  // so a fleeing mage wards AND runs. (npc_shield would skip at 75; haste doesn't.)
+  {
+    entt::registry reg;
+    const entt::entity mage = reg.create();
+    reg.emplace<eng::sim::Npc>(mage);
+    reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(mage);
+    reg.emplace<eng::sim::Stats>(mage).mp.current = 75.0f;  // just warded -> below a full bar
+    reg.emplace<eng::sim::Velocity>(mage, eng::Vec2{-50.0f, 0.0f});  // fleeing
+    reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);
+    const entt::entity beast = reg.create();
+    reg.emplace<eng::sim::Enemy>(beast);
+    reg.emplace<eng::sim::Transform>(beast, eng::Vec2{50.0f, 0.0f});
+    eng::sim::npc_haste(reg);
+    REQUIRE(reg.all_of<eng::sim::Hasted>(mage));  // 75 mana >= 25 cost -> still hastes
+  }
+
+  // The not-already-Hasted gate: a mage ALREADY quick, even moving with a threat, does NOT re-cast
+  // — it runs under the quickening and re-hastes only once it lapses (the npc_shield-style
+  // throttle).
+  entt::registry reg;
+  const entt::entity mage = reg.create();
+  reg.emplace<eng::sim::Npc>(mage);
+  reg.emplace<eng::sim::Transform>(mage, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Attributes>(mage);
+  auto& st = reg.emplace<eng::sim::Stats>(mage);
+  reg.emplace<eng::sim::Velocity>(mage,
+                                  eng::Vec2{-50.0f, 0.0f});  // moving, so only the gate stops it
+  reg.emplace<eng::sim::Skills>(mage).train(eng::sim::SkillId::Spellcasting);
+  reg.emplace<eng::sim::Hasted>(mage, eng::sim::Hasted{5.0f, 1.4f});  // already quick
+  const entt::entity beast = reg.create();
+  reg.emplace<eng::sim::Enemy>(beast);
+  reg.emplace<eng::sim::Transform>(beast, eng::Vec2{50.0f, 0.0f});
+  const float mana_before = st.mp.current;
+  eng::sim::npc_haste(reg);
+  REQUIRE(reg.get<eng::sim::Stats>(mage).mp.current == Approx(mana_before));  // no re-cast, no mana
+}
+
 TEST_CASE("an NPC mage wards itself when a creature closes: shield has player==NPC parity",
           "[sim]") {
   // The defensive third of the NPC caster's kit (npc_cast bolts, npc_heal mends, npc_shield wards):

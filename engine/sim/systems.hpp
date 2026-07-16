@@ -279,6 +279,17 @@ void npc_heal(entt::registry& reg);
 // positions). Draws no RNG.
 void npc_shield(entt::registry& reg);
 
+// NPCs QUICKEN themselves: a learned colonist mage that is MOVING (fleeing/retreating/charging)
+// with a creature within threat range casts HASTE on itself (via the shared haste_spell) to cover
+// ground faster — the mobility twin of npc_shield, completing the player==NPC parity for the FIFTH
+// spell (the first NPC use of the utility verb). Gated like npc_shield (learned + a threat +
+// not-already-Hasted) plus a MOVING gate (haste is a no-op on a standing mage, and hasting a
+// stand-and-bolt mage would starve npc_cast's full-bar offence) and WITHOUT the full-bar gate
+// (haste needs only its own cost, so a fleeing mage that just warded can still run). A 1-tick
+// startup lag is fine (haste lasts 5s). No moving threatened learned NPC -> bit-identical. Draws no
+// RNG.
+void npc_haste(entt::registry& reg);
+
 // Cast a CURE: a learned caster strips Poisoned off the nearest poisoned ally in range, spending
 // the same mana as a bolt/mend and training the same Healing -> Wisdom skill — the fourth of the
 // caster's kit (bolt / mend / barrier / CLEANSE), the restorative counter to a swarmer's or
