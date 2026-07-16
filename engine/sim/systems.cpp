@@ -673,6 +673,12 @@ void steer_npcs(entt::registry& reg) {
       bool has_meal = false;
       float nearest_food = kForageRadius * awareness;
       for (const entt::entity f : food) {
+        // A non-nourishing Pickup isn't a meal: a WATERSKIN (spawn_waterskin sets food 0, water >
+        // 0) is the first food=0 Pickup, and without this a hungry NPC would path to the nearer
+        // skin, arrive, gain 0 hunger, and consume the water cache. The Pickup twin of the plot
+        // loop's stock-0 skip just below. Every orb/meal has food > 0, so this changes nothing for
+        // them.
+        if (food.get<Pickup>(f).food <= 0.0f) continue;
         const float d = glm::distance(pos, food.get<Transform>(f).position);
         if (d < nearest_food) {
           nearest_food = d;
