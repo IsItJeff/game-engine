@@ -664,10 +664,14 @@ void steer_npcs(entt::registry& reg) {
       // Head for the nearest FOOD — a scattered loot orb OR a fixed food plot with stock left,
       // whichever is closer. Track the target POSITION (not entity) so the two kinds compete on one
       // ruler; a bare plot (stock 0) isn't worth the walk, so it's skipped. Orbs are eaten in
-      // collect_pickups, plots grazed in graze.
+      // collect_pickups, plots grazed in graze. WISDOM widens the forage REACH by the SAME
+      // `awareness` that sharpens danger-sense above — a wise forager spots a meal from farther,
+      // the OPPORTUNITY twin of "perceives danger sooner" (and since WIS is trained BY foraging,
+      // the land-wise forager finds food it wouldn't have, compounding). WIS 1 -> ×1.0 -> the base
+      // kForageRadius, so every existing forage test is bit-identical.
       Vec2 meal_pos{0.0f, 0.0f};
       bool has_meal = false;
-      float nearest_food = kForageRadius;
+      float nearest_food = kForageRadius * awareness;
       for (const entt::entity f : food) {
         const float d = glm::distance(pos, food.get<Transform>(f).position);
         if (d < nearest_food) {
