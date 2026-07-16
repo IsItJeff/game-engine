@@ -4052,30 +4052,44 @@ entt::entity equip_nearest_gear(entt::registry& reg, entt::entity wearer) {
   // RETURNing the item for the caller to destroy (collect-then-destroy, so no view is
   // invalidated mid-iteration). entt::null if none in reach. THE one place gear mods are
   // folded, shared by the player's Equip command and the npc_equip system, so a player and an
-  // NPC can never gear up differently. The fold is NON-CLOBBERING: get_or_emplace keeps the
-  // existing cache and each branch writes ONLY its own slot's pair, so grabbing armour leaves a
-  // wielded weapon intact and vice-versa (two independent slots).
+  // NPC can never gear up differently. The fold is NON-CLOBBERING across slots (get_or_emplace
+  // keeps the existing cache and each branch writes ONLY its own slot's pair, so grabbing armour
+  // leaves a wielded weapon intact and vice-versa) AND within a slot: a slot already FILLED is
+  // skipped, so a new weapon can't OVERWRITE the cache of a blade you already wield and destroy it
+  // (its own ground entity was consumed on the first equip, so an overwrite would annihilate the
+  // traited/worn instance — not the item conservation Drop/drop_kit uphold). To swap, Drop the old
+  // first, then grab. A durability > 0 marks a filled slot (a shattered/absent slot is 0); bare ->
+  // both free. (npc_equip already skips an armed NPC via its own all_of<Equipped> guard, so this
+  // only ever bites the player's Equip-while-geared.)
   constexpr float kEquipReach = 30.0f;  // a bit past contact — step near and grab it
   const Vec2 pos = reg.get<Transform>(wearer).position;
+  const Equipped* worn = reg.try_get<Equipped>(wearer);  // current gear (null if bare)
+  const bool weapon_slot_free = worn == nullptr || worn->weapon_durability <= 0.0f;
+  const bool armour_slot_free = worn == nullptr || worn->armour_durability <= 0.0f;
   entt::entity nearest = entt::null;
   bool nearest_is_weapon = false;
   float best = kEquipReach;  // ONE shared best, so the nearer of a weapon vs an armour wins
   auto weapons = reg.view<Weapon, Transform>();
-  for (const entt::entity w : weapons) {
-    const float d = glm::distance(pos, weapons.get<Transform>(w).position);
-    if (d < best) {
-      best = d;
-      nearest = w;
-      nearest_is_weapon = true;
+  if (weapon_slot_free) {  // already wielding one -> skip weapons (grabbing would clobber+destroy
+                           // it)
+    for (const entt::entity w : weapons) {
+      const float d = glm::distance(pos, weapons.get<Transform>(w).position);
+      if (d < best) {
+        best = d;
+        nearest = w;
+        nearest_is_weapon = true;
+      }
     }
   }
   auto armours = reg.view<Armour, Transform>();
-  for (const entt::entity a : armours) {
-    const float d = glm::distance(pos, armours.get<Transform>(a).position);
-    if (d < best) {
-      best = d;
-      nearest = a;
-      nearest_is_weapon = false;
+  if (armour_slot_free) {  // already armoured -> skip armour (same within-slot non-clobbering)
+    for (const entt::entity a : armours) {
+      const float d = glm::distance(pos, armours.get<Transform>(a).position);
+      if (d < best) {
+        best = d;
+        nearest = a;
+        nearest_is_weapon = false;
+      }
     }
   }
   if (nearest == entt::null) return entt::null;
