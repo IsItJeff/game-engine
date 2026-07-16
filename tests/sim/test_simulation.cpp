@@ -1811,6 +1811,37 @@ TEST_CASE("a hungry NPC steers toward a nearby food orb", "[sim]") {
   REQUIRE(v.y == Approx(0.0f));  // ...straight at it
 }
 
+TEST_CASE("a hungry NPC ignores a waterskin: it forages real food not a water cache", "[sim]") {
+  // A waterskin is a Pickup with food=0 (spawn_waterskin) — the FIRST non-nourishing Pickup. The
+  // hunger-forage rung must not MISTAKE it for a meal: a hungry NPC with a NEARER waterskin and a
+  // farther REAL orb should still head for the ORB, not detour to the waterskin, arrive, and gain 0
+  // hunger (wasting the cache meant for a thirsty colonist). The Pickup-forage loop needs the same
+  // "is it actually nourishing?" guard its sibling PLOT loop already has (it skips a stock-0
+  // patch).
+  entt::registry reg;
+  const entt::entity npc = reg.create();
+  reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+  reg.emplace<eng::sim::Velocity>(npc);
+  reg.emplace<eng::sim::Npc>(npc);
+  reg.emplace<eng::sim::Stats>(npc).hunger.current = 10.0f;  // below the seek threshold
+  const entt::entity skin = reg.create();
+  reg.emplace<eng::sim::Transform>(skin,
+                                   eng::Vec2{-50.0f, 0.0f});  // a waterskin NEARER, to the left
+  auto& pk = reg.emplace<eng::sim::Pickup>(skin);
+  pk.food = 0.0f;  // ...but it's WATER, not food
+  pk.water = 60.0f;
+  const entt::entity orb = reg.create();
+  reg.emplace<eng::sim::Transform>(orb,
+                                   eng::Vec2{100.0f, 0.0f});  // a REAL orb farther, to the right
+  reg.emplace<eng::sim::Pickup>(orb);                         // default food 50
+
+  eng::sim::steer_npcs(reg);
+
+  const eng::Vec2 v = reg.get<eng::sim::Velocity>(npc).value;
+  REQUIRE(v.x > 0.0f);           // heads RIGHT toward the REAL orb, NOT left to the waterskin
+  REQUIRE(v.y == Approx(0.0f));  // straight at it
+}
+
 TEST_CASE("Wisdom widens the forage reach: a wise forager spots a meal a plain one can't",
           "[sim]") {
   // The OPPORTUNITY twin of "wisdom sharpens danger awareness": WIS scales the forage radius by the

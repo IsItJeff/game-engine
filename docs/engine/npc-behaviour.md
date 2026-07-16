@@ -10,7 +10,8 @@ wants, still perception-then-action, still hard-coded leaves:
 1. **Flee** the nearest `Hazard` (fear beats everything).
 2. **Rescue** — run to the nearest **Downed** ally to haul them up (the first want about
    another *person*, added with the [Downed death beat](combat.md)).
-3. **Forage** — if hungry, head for the nearest food orb (a `Pickup`).
+3. **Forage** — if hungry, head for the nearest *nourishing* food orb (a `Pickup` with `food > 0`, so
+   a water-only waterskin is skipped) or stocked food plot.
 4. **Arm up** — if unarmed, head for the nearest dropped `Weapon` (`npc_equip` wields it on
    reach), so colonists loot the battlefield and fight harder — the player==NPC gear parity.
 5. Otherwise **come to rest** — no want, so the colonist settles (velocity 0) and recovers,
