@@ -598,7 +598,10 @@ cold**, halving a `ColdZone`'s warmth drain (see [the stats system](stats-system
 wear plate into the chill, not just into a fight. So you can be a
 fast glass fighter (weapon), a slow tank (armour), or grind to carry both. The two slots are
 **independent**: `Equipped` is a flat pair-of-pairs and `equip_nearest_gear` writes only the
-grabbed slot, so donning armour never disturbs a wielded weapon. `Drop` (`Q`) is the symmetric
+grabbed slot, so donning armour never disturbs a wielded weapon. It is also non-clobbering **within**
+a slot: a slot that is already **filled** is skipped, so grabbing a weapon while you already wield one
+can't overwrite the cache and *destroy* the held blade (whose own ground entity was consumed on the
+first equip) — to swap, `Drop` (`Q`) the old first, then grab. `Drop` is the symmetric
 twin — it sheds only the *weapon* pair and leaves your armour on (a blanket removal would strip
 it); with only armour worn, `Q` is a no-op. NPCs grab armour through the same shared fold
 (parity), though they only take the first piece they reach for now.

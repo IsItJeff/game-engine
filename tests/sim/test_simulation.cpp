@@ -8962,6 +8962,43 @@ TEST_CASE("equipping a venom weapon folds its venom into the wielder", "[sim]") 
   REQUIRE(eq->weapon_venom == Approx(6.0f));  // the venom folded into the wielder's cache
 }
 
+TEST_CASE("equipping over a filled slot doesn't clobber and destroy the held item", "[sim]") {
+  // The item-conservation invariant, extended WITHIN a slot. equip_nearest_gear's fold is
+  // non-clobbering ACROSS slots (weapon vs armour), but it used to CLOBBER a held weapon with a
+  // nearer dropped one: the caller destroys the returned ground item, and the held blade's own
+  // ground entity was already destroyed on its first equip, so overwriting the cache ANNIHILATED it
+  // (a traited/worn blade gone, not dropped). Now a FILLED slot is skipped (like npc_equip skips an
+  // armed NPC) — the held item survives and the ground item stays grabbable; to swap, Drop the old
+  // first. Across-slot grabbing still works (a wielded weapon doesn't block donning armour).
+  entt::registry reg;
+  const entt::entity player = reg.create();
+  reg.emplace<eng::sim::Transform>(player, eng::Vec2{0.0f, 0.0f});
+  auto& eq = reg.emplace<eng::sim::Equipped>(player);  // already wielding a vampiric blade...
+  eq.weapon_leech = 0.3f;
+  eq.weapon_durability = 40.0f;  // a filled weapon slot (durability > 0)
+  const entt::entity ground_weapon = reg.create();
+  reg.emplace<eng::sim::Transform>(ground_weapon, eng::Vec2{8.0f, 0.0f});  // a plain blade in reach
+  reg.emplace<eng::sim::Weapon>(ground_weapon);                            // plain: no leech
+
+  const entt::entity grabbed = eng::sim::equip_nearest_gear(reg, player);
+
+  REQUIRE((grabbed == entt::null));  // the weapon slot is filled -> nothing grabbed (no clobber)...
+  REQUIRE(reg.get<eng::sim::Equipped>(player).weapon_leech ==
+          Approx(0.3f));              // ...held blade intact
+  REQUIRE(reg.valid(ground_weapon));  // ...and the ground blade survives, still there to grab later
+
+  // Across-slot still works: with the weapon slot filled but the ARMOUR slot empty, a dropped plate
+  // in reach is still donned (the fix skips only the FILLED slot, not all equipping).
+  const entt::entity ground_armour = reg.create();
+  reg.emplace<eng::sim::Transform>(ground_armour, eng::Vec2{5.0f, 0.0f});  // nearer than the weapon
+  reg.emplace<eng::sim::Armour>(ground_armour);
+
+  const entt::entity donned = eng::sim::equip_nearest_gear(reg, player);
+
+  REQUIRE(donned == ground_armour);  // the empty armour slot is filled from the nearest gear...
+  REQUIRE(reg.get<eng::sim::Equipped>(player).armour_durability > 0.0f);  // ...the plate folded in
+}
+
 TEST_CASE("a vampiric weapon's hit heals the wielder a slice of the damage it deals", "[sim]") {
   // The player-side LEECH proc: wielding a vampiric blade (Equipped.weapon_leech > 0) heals the
   // wielder a fraction of the damage a landed hit deals -- the mirror of the leech creature's
