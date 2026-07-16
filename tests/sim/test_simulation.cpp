@@ -1774,6 +1774,34 @@ TEST_CASE("a hungry NPC steers toward a nearby food orb", "[sim]") {
   REQUIRE(v.y == Approx(0.0f));  // ...straight at it
 }
 
+TEST_CASE("Wisdom widens the forage reach: a wise forager spots a meal a plain one can't",
+          "[sim]") {
+  // The OPPORTUNITY twin of "wisdom sharpens danger awareness": WIS scales the forage radius by the
+  // SAME `awareness` (a wise forager perceives food from farther, and WIS is trained BY foraging so
+  // it compounds). A meal sits BEYOND the base forage radius (kForageRadius 260) but within a
+  // high-WIS forager's widened reach -- the WIS-1 colonist can't sense it (falls through to rest,
+  // velocity 0), while the wise one heads straight for it. WIS 1 -> ×1.0 -> the base radius ->
+  // every existing forage test is bit-identical.
+  const auto forage_velocity_x = [](int wisdom) {
+    entt::registry reg;
+    const entt::entity npc = reg.create();
+    reg.emplace<eng::sim::Transform>(npc, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(npc);
+    reg.emplace<eng::sim::Npc>(npc);
+    reg.emplace<eng::sim::Stats>(npc).hunger.current = 10.0f;  // hungry -> wants to forage
+    reg.emplace<eng::sim::Attributes>(npc).wisdom.level = wisdom;
+    const entt::entity orb = reg.create();
+    reg.emplace<eng::sim::Transform>(orb,
+                                     eng::Vec2{400.0f, 0.0f});  // > base 260, < a wise reach (~507)
+    reg.emplace<eng::sim::Pickup>(orb);
+    eng::sim::steer_npcs(reg);
+    return reg.get<eng::sim::Velocity>(npc).value.x;
+  };
+  REQUIRE(forage_velocity_x(1) ==
+          Approx(0.0f));                  // WIS 1: the meal is out of reach -> doesn't forage
+  REQUIRE(forage_velocity_x(20) > 0.0f);  // WIS 20: awareness widens the reach -> heads for it
+}
+
 TEST_CASE("a starving colonist trudges: the Need debuff drags every step slower", "[sim]") {
   // need_efficiency reaches the LEGS, not just the swing: the same 1.0-at-comfort -> 0.5-at-empty
   // curve that saps combat damage now scales steer speed, so the emptier the belly the heavier the
