@@ -499,6 +499,13 @@ struct Enemy {
   // class. 0 = no blast (every other archetype — bit-identical). Placed LAST so existing positional
   // `Enemy{...}` initialisers keep their meaning.
   float death_blast_damage = 0.0f;
+  // If > 0 this creature GIVES UP a chase once its nearest prey is farther than this range — it
+  // stops homing and holds ground rather than pursuing across the whole map forever (chase_prey).
+  // The tuning knob that turns an endless hunter into a territorial one you can OUTRUN, so kiting
+  // has an exit. More "procs as data" — a knob, not a creature class. 0 = chases unbounded (every
+  // archetype today — bit-identical). Placed LAST so existing positional `Enemy{...}` initialisers
+  // keep their meaning. (Return-to-spawn is a later slice; this one just ends the chase.)
+  float leash_range = 0.0f;
 };
 
 // A lingering damage-over-time left by a venomous blow (resolve_creature_contacts). Unlike a hit,

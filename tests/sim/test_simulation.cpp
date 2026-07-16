@@ -10057,6 +10057,31 @@ TEST_CASE("a creature chases the nearest person, player or NPC", "[sim]") {
   REQUIRE(v.x == Approx(0.0f));   // not a whisker toward the far-off player
 }
 
+TEST_CASE("a creature gives up when prey outruns its leash range", "[sim]") {
+  // The give-up / leash: an Enemy with leash_range > 0 ABANDONS the chase once its nearest prey is
+  // farther than that range — it zeroes its velocity and holds ground rather than homing across the
+  // whole map forever. leash_range 0 (every archetype today) = unbounded chase, bit-identical. Pure
+  // geometry (reads Transforms), no RNG. The beast starts mid-chase (velocity 70) so the give-up is
+  // proven to ACTIVELY zero it, not merely leave an already-still creature — non-tautological.
+  const auto chase_speed_after = [](float leash_range, float prey_distance) {
+    entt::registry reg;
+    const entt::entity beast = reg.create();
+    reg.emplace<eng::sim::Transform>(beast, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(beast, eng::Vec2{70.0f, 0.0f});  // already homing (mid-chase)
+    reg.emplace<eng::sim::Enemy>(beast).leash_range = leash_range;   // default chase_speed 70
+    const entt::entity prey = reg.create();
+    reg.emplace<eng::sim::Transform>(prey, eng::Vec2{prey_distance, 0.0f});
+    reg.emplace<eng::sim::Stats>(prey);
+    eng::sim::chase_prey(reg);
+    return glm::length(reg.get<eng::sim::Velocity>(beast).value);
+  };
+  REQUIRE(chase_speed_after(0.0f, 500.0f) == Approx(70.0f));   // no leash -> chases however far
+  REQUIRE(chase_speed_after(100.0f, 50.0f) == Approx(70.0f));  // prey within leash -> still chases
+  REQUIRE(chase_speed_after(100.0f, 200.0f) == Approx(0.0f));  // prey beyond leash -> gives up
+  REQUIRE(chase_speed_after(100.0f, 100.0f) ==
+          Approx(70.0f));  // exactly at the edge -> still on it
+}
+
 TEST_CASE("the hearth wards creatures: a beast leaves prey sheltering in the fire", "[sim]") {
   // The fire's DEFENSIVE half (regenerate_vitals is its healing half): a creature won't hunt prey
   // standing in a hearth's glow, so reaching the fire is a real escape — the same in_a_hearth reach
