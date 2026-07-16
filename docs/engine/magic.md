@@ -19,7 +19,10 @@ mana, but it does nothing until you have *learned* to cast.
 | **`CastShield` command** | the funnel path (press **B**) that runs `shield_spell` for the player |
 | **`cleanse_spell`** | the **cure** spell — strips `Poisoned` off the nearest poisoned ally, trains `Healing → Wisdom` |
 | **`CastCleanse` command** | the funnel path (press **X**) that runs `cleanse_spell` for the player |
+| **`haste_spell`** | the **utility** spell — raises a timed `Hasted` quickening on yourself, `Intellect`-scaled |
+| **`CastHaste` command** | the funnel path (press **V**) that runs `haste_spell` for the player |
 | **`Shielded` + `tick_shield`** | the first **timed buff** — soaks `absorb` off each blow, aged/reaped each tick |
+| **`Hasted` + `tick_haste`** | the **move** buff — `integrate_motion` scales the position delta by `factor`, aged/reaped each tick |
 
 ## Why it matters
 
@@ -187,6 +190,39 @@ short of the design's mender). Built on the mend's exact shape (the learned `Spe
 Parity again: `npc_cleanse` drives the *same* `cleanse_spell` for any learned NPC on a full mana bar,
 running *after* `npc_heal` — so a battle-mage bolts/mends first and cures a poisoned friend in a lull.
 
+### The utility spell — `haste_spell`
+
+The **fifth** verb (press **V**, the `CastHaste` command) and the first that does the design's *"magic
+does more than damage"* work. Where the bolt reaches a foe, the mend/cure reach a friend, and the shield
+hardens you in place, **haste just speeds you up** — a learned caster raises a timed **quickening on
+itself** to close a gap or break a chase. What sets it apart:
+
+- **It is the game's first *movement* buff** — `Hasted {remaining, factor}`, the mobility twin of
+  `Shielded` (same `{timer, magnitude}` shape). While it lasts, **`integrate_motion` scales the position
+  *delta* by `factor`** — the very slot the **mire** drag already occupies, so haste is literally *"mire
+  in reverse"*: one buff, one scaling site, reaching player and NPC alike. Scaling the **delta, not the
+  stored `Velocity`**, is what keeps every velocity reader downstream (`update_stamina`, `drain_hunger`)
+  on the true heading — a hasted mover just covers more ground.
+- **`Intellect` quickens it — but hunger does *not* thin it** — `kBaseHaste` (1.4×) + a
+  per-`Intellect`-level delta. This is the one deliberate break from the shield: the barrier's `absorb`
+  is scaled by `need_efficiency`, but haste is **not**, because the mover's **base velocity already is**
+  (`MovePlayer` and `steer_npcs` both apply `need_efficiency` to speed). Scaling the factor *too* would
+  double-count the need penalty — and, since the debuff can fall to a 0.5 floor, could pull the factor
+  *below 1.0* and turn a "haste" into a *slow*. A relative multiplier on an already-need-scaled base is
+  the correct shape: a starving mage still gets the full **relative** boost, just on legs that trudge.
+- **It spends the same mana and shares the gates** — `kHasteManaCost` (25), an empty bar fizzles; a
+  non-caster can't haste (bit-identical world); a 0-HP body can't cast it. `tick_haste` ages the
+  quickening each tick and reaps it when `remaining` runs out, and casting trains `Spellcasting →
+  Intellect` like the rest of the kit.
+- **It reads on screen** — a hasted dot wears a bright **magenta ring** (outermost, so it stays
+  legible over a guard/shield/panic ring), and the debug panel shows a **`HASTED — Nx speed, Ns
+  left`** callout. A movement buff is the hardest to *feel* — unlike a soaked blow you never sense it
+  directly — so the on-screen tell matters most here, the field/panel cue every other status carries.
+
+Unlike the other four, haste is **player-only for now** — the utility verb has no obvious threat-trigger
+the way `npc_shield` (a creature closes) or `npc_cast` (a hostile in range) do, so there is no
+`npc_haste` yet; a later one can close the parity once a use-case appears (a fleeing colonist, say).
+
 ## What's next
 
 This is a seam, not the whole trunk. **Learning**, **NPC casters**, **support magic**, a **defensive
@@ -194,8 +230,10 @@ ward**, and now **NPCs that seek magic out** exist (a `Spellbook` you read, a co
 beside you, a mend that heals your allies, a barrier that soaks a blow, a cure that lifts a venom, and a
 [`Scholar`-aspiration colonist](npc-behaviour.md) that walks to a tome to learn — from a **permanent
 library** that reading no longer consumes, so every Scholar reliably becomes a mage) — the **offence /
-support / defence / cure** kit is complete, and a colonist mage now casts all four (`npc_cast` /
-`npc_heal` / `npc_shield` / `npc_cleanse`), the full player==NPC parity. Growing from here: **more
+support / defence / cure** kit is complete, a colonist mage casts all four (`npc_cast` /
+`npc_heal` / `npc_shield` / `npc_cleanse`) for the full player==NPC parity, and a fifth **utility**
+verb — **haste** — opens the "magic does more than damage" door (player-only for now; no `npc_haste`
+yet). Growing from here: **more
 spells** (an area blast, each its own book), a
 **dedicated Healing/Abjuration tome**
 so the support and ward skills have their own learn-paths (today they ride the Spellcasting gate), a

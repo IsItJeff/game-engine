@@ -529,6 +529,21 @@ struct Shielded {
   float absorb = 0.0f;     // damage soaked off each blow while it lasts
 };
 
+// A cast HASTE — the game's first MOVEMENT buff, the mobility twin of Shielded (same {timer,
+// magnitude} shape). While present, `factor` multiplies the caster's MOVEMENT each tick:
+// integrate_motion scales the position DELTA by it, in the very slot the mire drag already lives,
+// so haste is literally "mire in reverse". It scales the DELTA, not the stored Velocity, so every
+// velocity-reading system downstream (update_stamina, drain_hunger — both binary moving/still) sees
+// the true heading; a hasted mover just covers more ground. Raised by haste_spell (the design's
+// UTILITY-role spell — the first that neither harms a foe nor mends a friend nor roots you in
+// place, it just speeds you, to close a gap or break a chase), aged and reaped by tick_haste.
+// Absent = unhasted = every existing move is bit-identical; a defaulted factor of 1.0 is also a
+// no-op.
+struct Hasted {
+  float remaining = 0.0f;  // seconds of quickening left
+  float factor = 1.0f;     // movement multiplier while it lasts (1.0 = no change)
+};
+
 // Marks a character holding a GUARD (a raised block). While present, an incoming creature blow
 // (resolve_creature_contacts) — AND a physical ranged shot, a thrown weapon or a spit
 // (advance_projectiles) — is softened to kBlockDamageFactor of its damage via the shared

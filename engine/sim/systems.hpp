@@ -142,6 +142,12 @@ void tick_poison(entt::registry& reg, float dt);
 // (a mid-view removal invalidates the iterator). No RNG.
 void tick_shield(entt::registry& reg, float dt);
 
+// Age each cast quickening (Hasted) and reap it when spent — the BUFF twin of tick_shield. Order is
+// not load-bearing (integrate_motion reads Hasted at the START of the tick; this just decays it),
+// so it sits beside tick_shield. Collect-then-remove (a mid-view removal invalidates the iterator).
+// No RNG.
+void tick_haste(entt::registry& reg, float dt);
+
 // Count down the PANIC of every routed colonist (Panicked, emplaced by handle_deaths when a bonded
 // friend falls) and remove it when it lapses — the acute grief reaction wears off and the colonist
 // recovers its nerve. The timer twin of tick_poison; a no-op when nothing is panicked. Draws no
@@ -230,6 +236,16 @@ void heal_spell(entt::registry& reg, entt::entity caster);
 // bit-identical. Actor-agnostic like the bolt/mend: the player casts it via CastShield, a colonist
 // mage via npc_shield (a threat-triggered self-ward) — the player==NPC parity. No RNG.
 void shield_spell(entt::registry& reg, entt::entity caster);
+
+// Cast a HASTE — the UTILITY spell of the caster's kit (bolt = offence, mend = support, shield =
+// defence, cleanse = cure, haste = mobility). A learned caster (Spellcasting) raises a timed
+// quickening on ITSELF: for a few seconds, integrate_motion scales its movement by `factor`, which
+// scales with INTELLECT and trains by casting -> Spellcasting -> INT. (Re)emplaces the caster's own
+// Hasted (get_or_emplace, so a recast re-ups rather than stacks); tick_haste ages it. A no-op if
+// the caster hasn't learned, is at 0 HP, or the mana bar is empty -> a non-caster world is
+// bit-identical. UNLIKE the shield, the factor is NOT need-scaled (the base velocity already is —
+// see haste_spell). Player-only for now (no npc_haste yet). No RNG.
+void haste_spell(entt::registry& reg, entt::entity caster);
 
 // NPCs fight back: every NPC with a hazard in reach strikes it (via perform_attack),
 // training Striking -> Strength just as the player does — so NPCs build Strength too,

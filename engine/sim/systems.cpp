@@ -1331,8 +1331,12 @@ void integrate_motion(entt::registry& reg, float dt) {
   auto view = reg.view<Transform, Velocity>();
   for (const entt::entity e : view) {
     Transform& tf = view.get<Transform>(e);
-    const float factor =
-        waded_mire_factor(mire_factor(reg, tf.position), reg.try_get<Attributes>(e));
+    float factor = waded_mire_factor(mire_factor(reg, tf.position), reg.try_get<Attributes>(e));
+    // A cast HASTE speeds the mover: multiply the SAME position-delta factor the mire drags (haste
+    // is mire in reverse — one buff scaling one slot, reaching player, NPC, and any other mover
+    // uniformly). Scaling the delta, not the stored Velocity, keeps every velocity reader on the
+    // true heading, exactly like the mire above. Unhasted (no Hasted) -> *1.0 -> bit-identical.
+    if (const Hasted* haste = reg.try_get<Hasted>(e)) factor *= haste->factor;
     tf.position += view.get<Velocity>(e).value * dt * factor;
   }
 }
@@ -3688,6 +3692,70 @@ void shield_spell(entt::registry& reg, entt::entity caster) {
   shield.absorb = absorb;
 }
 
+void haste_spell(entt::registry& reg, entt::entity caster) {
+  // The UTILITY spell of the caster's kit (bolt = offence, mend = support, shield = defence,
+  // cleanse = cure, HASTE = mobility) — a learned caster QUICKENS ITSELF, spending the same mana
+  // bar, moving faster for a few seconds. The design's "magic does more than damage" verb: the
+  // first spell that neither reaches out to a foe (bolt) nor to a friend (mend/cleanse) nor hardens
+  // you in place (shield) — it just speeds you up, to close a gap or break a chase. It shares the
+  // shield's shape (the learned Spellcasting gate + a mana cost + an INTELLECT-scaled effect
+  // trained by casting) but instead of a Shielded it (re)emplaces the caster's own Hasted, which
+  // tick_haste ages and integrate_motion reads. Draws NO RNG. No Transform needed (a self-buff has
+  // no position to aim), like the shield. Player-only for now: the player casts it via CastHaste,
+  // but no NPC wires it yet — the utility verb has no obvious threat-trigger the way
+  // npc_shield/npc_cast do, so a later npc_haste can close the parity when a use-case appears (a
+  // fleeing colonist, say).
+  constexpr float kHasteDuration = 5.0f;       // seconds the quickening holds (a knob)
+  constexpr float kHasteManaCost = 25.0f;      // the same cost as a bolt/mend/shield
+  constexpr float kBaseHaste = 1.4f;           // movement multiplier before Intellect (40% faster)
+  constexpr float kHastePerIntellect = 0.04f;  // each Intellect level past 1 quickens it a little
+  const Fixed kSpellcastingPerCast = Fixed::from_int(10);
+
+  Attributes* attrs = reg.try_get<Attributes>(caster);
+  Skills* skills = reg.try_get<Skills>(caster);
+  Stats* stats = reg.try_get<Stats>(caster);
+  if (attrs == nullptr || skills == nullptr || stats == nullptr) return;
+
+  // A body at 0 HP is inert — it can't cast (the same caster-guard the bolt/mend/shield carry; a
+  // dying NPC never goes Downed, so guard on health, not the player-only Downed).
+  if (stats->health.current <= 0.0f) return;
+
+  // THE LEARNED GATE: shares Spellcasting with the rest of the kit — no skill, no haste (keeps a
+  // non-caster world bit-identical, a plain colonist can't quicken).
+  if (skills->find(SkillId::Spellcasting) == nullptr) return;
+
+  // Needs mana in hand — an empty bar fizzles (nothing spent, no XP), like the rest of the kit.
+  // INTELLECT eases the spend (eased_mana_cost); INT 1 -> the full cost -> bit-identical.
+  const float mana_cost = eased_mana_cost(kHasteManaCost, attrs);
+  if (stats->mp.current < mana_cost) return;
+  stats->mp.current -= mana_cost;
+
+  // Casting the quickening trains Spellcasting -> Intellect, the same learn-by-doing loop the whole
+  // magic tree runs on; like the shield it ALWAYS connects (it hastes YOU), so every cast trains.
+  CharacterLevel* character = reg.try_get<CharacterLevel>(caster);
+  grant_skill_xp(*skills, *attrs, SkillId::Spellcasting, kSpellcastingPerCast, character);
+  grant_skill_xp(
+      *skills, *attrs, SkillId::Attunement, Fixed::from_int(10),
+      character);  // casting trains the mana skill (Attunement -> Endurance), as at the shield
+
+  // Raise (or refresh) the quickening: base + earned-Intellect delta. DELIBERATELY NOT scaled by
+  // need_efficiency, UNLIKE the shield's absorb — and this is the one real divergence from the
+  // clone, so it earns a full note. The barrier's absorb scaling toward 0 when starved is harmless
+  // (a weaker ward); but this factor MULTIPLIES movement, and the mover's base velocity is ALREADY
+  // need-scaled (MovePlayer and steer_npcs both apply need_efficiency to speed), so scaling the
+  // factor too would DOUBLE-COUNT the need penalty on the hasted portion — and, since
+  // need_efficiency can fall to the 0.5 floor, could pull the factor BELOW 1.0 and turn a "haste"
+  // into a SLOW, a nonsensical spell. A relative multiplier on an already-need-scaled base is the
+  // correct shape: a starving mage still gets the full RELATIVE boost, just on legs that already
+  // trudge. get_or_emplace so a RECAST re-ups the clock and re-reads INT rather than stacking a
+  // second component.
+  const float factor =
+      kBaseHaste + static_cast<float>(attrs->intellect.level - 1) * kHastePerIntellect;
+  Hasted& haste = reg.get_or_emplace<Hasted>(caster);
+  haste.remaining = kHasteDuration;
+  haste.factor = factor;
+}
+
 void advance_projectiles(entt::registry& reg, float dt) {
   // Fly each in-flight shot toward its homing target; on arrival apply its carried damage and reap
   // the shot. Collect-then-destroy so no view is invalidated mid-iteration (and so an impact that
@@ -5404,6 +5472,23 @@ void tick_shield(entt::registry& reg, float dt) {
     if (shield.remaining <= 0.0f) spent.push_back(e);
   }
   for (const entt::entity e : spent) reg.remove<Shielded>(e);
+}
+
+void tick_haste(entt::registry& reg, float dt) {
+  // Age each cast quickening and reap it when spent — the BUFF twin of tick_shield (same collect-
+  // then-remove shape; removing a component mid-view-walk invalidates the iterator, the ECS trap).
+  // No exclude<Downed>: a haste on a body that goes Downed just counts down and lapses harmlessly —
+  // a Downed body is rooted (steer_npcs/MovePlayer don't drive it), so the multiplier has nothing
+  // to scale; letting it expire is cleaner than special-casing the down, exactly as tick_shield
+  // reasons.
+  std::vector<entt::entity> spent;
+  auto view = reg.view<Hasted>();
+  for (const entt::entity e : view) {
+    Hasted& haste = view.get<Hasted>(e);
+    haste.remaining -= dt;
+    if (haste.remaining <= 0.0f) spent.push_back(e);
+  }
+  for (const entt::entity e : spent) reg.remove<Hasted>(e);
 }
 
 void tick_panic(entt::registry& reg, float dt) {

@@ -5949,6 +5949,76 @@ TEST_CASE("a raised shield soaks a spit too: the ranged twin of the melee ward",
   REQUIRE(reg.all_of<eng::sim::Poisoned>(victim));  // venom lands through the barrier
 }
 
+TEST_CASE("a haste spell quickens the caster: learned + mana gated INT scales the speed", "[sim]") {
+  // The UTILITY spell of the kit (the design's "magic does more than damage" verb: bolt = offence,
+  // mend = support, shield = defence, cleanse = cure, HASTE = mobility): a learned caster raises a
+  // timed quickening on ITSELF, spending mana, that multiplies its movement. Same shape as the
+  // shield — the learned gate keeps a non-caster world bit-identical, a 0-HP body is inert (the
+  // shared caster guard), an empty bar fizzles, and INTELLECT (the kit's attribute) scales the
+  // effect. Returns the haste factor by VALUE (or -1 if no Hasted was raised) — never a pointer
+  // into the local registry, which would dangle past its destruction.
+  const auto haste_factor = [](bool learned, float caster_hp, float mana, int intellect) {
+    entt::registry reg;
+    const entt::entity caster = reg.create();
+    auto& at = reg.emplace<eng::sim::Attributes>(caster);
+    at.intellect.level = intellect;
+    auto& st = reg.emplace<eng::sim::Stats>(caster);
+    st.health.current = caster_hp;
+    st.mp.current = mana;
+    auto& sk = reg.emplace<eng::sim::Skills>(caster);
+    if (learned) sk.train(eng::sim::SkillId::Spellcasting);
+    eng::sim::haste_spell(reg, caster);
+    const eng::sim::Hasted* h = reg.try_get<eng::sim::Hasted>(caster);
+    return h == nullptr ? -1.0f : h->factor;
+  };
+  REQUIRE(haste_factor(true, 100.0f, 100.0f, 1) >
+          1.0f);  // learned + mana + alive -> a speedup (>1x)
+  REQUIRE(haste_factor(false, 100.0f, 100.0f, 1) == -1.0f);  // never learned -> no haste (the gate)
+  REQUIRE(haste_factor(true, 0.0f, 100.0f, 1) == -1.0f);     // a 0-HP body is inert -> no haste
+  REQUIRE(haste_factor(true, 10.0f, 10.0f, 1) == -1.0f);     // empty bar (< 25 cost) fizzles
+  REQUIRE(haste_factor(true, 100.0f, 100.0f, 3) >            // a keener INT quickens it more...
+          haste_factor(true, 100.0f, 100.0f, 1));            // ...over the untrained caster's
+
+  // and it SPENDS the mana it costs (a full 100 bar -> 75 after one 25-cost haste).
+  entt::registry reg;
+  const entt::entity caster = reg.create();
+  reg.emplace<eng::sim::Attributes>(caster);
+  const float mana_before = reg.emplace<eng::sim::Stats>(caster).mp.current;
+  reg.emplace<eng::sim::Skills>(caster).train(eng::sim::SkillId::Spellcasting);
+  eng::sim::haste_spell(reg, caster);
+  REQUIRE(reg.get<eng::sim::Stats>(caster).mp.current == Approx(mana_before - 25.0f));
+}
+
+TEST_CASE("a raised haste speeds a mover then expires", "[sim]") {
+  // The quickening's PAYOFF: while Hasted, integrate_motion scales the position DELTA by `factor`,
+  // so a hasted mover covers MORE ground per tick than an identical unhasted one. It scales the
+  // delta, NOT the stored Velocity (exactly where the mire drag already lives — haste is mire in
+  // reverse), so the heading is untouched and every velocity reader downstream sees the true speed.
+  // Varying ONLY the haste (present vs absent, and its factor) is non-tautological: without the
+  // factor read every case advances the same 10 and the hasted asserts fail.
+  const auto advanced = [](bool hasted, float factor) {
+    entt::registry reg;
+    const entt::entity mover = reg.create();
+    reg.emplace<eng::sim::Transform>(mover, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Velocity>(mover, eng::Vec2{10.0f, 0.0f});  // due east at 10 u/s
+    if (hasted) reg.emplace<eng::sim::Hasted>(mover, eng::sim::Hasted{5.0f, factor});
+    eng::sim::integrate_motion(reg, 1.0f);  // one full second -> distance == speed * factor
+    return reg.get<eng::sim::Transform>(mover).position.x;
+  };
+  REQUIRE(advanced(false, 1.0f) == Approx(10.0f));  // unhasted -> 10 u in 1 s (bit-identical)
+  REQUIRE(advanced(true, 1.5f) == Approx(15.0f));  // 1.5x haste -> 15 u (the delta scaled, not vel)
+  REQUIRE(advanced(true, 1.0f) == Approx(10.0f));  // a 1.0 factor is a no-op -> the same 10 u
+
+  // and it EXPIRES: tick_haste ages the quickening and reaps it when the clock runs out.
+  entt::registry reg;
+  const entt::entity e = reg.create();
+  reg.emplace<eng::sim::Hasted>(e, eng::sim::Hasted{0.02f, 1.5f});  // ~1.2 ticks of life left
+  eng::sim::tick_haste(reg, 1.0f / 60.0f);  // one tick (~0.017s) -> still up
+  REQUIRE(reg.all_of<eng::sim::Hasted>(e));
+  eng::sim::tick_haste(reg, 1.0f / 60.0f);  // a second tick -> past 0 -> reaped
+  REQUIRE_FALSE(reg.all_of<eng::sim::Hasted>(e));
+}
+
 TEST_CASE("a defter thrower's bolt flies faster: dexterity's Speed aspect", "[sim]") {
   // DEX's design "Speed" aspect: a defter thrower launches a FASTER projectile, so it reaches the
   // target sooner and is wasted less often when the target dies mid-flight (advance_projectiles
