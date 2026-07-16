@@ -786,10 +786,14 @@ recovered as plain steel, not the instance. A bare, unarmed colonist leaves noth
     0 by the killing blow can't *drink itself back alive* and dodge the reap) and **`creature_spit`**
     (a spitter poisoned to 0 launches no spit from the grave). The deliberate *exception* is a
     **melee dying blow**: it's already in motion when the swinger crosses 0, so
-    `resolve_creature_contacts` still lets that last swing land — which is why the leech guard (and
-    the melee kill vigor) sits on the action, not behind a health gate — and it's why the *ranged*
-    vigor needs the guard the melee one doesn't (`npc_attack` runs before any same-tick damage, so a
-    melee killer is always alive; a projectile launched earlier can land after its owner falls).
+    `resolve_creature_contacts` still lets that last swing land — the guard sits on the *self-heal*,
+    not on the swing. And `perform_attack`'s self-heals — **kill vigor** *and* the **vampiric
+    drink** — carry that same `health > 0` guard, for a reason easy to miss: a villain player's
+    Attack **cruel-strikes** the nearest colonist to 0 HP at *step 2b*, **before** `npc_attack` makes
+    that 0-HP colonist swing — and an NPC never goes `Downed`, so it isn't reaped until later that
+    tick. So a melee killer is **not** always alive when it kills; without the guard, the dying
+    swing's vigor or leech would heal it back above 0 and dodge the reap — the same cheat the *ranged*
+    vigor's guard prevents (a projectile launched earlier lands after its owner has fallen).
 
 ### Seeing the blows — the hit-flash
 

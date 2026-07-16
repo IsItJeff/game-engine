@@ -6779,6 +6779,36 @@ TEST_CASE("a kill grants vigor: felling a foe heals the killer", "[sim]") {
           Approx(100.0f));  // ...but a full one is capped (unchanged)
 }
 
+TEST_CASE("a melee kill can't heal a dead attacker: kill vigor is inert at 0 HP", "[sim]") {
+  // The "0 HP is inert" invariant at the MELEE kill site — the gap its ranged and leech siblings
+  // already guard. A colonist cruel-struck to EXACTLY 0 HP by a villain player's perform_attack is
+  // drained at step 2b, BEFORE npc_attack and long before handle_deaths — and NPCs never go Downed,
+  // so the 0-HP colonist is neither reaped nor Downed when npc_attack (no health guard) makes it
+  // swing. Without a guard, felling a foe heals it back above 0 (kill vigor +kKillVigor), so
+  // handle_deaths (later this tick) never reaps it: the attacker cheats death, the lethal cruel
+  // strike is undone, and a Violence deed is left with no corpse. RED before the guard: the vigor
+  // healed the dead attacker back to 8. Varies ONLY the attacker's HP, so it's non-tautological.
+  const auto kill_and_read_health = [](float killer_hp) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk).strength.level = 20;  // one-shots the frail foe
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk).health.current = killer_hp;
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{2.0f, 2.0f, 0.0f});  // frail -> dies in one
+    reg.emplace<eng::sim::Attributes>(foe).endurance.level = 1;
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};  // foe DEX 1 never dodges, atk LCK 1 never crits
+    eng::sim::perform_attack(reg, atk, rng);
+    REQUIRE(reg.get<eng::sim::Stats>(foe).health.current == 0.0f);  // the foe still fell
+    return reg.get<eng::sim::Stats>(atk).health.current;
+  };
+  REQUIRE(kill_and_read_health(50.0f) > 50.0f);         // a LIVING killer gains vigor (control)
+  REQUIRE(kill_and_read_health(0.0f) == Approx(0.0f));  // a killer already at 0 HP can't heal back
+}
+
 TEST_CASE("a ranged kill grants vigor too: a killing throw heals the thrower", "[sim]") {
   // Parity with the melee kill vigor — a killing THROW restores the same health to the owner, at
   // the projectile-impact kill site.
@@ -8896,6 +8926,34 @@ TEST_CASE("a vampiric weapon's hit heals the wielder a slice of the damage it de
       Approx(2.0f * health_gained(0.25f, 50.0f)));  // proportional to leech (same seed -> same dmg)
   REQUIRE(health_gained(0.5f, 98.0f) ==
           Approx(2.0f));  // capped at max: a near-full wielder gains only up to its ceiling
+}
+
+TEST_CASE("a vampiric hit can't heal a dead wielder: leech is inert at 0 HP", "[sim]") {
+  // The vampiric self-heal has the SAME 0-HP-inert gap as kill vigor, but fires on ANY landed hit
+  // (no kill needed), so it's the broader hole: a wielder cruel-struck to 0 HP this tick, made to
+  // swing by npc_attack, would drink itself back above 0 off a single leech hit and escape the
+  // reap. The foe SURVIVES (full HP) so kill-vigor never fires — this isolates the vampiric drink.
+  // RED before the guard: the dead wielder drank back above 0. Varies ONLY the wielder's HP.
+  const auto wielder_hp_after = [](float start_hp) {
+    entt::registry reg;
+    const entt::entity atk = reg.create();
+    reg.emplace<eng::sim::Transform>(atk, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Attributes>(atk);  // STR 1 -> a soft hit that won't fell a full-HP foe
+    reg.emplace<eng::sim::Skills>(atk);
+    reg.emplace<eng::sim::Stats>(atk, eng::sim::Vital{start_hp, 100.0f, 0.0f});
+    reg.emplace<eng::sim::Equipped>(atk).weapon_leech = 0.5f;  // a vampiric blade folded in
+    const entt::entity foe = reg.create();
+    reg.emplace<eng::sim::Transform>(foe, eng::Vec2{20.0f, 0.0f});             // in reach
+    reg.emplace<eng::sim::Stats>(foe, eng::sim::Vital{100.0f, 100.0f, 0.0f});  // full -> survives
+    reg.emplace<eng::sim::Attributes>(foe);  // DEX 1 -> never dodges, VIT 1 -> defence 0
+    reg.emplace<eng::sim::Enemy>(foe);
+    std::mt19937 rng{1234};
+    eng::sim::perform_attack(reg, atk, rng);
+    REQUIRE(reg.get<eng::sim::Stats>(foe).health.current < 100.0f);  // the hit landed (drew blood)
+    return reg.get<eng::sim::Stats>(atk).health.current;
+  };
+  REQUIRE(wielder_hp_after(50.0f) > 50.0f);         // a LIVING wielder drinks (the control)
+  REQUIRE(wielder_hp_after(0.0f) == Approx(0.0f));  // a wielder already at 0 HP can't drink back
 }
 
 TEST_CASE("equipping a vampiric weapon folds its leech into the wielder", "[sim]") {

@@ -3024,8 +3024,14 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
       // ...and the kill grants the killer a burst of VIGOR — a little health back (kKillVigor),
       // capped at max. Rewards finishing a fight; a full-health killer is unchanged
       // (bit-identical). Reuses `atk_stats` (the attacker's sheet); an attacker with no Stats
-      // simply doesn't heal. NPCs get it too via the shared perform_attack.
-      if (atk_stats != nullptr) {
+      // simply doesn't heal. NPCs get it too via the shared perform_attack. GUARDED on the attacker
+      // being ALIVE (health > 0), the ranged-vigor / leech-drink mirror: a villain player's Attack
+      // cruel-strikes the nearest colonist to 0 HP at step 2b, BEFORE npc_attack runs — and an NPC
+      // never goes Downed, so that 0-HP colonist is neither reaped nor inert when npc_attack makes
+      // it swing. Without this guard, felling a foe would heal it back above 0 and handle_deaths
+      // (later this tick) would never reap it — the attacker cheats death and the lethal strike is
+      // undone. 0 HP is inert.
+      if (atk_stats != nullptr && atk_stats->health.current > 0.0f) {
         atk_stats->health.current += kKillVigor;
         if (atk_stats->health.current > atk_stats->health.max)
           atk_stats->health.current = atk_stats->health.max;
@@ -3043,8 +3049,13 @@ entt::entity perform_attack(entt::registry& reg, entt::entity attacker, std::mt1
     // near-dead foe can't over-heal off HP that wasn't there), scaled by the blade's leech, capped
     // at the wielder's max. Only a vampiric blade (gear->weapon_leech > 0) with a Stats-bearing
     // attacker heals, so a bare-handed or plain swing is bit-identical. `gear`/`atk_stats` were
-    // fetched at the top; NPCs drink too via the shared perform_attack.
-    if (gear != nullptr && gear->weapon_leech > 0.0f && atk_stats != nullptr) {
+    // fetched at the top; NPCs drink too via the shared perform_attack. GUARDED on the wielder
+    // being ALIVE (health > 0) for the same reason as kill-vigor above, but this is the BROADER
+    // hole: the drink fires on ANY landed hit, no kill needed, so a wielder cruel-struck to 0 HP
+    // (then made to swing by npc_attack) would drink itself back above 0 off a single hit and
+    // escape the reap. 0 HP is inert.
+    if (gear != nullptr && gear->weapon_leech > 0.0f && atk_stats != nullptr &&
+        atk_stats->health.current > 0.0f) {
       const float drained =
           dealt < before_hp ? dealt : before_hp;  // only what the foe actually lost
       atk_stats->health.current += drained * gear->weapon_leech;
@@ -3874,8 +3885,9 @@ void advance_projectiles(entt::registry& reg, float dt) {
           // HP. Without this guard the landing kill's vigor would heal the 0-HP owner back above 0,
           // so handle_deaths (later this tick) would never reap it — the owner would cheat death
           // and the kill be undone (an NPC survives permadeath; a player skips going Downed). 0 HP
-          // is inert. The melee twin (perform_attack) needs no such guard: npc_attack runs BEFORE
-          // any same-tick damage, so its attacker is always alive when it kills.
+          // is inert. The melee twin (perform_attack's kill-vigor + vampiric drink) now carries the
+          // SAME guard: a villain player's step-2b cruel strike is a same-tick damage source that
+          // runs BEFORE npc_attack, so a melee attacker is NOT always alive when it kills either.
           if (Stats* owner_stats = reg.try_get<Stats>(p.owner);
               owner_stats != nullptr && owner_stats->health.current > 0.0f) {
             owner_stats->health.current += kKillVigor;
