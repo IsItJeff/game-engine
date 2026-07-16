@@ -546,6 +546,12 @@ void spawn_warded_armour(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 // plate. Draws no RNG.
 void spawn_evasive_armour(entt::registry& reg, Vec2 pos, float quality = 1.0f);
 
+// Spawn a WATERSKIN at `pos` — a portable Pickup that refills the WATER need on collect (pk.water),
+// the water twin of a meal / the portable answer to a fixed well. Pure water (no heal/food/max-HP),
+// a long lifetime so a placed cache lingers, no RNG. Closes the food-has-a-pickup / water-doesn't
+// asymmetry; build_scene places one as a showcase supply.
+void spawn_waterskin(entt::registry& reg, Vec2 pos);
+
 // Collect loot and age it: each Pickup's `lifetime` counts down by `dt`, and one a
 // player overlaps restores its `heal` health (capped) AND permanently raises max HP by
 // its `bonus_max_hp`, then is consumed; an orb whose lifetime runs out fades away

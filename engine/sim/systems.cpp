@@ -4353,6 +4353,28 @@ void spawn_evasive_armour(entt::registry& reg, Vec2 pos, float quality) {
   a.quality = quality;
 }
 
+void spawn_waterskin(entt::registry& reg, Vec2 pos) {
+  // A portable WATER source on the ground at `pos` — the water twin of spawn_meal. It is a Pickup
+  // like a loot orb or a meal, but PURE water: collect_pickups refills its `water` and nothing else
+  // (no heal, no permanent max-HP, no food — is_loot stays false so it trains no Scavenging
+  // either), so it quenches thirst the way a meal fills hunger — the portable answer to "parched
+  // far from any well". A water-blue dot so it reads as a drink, not treasure or food. Draws NO
+  // RNG, so a build_scene placement leaves the seeded stream bit-aligned. Given a long lifetime so
+  // a PLACED supply cache LINGERS to be found (a dropped orb fades in ~20s; a stashed skin waits).
+  constexpr float kWaterskinWater = 60.0f;  // a solid drink — a good chunk of the 100 water bar
+  constexpr float kWaterskinLifetime = 600.0f;  // a placed cache lingers (vs an orb's ~20s fade)
+  const entt::entity e = reg.create();
+  reg.emplace<Transform>(e, pos);
+  reg.emplace<PrevTransform>(e, pos);
+  reg.emplace<RenderDot>(e, Vec3{0.2f, 0.55f, 0.95f}, 4.0f);  // small water-blue skin
+  Pickup& pk = reg.emplace<Pickup>(e);
+  pk.heal = 0.0f;              // supply, not combat loot — no restorative heal...
+  pk.bonus_max_hp = 0.0f;      // ...no permanent HP bump...
+  pk.food = 0.0f;              // ...and no food; it refills WATER only
+  pk.water = kWaterskinWater;  // the drink it carries
+  pk.lifetime = kWaterskinLifetime;
+}
+
 void decay_standing(entt::registry& reg) {
   // Leaky moral DECAY, the slow counter-current to record_deed: every kDecayPeriod ticks each
   // nonzero deed dimension creeps ONE step toward 0, so a reputation FADES if it isn't renewed —
@@ -5110,6 +5132,13 @@ void collect_pickups(entt::registry& reg, float dt) {
       // flat rate), so this is bit-identical for orbs.
       stats.hunger.current += pk.food;
       if (stats.hunger.current > stats.hunger.max) stats.hunger.current = stats.hunger.max;
+
+      // Drinking it refills water — the WATER twin of the hunger refill above, so a WATERSKIN
+      // (pk.water > 0) quenches thirst the way a meal fills hunger, the portable answer to "parched
+      // far from any well". Every orb/meal today sets pk.water 0, so this adds exactly 0 for them
+      // -> bit-identical. Clamped to max like hunger (no overfill).
+      stats.water.current += pk.water;
+      if (stats.water.current > stats.water.max) stats.water.current = stats.water.max;
 
       // Grabbing LOOT trains Scavenging -> Luck (deterministic XP, no RNG), so foraging
       // the field is itself a build: more Luck -> more crits (perform_attack). Guard on the

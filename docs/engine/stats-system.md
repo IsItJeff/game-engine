@@ -26,8 +26,10 @@ debug key and from touching a hazard, and reaching zero puts the player *Downed*
 by an ally or respawned on a timer). Stamina is
 spent by moving and recovers by resting; running it dry slows the player to a
 crawl. Hunger only ever falls (you refill it by *eating*, not resting) and starves you at
-empty; **water** is its twin — it falls too, you refill it by *drinking* at a pond, and empty it
-dehydrates you. **Fatigue** is the odd third need — it falls as you *exert* and *recovers* as you
+empty; **water** is its twin — it falls too, you refill it by *drinking* at a pond **or by grabbing a
+waterskin** (a portable `Pickup` carrying `water`, the twin of a food orb/meal — so being parched far
+from any pond has an answer, closing a gap where food had both a fixed source and a portable pickup
+but water had only the fixed well), and empty it dehydrates you. **Fatigue** is the odd third need — it falls as you *exert* and *recovers* as you
 rest — and empty it **collapses** you (`Downed`, ally-rescuable, even at full health). An NPC runs the
 *identical* need but has no `Downed` grace, so empty fatigue **permakills** it outright — the same
 death every other emptied need deals, and the same rule as HP-to-0 below (the great equalizer applies
