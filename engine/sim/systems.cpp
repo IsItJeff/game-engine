@@ -1257,6 +1257,21 @@ void chase_prey(entt::registry& reg) {
     }
     if (target == entt::null) continue;  // nobody left to hunt — keep drifting
 
+    // GIVE UP if the prey outran the leash: a creature with leash_range > 0 abandons the chase once
+    // its nearest prey is farther than that range — it zeroes its velocity and HOLDS GROUND rather
+    // than homing forever. `nearest` already holds the chosen prey's distance (computed just
+    // above), so this is a pure geometry guard: no new scan, no RNG. leash_range defaults 0 and the
+    // guard is gated `> 0.0f`, so every existing creature (no archetype sets a leash yet) chases
+    // unbounded exactly as before -> bit-identical, and the golden replay is untouched. Strict `>`
+    // so a prey sitting exactly AT the leash edge is still hunted (the edge belongs to the chase).
+    // This first slice just ENDS the chase; return-to-spawn would need a Home position seeded at
+    // make_creature.
+    const Enemy& enemy = creatures.get<Enemy>(c);
+    if (enemy.leash_range > 0.0f && nearest > enemy.leash_range) {
+      creatures.get<Velocity>(c).value = {0.0f, 0.0f};
+      continue;
+    }
+
     // A WOUNDED creature LIMPS: below kLimpThreshold of its HP — the SAME 0.3 fraction the enrage
     // rung uses — it chases at kLimpMoveScale, the creature-side mirror of the player's exhaustion
     // crawl. So the sub-30% band is a sharp risk/reward from BOTH sides: a cornered beast RAGES
@@ -1277,8 +1292,7 @@ void chase_prey(entt::registry& reg) {
     const Vec2 toward = prey.get<Transform>(target).position - c_pos;
     const float len = glm::length(toward);
     if (len > 0.0f)
-      creatures.get<Velocity>(c).value =
-          (toward / len) * creatures.get<Enemy>(c).chase_speed * chase_scale;
+      creatures.get<Velocity>(c).value = (toward / len) * enemy.chase_speed * chase_scale;
   }
 }
 

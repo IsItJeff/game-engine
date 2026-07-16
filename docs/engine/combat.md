@@ -201,6 +201,12 @@ kill you want to land from outside its blast, not in its face. (A slow, heavily-
   `resolve_creature_contacts` beast already on top of you gets its last swings as it drifts off, and a
   `creature_spit` spitter still lobs venom from range (see the next two bullets), so the hearth buys
   space, not invulnerability. See [the stats system](stats-system.md) for its healing half.
+  A creature can also **give up on its own**: an `Enemy` with a `leash_range > 0` **abandons the
+  chase** once its nearest prey is farther than that range — it holds ground instead of homing across
+  the whole map, so an endless hunter becomes a **territorial** one you can *outrun*. It's a "procs as
+  data" knob (like `poison_per_second` / `death_blast_damage`), so `leash_range` defaults **0** =
+  unbounded chase (every archetype today — bit-identical). This first slice just **ends** the chase;
+  a return-to-spawn walk-back would need a home position seeded at creature spawn (a later slice).
 - **`resolve_creature_contacts`** — on a cooldown (~0.8 s), a creature in contact deals
   its `attack_damage` to whoever it caught, *softened by that victim's VIT* (same
   `mitigate`), and trains their Toughness (via `train_on_damage`). Unlike a mote it is
