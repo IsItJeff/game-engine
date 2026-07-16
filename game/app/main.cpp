@@ -196,6 +196,20 @@ void draw_entities(const eng::sim::World& world, ImDrawList* dl, float alpha) {
       dl->AddCircle(ImVec2{p.x, p.y}, radius + 6.0f, IM_COL32(255, 150, 40, 235), 0, 2.0f);
     }
 
+    // A cast HASTE reads on the FIELD: a Hasted entity (a quickening up from haste_spell) gets a
+    // bright MAGENTA ring, so you can SEE who's sped up — the field cue every other status has, and
+    // the one it matters MOST for, since a movement buff is nearly unreadable without a tell
+    // (unlike a shield, you never feel a blow soaked). Drawn OUTERMOST (radius+7, outside the guard
+    // +3 / downed +4 / shield +5 / panic +6 rings), since haste can coincide with any of them (cast
+    // it then raise a guard, or be hasted as you're downed) — concentric rings stay legible,
+    // exactly as the shield's +5 and panic's +6 already handle their overlaps. Magenta reads apart
+    // from the guard steel-blue / downed pale / shield cyan / panic amber / caster-core violet.
+    // Presentation- only: reads Hasted, never sets it; optional (only the player hastes today), so
+    // all_of guards it.
+    if (world.registry().all_of<eng::sim::Hasted>(e)) {
+      dl->AddCircle(ImVec2{p.x, p.y}, radius + 7.0f, IM_COL32(255, 105, 210, 235), 0, 2.0f);
+    }
+
     // A CASTER reads on the FIELD: any being that has LEARNED Spellcasting wears a small
     // arcane-violet CORE — an inner spark, NOT an outer status ring, so a mage is legible at a
     // glance. Persistent (a mage always knows magic), unlike the transient guard/downed/shield
@@ -261,6 +275,16 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::TextColored(ImVec4{0.35f, 0.92f, 0.86f, 1.0f},
                        "SHIELDED — soaks %.0f per blow, %.1fs left",
                        static_cast<double>(sh->absorb), static_cast<double>(sh->remaining));
+  }
+  // A cast HASTE (from V): the panel twin of its magenta field ring, so you can read the speed
+  // multiplier and how long it has left — the callout every other player status already has
+  // (DOWNED, GUARDING, SHIELDED above). Magenta to match the ring's hue (as SHIELDED's callout
+  // matches its cyan). This readout carries more weight than the others: a movement buff is the
+  // hardest to feel, so the "%.2fx speed" number is the clearest confirmation the 25 mana bought
+  // something. try_get so it shows only while a quickening is up.
+  if (const eng::sim::Hasted* ha = world.registry().try_get<eng::sim::Hasted>(player)) {
+    ImGui::TextColored(ImVec4{1.0f, 0.41f, 0.82f, 1.0f}, "HASTED — %.2fx speed, %.1fs left",
+                       static_cast<double>(ha->factor), static_cast<double>(ha->remaining));
   }
   if (const eng::sim::Stats* stats = world.registry().try_get<eng::sim::Stats>(player)) {
     const eng::sim::Vital& h = stats->health;
@@ -570,6 +594,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
   bool heal_was_down = false;
   bool shield_was_down = false;
   bool cleanse_was_down = false;
+  bool haste_was_down = false;
 
   while (renderer->poll_events()) {
     // --- real elapsed time since the last frame ---
@@ -712,6 +737,16 @@ int main(int /*argc*/, char* /*argv*/[]) {
       transport.send(eng::net::Message{eng::sim::cast_cleanse(eng::sim::kLocalPlayer)});
     }
     cleanse_was_down = cleanse_raw;
+
+    // V, edge-triggered, casts a HASTE on yourself — the utility spell of the kit (bolt C, mend H,
+    // barrier B, cleanse X, haste V). Same mana bar and learned Spellcasting gate; it raises a
+    // timed Hasted that speeds your movement, so you cast it to close a gap or break a chase. An
+    // empty bar fizzles.
+    const bool haste_raw = keys[SDL_SCANCODE_V];
+    if (haste_raw && !haste_was_down && accept_actions) {
+      transport.send(eng::net::Message{eng::sim::cast_haste(eng::sim::kLocalPlayer)});
+    }
+    haste_was_down = haste_raw;
 
     // K, HELD (not edge-triggered), raises a GUARD: incoming creature blows are softened but you
     // move slower. A held stance rather than a one-shot action, so it rides the per-tick MovePlayer

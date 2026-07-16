@@ -683,6 +683,7 @@ void World::step() {
   tick_poison(registry_, dt);                      // venom from a swarmer's bite chips health...
   tick_shield(registry_, dt);  // ...and a cast barrier ages, expiring when spent (the buff twin,
                                // after contacts so it still soaks the blows of the tick it's cast)
+  tick_haste(registry_, dt);   // ...and a cast quickening ages, expiring when spent (the move buff)
   tick_panic(registry_, dt);   // ...a routed mourner's panic ebbs (before deaths)
   creature_spit(registry_, dt);        // ranged creatures launch a spit at a person...
   npc_shield(registry_);               // ...a threatened colonist mage wards ITSELF first...
@@ -1021,6 +1022,19 @@ void World::apply_command(const Command& cmd) {
         if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
         if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't cast
         cleanse_spell(registry_, a);
+      }
+      break;
+    }
+    case CommandKind::CastHaste: {
+      // The UTILITY spell of the kit: the player quickens ITSELF (haste_spell), spending MANA and
+      // gated on the same learned Spellcasting skill. Same match-by-player-id and view as
+      // CastShield; haste_spell only emplaces/mutates the caster's own Hasted (no spawn), so the
+      // iteration is trivially stable.
+      auto casters = registry_.view<PlayerControlled, Transform, Attributes, Skills, Stats>();
+      for (const entt::entity a : casters) {
+        if (casters.get<PlayerControlled>(a).player != cmd.player) continue;
+        if (registry_.all_of<Downed>(a)) continue;  // helpless — a crumpled body can't cast
+        haste_spell(registry_, a);
       }
       break;
     }
