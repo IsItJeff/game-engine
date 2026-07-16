@@ -633,6 +633,13 @@ struct Pickup {
                        // (spawn_meal, harvested from a ripe crop) sets this higher: prepared
                        // food fills more than the loot you scavenge. Appended LAST so the
                        // orb default is unchanged (bit-identical) — collect_pickups reads it.
+  float water = 0.0f;  // water it refills when collected — the WATERSKIN field, closing a real
+                       // asymmetry: food has both a fixed source (FoodSource) AND a portable Pickup
+                       // (the field above), but water had only the fixed WaterSource/drink loop.
+                       // A waterskin (spawn_waterskin) is a Pickup carrying this, the portable twin
+                       // of the well. Default 0 so every existing orb/meal refills no water
+                       // (bit-identical) — collect_pickups reads it. Appended LAST for the same
+                       // positional-init safety as food above.
 };
 
 // A SPELLBOOK lying on the ground, waiting to be READ. The design's "magic is LEARNED" made real:

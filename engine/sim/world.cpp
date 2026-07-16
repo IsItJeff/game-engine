@@ -603,6 +603,10 @@ entt::entity build_scene(entt::registry& reg, std::mt19937& rng) {
   // as loot too (the armour-drop roll's evasive band, handle_deaths), so the dodge build is
   // renewable, not just this one starting piece.
   spawn_evasive_armour(reg, Vec2{center.x + 60.0f, center.y - 160.0f});
+  // A WATERSKIN (water-blue dot) off to the side — a portable water source to find, the twin of the
+  // fixed WaterSource pond, so being parched far from the well has an answer. A hand-placed opener
+  // that draws NO RNG (last, after every seeded draw above), so the scene stays bit-aligned.
+  spawn_waterskin(reg, Vec2{center.x - 200.0f, center.y - 120.0f});
   return player;
 }
 

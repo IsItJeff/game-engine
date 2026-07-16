@@ -1581,6 +1581,43 @@ TEST_CASE("eating a loot orb refills hunger", "[sim]") {
   REQUIRE(!reg.valid(orb));                                          // and was consumed
 }
 
+TEST_CASE("a waterskin refills the water need on pickup: the portable twin of the well", "[sim]") {
+  // FOOD has both a fixed source (FoodSource/graze) AND a portable Pickup (pk.food from
+  // orbs/meals), but WATER had only the fixed WaterSource/drink loop. A waterskin closes that
+  // asymmetry: a Pickup carrying pk.water refills the WATER need on collect — the portable twin of
+  // the well — so being parched far from any pond has an answer. pk.water defaults 0 (every
+  // orb/meal today), so a thirsty eater's water is untouched -> bit-identical. Assert the NEED
+  // restored (not the raw pk.water field), with real headroom below the 100 max so the refill isn't
+  // masked by the cap.
+  const auto water_after = [](float pk_water) {
+    entt::registry reg;
+    const entt::entity drinker = reg.create();
+    reg.emplace<eng::sim::Transform>(drinker, eng::Vec2{0.0f, 0.0f});
+    reg.emplace<eng::sim::Stats>(drinker).water.current = 20.0f;  // parched, headroom to 100
+    const entt::entity skin = reg.create();
+    reg.emplace<eng::sim::Transform>(skin, eng::Vec2{0.0f, 0.0f});  // on the drinker -> in reach
+    reg.emplace<eng::sim::Pickup>(skin).water = pk_water;           // ...vary ONLY the water field
+    eng::sim::collect_pickups(reg, 1.0f / 60.0f);
+    return reg.get<eng::sim::Stats>(drinker).water.current;
+  };
+  REQUIRE(water_after(60.0f) == Approx(80.0f));  // 20 + 60 -> the need restored (not the raw 60)
+  REQUIRE(water_after(0.0f) == Approx(20.0f));   // a default orb (water 0) leaves thirst untouched
+  REQUIRE(water_after(200.0f) == Approx(100.0f));  // clamped at max -> no overfill
+}
+
+TEST_CASE("the opening scene seeds a waterskin: a portable water source to find", "[sim]") {
+  // spawn_waterskin places at least one refillable skin in build_scene, so the mechanism ships LIVE
+  // (a grabbable water source), not an inert field. A fresh World (no step yet) still holds it —
+  // the opener draws no RNG and sits after every rng draw, so the seeded scene is otherwise
+  // bit-identical.
+  eng::sim::World world;
+  bool found_waterskin = false;
+  for (const entt::entity e : world.registry().view<eng::sim::Pickup>()) {
+    if (world.registry().get<eng::sim::Pickup>(e).water > 0.0f) found_waterskin = true;
+  }
+  REQUIRE(found_waterskin);
+}
+
 TEST_CASE("harvesting a ripe crop drops a meal that fills more than a loot orb", "[sim]") {
   // The food economy's seam: instead of grazing a patch bite-by-bite you HARVEST it — spending
   // plot stock for one prepared MEAL that fills more hunger than the raw loot you'd scavenge.
