@@ -1299,6 +1299,26 @@ inline const char* veteran_title(const CharacterLevel& character) {
   return "Grizzled";               // 10+ — lived through it all
 }
 
+// An ARCANE-RANK title — how accomplished a CASTER is, banded from the Spellcasting skill's level
+// (which grows by casting). The magic twin of veteran_title (character level) and build_title
+// (which fighter): a warrior's progression reads on the HUD, so a mage's should too. Returns
+// nullptr for anyone who never LEARNED to cast (no Spellcasting skill) — magic is
+// learned-not-innate, so a non-caster has no arcane rank and the HUD simply omits the line (like
+// deed_epithet's nullptr). A pure query over the Skills sheet (never a stored slot); the HUD shows
+// it, the sim never reads it, so it can't touch replay. A freshly-learned caster (Spellcasting
+// level 1) is an Apprentice, and casting climbs it; deterministic (a plain level comparison, the
+// same bands as veteran_title). Ready to grow — finer bands, a school prefix — the same way the
+// sibling titles will.
+inline const char* mage_title(const Skills& skills) {
+  const Skill* cast = skills.find(SkillId::Spellcasting);
+  if (cast == nullptr) return nullptr;  // never learned to cast -> no arcane rank
+  const int lvl = cast->level;
+  if (lvl < 3) return "Apprentice";  // levels 1-2 — just learned the first spell
+  if (lvl < 6) return "Adept";       // 3-5 — a working caster
+  if (lvl < 10) return "Magus";      // 6-9 — a practised mage
+  return "Archmage";                 // 10+ — a master of the arcane
+}
+
 // A PERSONALITY-derived TEMPERAMENT title — how BRAVE or COWARDLY a character is, the panel-text
 // twin of the field cue personality_tint (which tints the dot red->green by this SAME bravery
 // axis). The FIFTH derived recognition beside standing_title (how good/bad), build_title (what

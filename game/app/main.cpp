@@ -432,6 +432,10 @@ void draw_debug_panel(const eng::sim::World& world, bool& paused) {
     ImGui::TextColored(ImVec4{0.95f, 0.4f, 0.4f, 1.0f}, "foes: %d", foes);
   }
   if (const eng::sim::Skills* skills = world.registry().try_get<eng::sim::Skills>(player)) {
+    // Arcane rank: a caster's Spellcasting-level title (Apprentice -> Adept -> Magus -> Archmage),
+    // the magic twin of the veteran `rank` line above. Shown only once you've learned to cast
+    // (nullptr for a non-caster), so a warrior's panel isn't cluttered with a rank it can't earn.
+    if (const char* mage = eng::sim::mage_title(*skills)) ImGui::Text("mage: %s", mage);
     // Show one learned skill's level + progress bar. Toughness only appears once the
     // player has taken a hit (it isn't in `owned` until then), so guard on find().
     const auto show_skill = [&](const char* label, eng::sim::SkillId id) {

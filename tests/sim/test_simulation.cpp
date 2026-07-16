@@ -7422,6 +7422,29 @@ TEST_CASE("veteran_title names the experience tier from character level", "[sim]
   REQUIRE(rank(25) == "Grizzled");  // and stays there
 }
 
+TEST_CASE("mage_title bands a caster's arcane rank a non-caster has none", "[sim]") {
+  // The magic twin of veteran_title: the Spellcasting-skill level (which grows by casting) bands
+  // into Apprentice / Adept / Magus / Archmage, the same thresholds veteran_title uses (<3, <6,
+  // <10). A non-caster (no Spellcasting skill) has NO rank -> nullptr, since magic is
+  // learned-not-innate.
+  eng::sim::Skills plain;                           // knows only the starting Conditioning
+  REQUIRE(eng::sim::mage_title(plain) == nullptr);  // never learned to cast -> no arcane rank
+
+  const auto rank = [](int level) {
+    eng::sim::Skills sk;
+    sk.train(eng::sim::SkillId::Spellcasting).level = level;  // learned to cast, at this level
+    return std::string(eng::sim::mage_title(sk));
+  };
+  REQUIRE(rank(1) == "Apprentice");  // a freshly-learned caster (Spellcasting level 1)...
+  REQUIRE(rank(2) == "Apprentice");  // ...top of the band
+  REQUIRE(rank(3) == "Adept");       // crosses into Adept
+  REQUIRE(rank(5) == "Adept");
+  REQUIRE(rank(6) == "Magus");  // crosses into Magus
+  REQUIRE(rank(9) == "Magus");
+  REQUIRE(rank(10) == "Archmage");  // crosses into the master band
+  REQUIRE(rank(30) == "Archmage");  // and stays there
+}
+
 TEST_CASE("temperament_title names the bravery band: the design's the Coward and Fearless",
           "[sim]") {
   // The FIFTH derived recognition (beside standing/build/epithet/veteran): a pure query over the
