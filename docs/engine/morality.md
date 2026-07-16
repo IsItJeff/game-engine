@@ -291,9 +291,11 @@ bit-identical to before decay existed.
   (what you're known for — the dominant single ledger dimension, past `kEpithetAt`), `veteran_title`
   (how seasoned, from character level), `temperament_title` (how brave, from the personality
   bravery axis — the panel-text twin of `personality_tint`), `versatile_title` (how BROADLY
-  trained — the generalist counterpart to `build_title`'s peak, reading all seven attributes), and
+  trained — the generalist counterpart to `build_title`'s peak, reading all seven attributes),
   `hero_role` (the design's Champion/Fiend ROLE — the conjunction of Renown *and* a dominant
-  Valor/Cruelty deed, where the other titles each read only one axis).
+  Valor/Cruelty deed, where the other titles each read only one axis), and `mage_title` (a caster's
+  arcane RANK — Apprentice → Archmage from the Spellcasting skill level, the magic twin of
+  `veteran_title`; `nullptr` for a non-caster).
 - `engine/sim/systems.hpp` / `systems.cpp` — `record_deed` (the single write-point,
   which also **drifts** the actor's matching `Personality` axis via the shared `drift_axis` clamp);
   `decay_standing` (the slow leak toward neutral, run each `step()`); the Charity credit and the
@@ -308,8 +310,8 @@ bit-identical to before decay existed.
   shows the player's `standing` number and its titles (`veteran_title` as *rank*, `standing_title`,
   `build_title`, its `breadth` twin `versatile_title` — shown only once you've trained 3+ attributes
   wide — `temperament_title`, the `known as` epithet (shown only once a deed kind crosses
-  `kEpithetAt`), and the `role` line (`hero_role` — a gold *Champion* / red *Fiend*, shown only at a
-  fame-and-deed pole).
+  `kEpithetAt`), the `role` line (`hero_role` — a gold *Champion* / red *Fiend*, shown only at a
+  fame-and-deed pole), and the `mage` rank (`mage_title`, shown only once you've learned to cast).
 - `tests/sim/test_simulation.cpp` — the funnel + signed formula, the wired deeds with
   player==NPC parity, the lazy no-deed-no-ledger path, `renown_scale`, `deed_epithet` (threshold,
   dominant-dimension pick, and the fixed tie order), and `versatile_title` (both count-band edges,
